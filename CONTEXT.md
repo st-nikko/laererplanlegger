@@ -12,7 +12,8 @@ Målbruker: én lærer, personlig verktøy, rask tilgang mellom timer.
 
 ```
 Lærerplanlegger/
-├── ukesoversikt.html   # HTML-markup, ~474 linjer. Alle modaler, header, kalendergrid-placeholders, student-form.
+├── index.html          # HTML-markup, ~474 linjer. Alle modaler, header, kalendergrid-placeholders, student-form.
+│                       # (het ukesoversikt.html t.o.m. økt 17 — omdøpt for GitHub Pages)
 ├── app.css             # All CSS, ~323 linjer. CSS-variabler, layout, modal-stiler, event-stiler, elev-admin-stiler.
 ├── app.js              # All JavaScript, ~1407 linjer. Se seksjoner nedenfor.
 ├── CONTEXT.md          # Dette dokumentet
