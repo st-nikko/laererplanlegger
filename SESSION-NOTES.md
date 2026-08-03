@@ -148,6 +148,20 @@ Jobbkalenderen mot Google Kalender.
 ### Neste steg
 - SFS2213-beregning.
 
+### Fremtidige features
+**Sveip mellom uker på mobil.** Dra mot venstre eller høyre i
+kalenderen for å bla en uke fram eller tilbake. Foreslått av Nikolai
+3. august.
+
+Navigasjonen finnes allerede — `changeNav(±1)` gjør jobben. Arbeidet
+ligger i å skille sveip fra scroll: `.calendar-scroll` scroller
+vertikalt, så en gest må bare telle som sveip når den horisontale
+bevegelsen klart dominerer, og først etter en terskel på rundt 50px.
+Ellers vil vanlig scrolling utløse ukebytte.
+
+Bør trolig gjelde dagsvisning også, der sveip bytter dag i stedet for
+uke. Ren `touchstart`/`touchend` på `#weekDayView`, ingen bibliotek.
+
 ### Lagt bort
 **Uke-etiketten i header.** `renderWeekLabel()` har en `else`-gren ment
 for månedsvisningen, men den fanger også Elever, Elevlogg og Min side —
