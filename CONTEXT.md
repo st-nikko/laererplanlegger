@@ -90,6 +90,6 @@ finnes — appen fungerer uendret om `sync.js` ikke lastes.
 2. ~~**Ingen `localStorage`**~~ — implementert. Data persisteres automatisk.
 3. ~~**"Now line" er hardkodet**~~ — endret til `new Date().getHours() + new Date().getMinutes() / 60`.
 4. ~~**Elever er hardkodet**~~ — ELEVADMIN implementert med legg til/rediger/slett og oppmøte%.
-5. **Delvis mobiloptimalisering** — under 768px omstyles `#sideMeny` til en fast bunn-navigasjon (ren CSS, egen seksjon «BUNN-NAVIGASJON (mobil)» i app.css; samme markup og klikk-håndtering). Resten av layouten (kalendergrid, modaler, gjøremål-sidebar) forutsetter fortsatt desktop.
+5. **Mobil, steg 1** — to seksjoner i app.css: «BUNN-NAVIGASJON (mobil)» gjør `#sideMeny` til en bunn-rad, og «MOBIL (under 768px)» nederst i fila tar resten — header over to rader, smalere tidskolonne i gridet, fullskjermmodaler, gjøremål-sidebar som overlegg, `100dvh`, horisontalt rullbar elevtabell. Alt er ren CSS pluss klassene `desktop-kun` og `rullbar-x` i markup. Ukesvisningen er fortsatt trang på 390px; blir det et problem, er neste grep å la mobilen åpne i dagsvisning.
 6. **SFS2213-beregning (`calcSFS`)** returnerer demo-tall, ikke ekte aggregering fra registrert tid.
 7. **Annenhver-uke vises ikke i Måned-visning** — `eventsForDate` håndterer weekPattern i uke/dag, men månedvisningen arver dette riktig.

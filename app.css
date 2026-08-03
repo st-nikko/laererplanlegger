@@ -18,7 +18,7 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg); color: var(--text-primary);
-      font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      font-size: 14px; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
     }
 
     /* ── HEADER ── */
@@ -555,4 +555,108 @@
 @media (max-width: 767px) {
   .synk-rad { flex-direction: column; align-items: stretch; }
   .synk-sist { margin-left: 0; }
+}
+
+/* ════════════════════════════════════════════
+   MOBIL (under 768px)
+   ════════════════════════════════════════════
+   Mobilen brukes først og fremst til å sjekke timeplanen. Målet her er
+   at ingenting stikker utenfor skjermkanten og at modaler er til å
+   bruke med tommelen — ikke en egen mobillayout.
+   Bunn-navigasjonen ligger i sin egen blokk lenger opp i fila. */
+@media (max-width: 767px) {
+
+  /* ── Header: to rader i stedet for én lang ── */
+  header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 6px 10px;
+    gap: 6px;
+    row-gap: 6px;
+  }
+  /* Logo og planfestet tid er desktop-pynt og -oppgaver */
+  .logo,
+  .desktop-kun { display: none; }
+
+  .view-toggle    { order: 1; }
+  .header-actions { order: 2; margin-left: auto; gap: 6px; }
+  .week-nav {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .week-label {
+    min-width: 0;          /* var 210px — hovedårsaken til sidescroll */
+    flex: 1;
+    font-size: 13px;
+  }
+
+  .ghost-btn, .new-btn, .view-btn {
+    padding: 7px 10px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+  .nav-btn { width: 36px; height: 36px; }
+
+  /* ── Kalendergrid: smalere tidskolonne gir plass til fem dager ── */
+  .day-headers,
+  .calendar-grid { grid-template-columns: 32px repeat(5, 1fr); }
+  .day-header    { padding: 5px 2px; }
+  .day-name      { font-size: 10px; }
+  .day-date      { font-size: 13px; }
+  .event         { font-size: 10px; padding: 2px 3px; }
+  .event-title   { font-size: 10px; }
+  .event-sub     { display: none; }   /* rom og trinn er detaljer for dagsvisning */
+  .event-badge   { font-size: 8px; padding: 0 3px; }
+  .time-tick     { font-size: 9px; padding-right: 4px; }
+
+  /* ── Modaler ── */
+  .overlay { padding: 0; }
+
+  /* Store arbeidsmodaler tar hele skjermen */
+  .event-modal,
+  .plan-modal,
+  .elevlogg-modal {
+    width: 100%;
+    max-width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  /* Små dialoger holder seg som dialoger, men innenfor kanten */
+  .simple-modal,
+  .after-save-modal {
+    width: calc(100% - 24px);
+    max-width: 380px;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+
+  /* ── Gjøremål: fast overlegg i stedet for kolonne ── */
+  #sidebarContent {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    bottom: 58px;                 /* over bunn-navigasjonen */
+    width: auto;
+    border-left: none;
+    z-index: 150;
+    box-shadow: 0 0 24px rgba(0,0,0,0.18);
+  }
+  #sidebarContent.collapsed { display: none; }
+
+  /* ── Tabeller scroller heller enn å sprenge siden ── */
+  .rullbar-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .elev-table { min-width: 560px; }
+  #elevAdminView { padding: 1rem 0.75rem; }
+
+  /* ── Min side ── */
+  #minSideView { padding: 1rem 0.75rem; }
+  .data-toolbar { flex-direction: column; align-items: stretch; }
+  .data-toolbar-btn { min-height: 40px; }
+
+  /* ── Trykkflater ── */
+  .btn-small { min-height: 34px; padding: 6px 10px; }
+  .meny-item { min-height: 48px; }
 }

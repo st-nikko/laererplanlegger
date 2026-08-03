@@ -23,7 +23,7 @@
   </div>
   <div class="header-actions">
     <button class="ghost-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">☰ Gjøremål</button>
-    <button class="ghost-btn" onclick="openPlanfestetTidModal()">Planfestet tid</button>
+    <button class="ghost-btn desktop-kun" onclick="openPlanfestetTidModal()">Planfestet tid</button>
     <button class="ghost-btn" onclick="goToToday()">I dag</button>
     <button class="new-btn" onclick="openEventForm(null)">+ Ny hendelse</button>
   </div>
@@ -91,7 +91,7 @@
 </div>
 
 <!-- ELEV-ADMIN VIEW -->
-<div id="elevAdminView" style="display:none; padding:1.5rem;"></div>
+<div id="elevAdminView" style="display:none; padding:1.5rem;" class="rullbar-x"></div>
 
 <!-- ELEVLOGG VIEW -->
 <div id="elevloggView" style="display:none">

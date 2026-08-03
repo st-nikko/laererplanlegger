@@ -2,7 +2,66 @@
 
 ---
 
-## Siste økt: 3. august 2026 (økt 20) — Kryptert synk via Supabase (verifisert i drift)
+## Siste økt: 3. august 2026 (økt 21) — Mobiltilpasning, steg 1 (venter på visuell kontroll)
+
+Nikolai meldte at UI-et var ubrukelig på telefon — headeren måtte
+scrolles horisontalt. Årsak: hele CSS-en var skrevet for desktop, med
+bare to media queries i fila (bunn-navigasjonen fra økt 17 og
+synk-raden fra økt 20).
+
+Avklart omfang: mobilen brukes først og fremst til å **sjekke
+timeplanen**. Registrering og planlegging gjøres på PC. Målet var
+derfor «brukbart», ikke egen mobillayout.
+
+### Hva ble gjort
+
+Én ny `@media (max-width: 767px)`-blokk nederst i app.css.
+
+**Header** brytes nå over to rader. `.week-label` mistet
+`min-width: 210px` — den var hovedårsaken til sidescrollen. Logo og
+«Planfestet tid» skjules; sistnevnte fikk klassen `desktop-kun` i
+markup fordi den er en oppgave man gjør ved skrivebordet.
+
+**Kalendergrid** fikk tidskolonnen redusert fra 48px til 32px, mindre
+skrift, og `.event-sub` skjult. På 390px gir det ~71px per dag —
+trangt, men lesbart. Dagsvisning er ett trykk unna for detaljer.
+
+**Modaler:** event, plan og elevlogg fyller skjermen. Små dialoger
+(`.simple-modal`, `.after-save-modal`) beholder dialogformen, men
+innenfor kanten.
+
+**Gjøremål-sidebaren** var 272px fast, altså to tredjedeler av
+skjermbredden. Den er nå et fast overlegg over innholdet, stoppende
+over bunn-navigasjonen. Merk at `.collapsed` måtte få `display: none`
+— `width: 0` gjør ingenting når elementet er `position: fixed`.
+
+**`100vh` → `100dvh`** med vh som fallback, så adresselinja ikke
+spiser innhold.
+
+**Elevtabellen** ligger nå i en `rullbar-x`-beholder og scroller
+horisontalt i stedet for å sprenge siden.
+
+### Tester
+`tests/mobil.test.js` — statisk sjekk, ikke visuell. Sandkassen har
+ingen nettleser, så det som testes er den vanligste årsaken til
+overflow: en fast bredde i grunn-CSS-en uten overstyring for smal
+skjerm. Testen deler fila i «utenfor media query» og «inne i mobil»,
+og krever at hver selektor med bredde over 360px er overstyrt.
+Fant tre modaler ved første kjøring — men det var falske treff fordi
+CSS-kommentarer hang fast foran selektoren. Kommentarene strippes nå
+før parsing.
+
+### Ikke verifisert
+Visuell kontroll på faktisk telefon gjenstår. Statisk analyse fanger
+overflow fra faste bredder, ikke fra innhold som ikke får plass.
+
+### Neste steg
+- Nikolai tester på telefon og melder hva som fortsatt skurrer.
+- Hvis ukesvisningen er for trang: la mobilen åpne i dagsvisning.
+
+---
+
+## Økt 20: 3. august 2026 — Kryptert synk via Supabase (verifisert i drift)
 
 ### Hva ble gjort
 
