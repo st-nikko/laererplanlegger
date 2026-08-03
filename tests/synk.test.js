@@ -1,0 +1,127 @@
+// Tester for kryptering og utvalg av synkdata i sync.js.
+// Kjøres uten Supabase — vi laster bare fila og kaller funksjonene direkte.
+const fs   = require('fs');
+const vm   = require('node:vm');
+const path = require('node:path').join(__dirname, '..') + '/';
+
+const kode = fs.readFileSync(path + 'sync.js', 'utf8');
+
+function lagStore(seed = {}) {
+  const data = { ...seed };
+  return {
+    getItem: k => (k in data ? data[k] : null),
+    setItem: (k, v) => { data[k] = String(v); },
+    removeItem: k => { delete data[k]; },
+    _dump: () => data
+  };
+}
+
+// Minimalt miljø: sync.js trenger crypto, localStorage, btoa/atob,
+// TextEncoder/Decoder og en document-stubb for statusvisningen.
+function lagKontekst(store) {
+  const ctx = {
+    localStorage: store,
+    crypto: require('node:crypto').webcrypto,
+    btoa: s => Buffer.from(s, 'binary').toString('base64'),
+    atob: s => Buffer.from(s, 'base64').toString('binary'),
+    TextEncoder, TextDecoder,
+    console, setTimeout, clearTimeout,
+    document: { getElementById: () => null },
+    window: {},
+    alert: () => {}, confirm: () => true,
+    loadFromStorage: () => {}, render: () => {}
+  };
+  ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(kode, ctx);
+  // const/let på toppnivå blir ikke egenskaper på kontekstobjektet
+  ctx.hent = uttrykk => vm.runInContext(uttrykk, ctx);
+  return ctx;
+}
+
+const tester = [];
+function test(navn, fn) { tester.push([navn, fn]); }
+
+function like(a, b, hva) {
+  const sa = JSON.stringify(a), sb = JSON.stringify(b);
+  if (sa !== sb) throw new Error(hva + ': ventet ' + sb + ', fikk ' + sa);
+}
+function sant(v, hva) { if (!v) throw new Error(hva); }
+
+// ── Kryptering ─────────────────────────────────────────────────
+test('krypter og dekrypter gir samme tekst tilbake', async () => {
+  const ctx = lagKontekst(lagStore());
+  const klartekst = JSON.stringify({ lp_events: '[{"id":1}]' });
+  const pakke = await ctx.krypter(klartekst, 'riktig-passfrase');
+  const ut    = await ctx.dekrypter(pakke, 'riktig-passfrase');
+  like(ut, klartekst, 'rundtur');
+});
+
+test('chifferteksten inneholder ikke klartekst', async () => {
+  const ctx = lagKontekst(lagStore());
+  const pakke = await ctx.krypter(JSON.stringify({ hemmelig: 'Esekiel' }), 'passfrase123');
+  sant(!pakke.ciphertext.includes('Esekiel'), 'navn skal ikke være lesbart');
+  sant(!Buffer.from(pakke.ciphertext, 'base64').toString('utf8').includes('Esekiel'),
+       'navn skal ikke være lesbart etter base64-dekoding');
+});
+
+test('feil passfrase gir feil, ikke tull', async () => {
+  const ctx = lagKontekst(lagStore());
+  const pakke = await ctx.krypter('hemmelig innhold', 'riktig');
+  let kastet = false;
+  try { await ctx.dekrypter(pakke, 'feil'); } catch { kastet = true; }
+  sant(kastet, 'dekryptering med feil passfrase skal kaste');
+});
+
+test('samme tekst gir ulik chiffertekst hver gang', async () => {
+  const ctx = lagKontekst(lagStore());
+  const a = await ctx.krypter('samme tekst', 'passfrase');
+  const b = await ctx.krypter('samme tekst', 'passfrase');
+  sant(a.ciphertext !== b.ciphertext, 'tilfeldig IV og salt skal gi ulikt resultat');
+});
+
+// ── Utvalg av data ─────────────────────────────────────────────
+test('elevnavn er ikke med i det som synkes', async () => {
+  const ctx = lagKontekst(lagStore({
+    lp_students:     '[{"id":"a1","trinn":10}]',
+    lp_studentNames: '{"a1":"Esekiel"}',
+    lp_events:       '[]'
+  }));
+  const json = ctx.samleSynkdata();
+  sant(!json.includes('studentNames'), 'lp_studentNames skal ikke samles opp');
+  sant(!json.includes('Esekiel'),      'navnet skal ikke være med');
+  sant(json.includes('lp_students'),   'strukturen skal være med');
+});
+
+test('innkommende data kan ikke overskrive elevnavn', async () => {
+  const store = lagStore({ lp_studentNames: '{"a1":"Esekiel"}' });
+  const ctx = lagKontekst(store);
+  // En ondsinnet eller feilaktig nyttelast prøver å sette navn
+  ctx.skrivSynkdata(JSON.stringify({
+    lp_events:       '[{"id":9}]',
+    lp_studentNames: '{"a1":"Overskrevet"}'
+  }));
+  like(JSON.parse(store.getItem('lp_studentNames')), { a1: 'Esekiel' },
+       'lokale navn skal være urørt');
+  like(store.getItem('lp_events'), '[{"id":9}]', 'events skal være oppdatert');
+});
+
+test('alle synknøkler er lp-nøkler og navn er utelatt', async () => {
+  const ctx = lagKontekst(lagStore());
+  const nokler = ctx.hent('SYNK_NOKLER');
+  sant(nokler.every(k => k.startsWith('lp_')), 'alle nøkler skal ha lp-prefiks');
+  sant(!nokler.includes('lp_studentNames'), 'navnekartet skal ikke synkes');
+  sant(!nokler.includes('lp_sync_passfrase'), 'passfrasen skal ikke synkes');
+});
+
+// ── Kjør ───────────────────────────────────────────────────────
+(async () => {
+  console.log('\nSynk og kryptering\n');
+  let alle = true;
+  for (const [navn, fn] of tester) {
+    try { await fn(); console.log('  OK   ' + navn); }
+    catch (e) { alle = false; console.log('  FEIL ' + navn + '\n       ' + e.message); }
+  }
+  console.log('\n' + (alle ? 'Alle tester passerte.' : 'Noen tester feilet.') + '\n');
+  process.exit(alle ? 0 : 1);
+})();

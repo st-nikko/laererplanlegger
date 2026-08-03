@@ -2152,6 +2152,11 @@ function saveToStorage() {
   } catch(e) {
     console.warn('Kunne ikke lagre til localStorage:', e);
   }
+
+  // Skyv endringene til skyen hvis synk er satt opp (sync.js).
+  // Funksjonen finnes ikke hvis sync.js ikke er lastet — appen skal
+  // fungere like godt uten.
+  if (typeof syncPushDebounced === 'function') syncPushDebounced();
 }
 
 function loadFromStorage() {

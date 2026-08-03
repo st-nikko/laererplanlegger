@@ -158,6 +158,43 @@
     </div>
   </div>
   <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Synk mellom enheter</div>
+    <p class="minside-hjelpetekst">
+      Dataene krypteres på denne enheten før de sendes. Passfrasen er den
+      eneste nøkkelen — mister du den, kan ingen låse opp dataene igjen.
+      Elevnavn synkes aldri og må legges inn på hver enhet.
+    </p>
+
+    <div id="synkStatus" class="synk-status synk-av"></div>
+
+    <div id="synkInnlogging" class="synk-blokk">
+      <label class="synk-label" for="synkEpost">E-postadresse</label>
+      <div class="synk-rad">
+        <input type="email" id="synkEpost" class="synk-input" placeholder="deg@example.com" autocomplete="email">
+        <button class="data-toolbar-btn" onclick="synkLoggInn()">Send innloggingslenke</button>
+      </div>
+      <p class="minside-hjelpetekst">Du får en lenke på e-post. Ingen passord.</p>
+    </div>
+
+    <div id="synkPassfraseSeksjon" class="synk-blokk" style="display:none">
+      <label class="synk-label" for="synkPassfrase">Passfrase</label>
+      <div class="synk-rad">
+        <input type="password" id="synkPassfrase" class="synk-input" placeholder="Minst 8 tegn" autocomplete="off">
+        <button class="data-toolbar-btn" onclick="lagrePassfrase()">Lagre</button>
+        <button class="data-toolbar-btn" onclick="glemPassfrase()">Glem</button>
+      </div>
+      <p class="minside-hjelpetekst" id="synkPassfraseStatus"></p>
+    </div>
+
+    <div id="synkAktiv" class="synk-blokk" style="display:none">
+      <div class="synk-rad">
+        <button class="data-toolbar-btn" onclick="syncNaa()">↻ Synkroniser nå</button>
+        <button class="data-toolbar-btn" onclick="synkLoggUt()">Logg ut</button>
+        <span class="minside-hjelpetekst">Innlogget som <span id="synkBrukerEpost"></span></span>
+      </div>
+    </div>
+  </div>
+  <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Data</div>
     <p class="minside-hjelpetekst">Eksporter all data som JSON-fil, eller importer fra en tidligere eksport.</p>
     <div class="data-toolbar">
@@ -617,5 +654,18 @@
 </div>
 
 <script src="app.js"></script>
+
+<!-- Supabase-klienten lastes som modul og legges på window slik at
+     sync.js kan bruke den uten at resten av appen blir moduler -->
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  window.supabaseJs = { createClient };
+  window.dispatchEvent(new Event('supabase-klar'));
+</script>
+<script src="sync.js"></script>
+<script>
+  if (window.supabaseJs) initSync();
+  else window.addEventListener('supabase-klar', initSync);
+</script>
 </body>
 </html>

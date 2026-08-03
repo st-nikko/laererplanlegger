@@ -7,9 +7,14 @@ const { JSDOM } = require('jsdom');
 const html = fs.readFileSync(path + 'index.html', 'utf8');
 const js   = fs.readFileSync(path + 'app.js', 'utf8');
 
-// Bytt <script src="app.js"> mot inline-kode
-const htmlInline = html.replace(/<script src="app\.js"><\/script>/,
-  '<script>' + js + '</script>');
+// Bytt <script src="app.js"> mot inline-kode, og fjern synk-oppsettet —
+// det krever nettverk og modulstøtte jsdom ikke har. Synken testes for
+// seg i tests/synk.test.js.
+const htmlInline = html
+  .replace(/<script src="app\.js"><\/script>/, '<script>' + js + '</script>')
+  .replace(/<script type="module">[\s\S]*?<\/script>/g, '')
+  .replace(/<script src="sync\.js"><\/script>/, '')
+  .replace(/<script>\s*if \(window\.supabaseJs\)[\s\S]*?<\/script>/, '');
 
 function lagStore(seed) {
   const data = { ...seed };

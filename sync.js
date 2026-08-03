@@ -1,0 +1,356 @@
+// ════════════════════════════════════════════════════════════
+// SYNK — kryptert synkronisering mellom enheter via Supabase
+// ════════════════════════════════════════════════════════════
+//
+// Prinsipp: hele datasettet krypteres i nettleseren med en passfrase
+// bare du kjenner, og lastes opp som én ugjennomtrengelig streng.
+// Supabase lagrer og henter, men kan ikke lese innholdet.
+//
+// Elevnavn synkes aldri. De ligger i lp_studentNames og forlater
+// ikke enheten — se ELEVNAVN-seksjonen i app.js.
+//
+// Konfliktmodell: siste skriving vinner. Redigerer du på to enheter
+// samtidig, går den eldste endringen tapt. Akseptabelt for én bruker
+// med én enhet om gangen; UI viser derfor alltid sist synkronisert.
+
+// ────────────────────────────────────────────
+// KONFIGURASJON
+// ────────────────────────────────────────────
+const SUPABASE_URL  = 'https://sfghgzktphhraiqiwcym.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmZ2hnemt0cGhocmFpcWl3Y3ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NDU1NjUsImV4cCI6MjEwMTMyMTU2NX0.4v9zb_1gyJmZCQW2TiyxFwayFUAf8E86SfjNXJXZPwQ';
+
+// Nøkler som synkes. lp_studentNames er bevisst utelatt.
+const SYNK_NOKLER = [
+  'lp_events', 'lp_todos', 'lp_planfestetTid', 'lp_overtid',
+  'lp_lessonData', 'lp_topicsBySubject', 'lp_students',
+  'lp_fridager', 'lp_skoleaar'
+];
+
+// Lokale nøkler for synktilstand
+const LS_PASSFRASE   = 'lp_sync_passfrase';
+const LS_SIST_SYNK   = 'lp_sync_sist';
+const LS_ENHETSNAVN  = 'lp_sync_enhet';
+
+let supabase       = null;
+let synkBruker     = null;   // innlogget bruker, eller null
+let synkStatus     = 'av';   // av | venter | synker | ok | feil
+let synkMelding    = '';
+let pushTimer      = null;
+
+// ────────────────────────────────────────────
+// OPPSTART
+// ────────────────────────────────────────────
+async function initSync() {
+  if (!window.supabaseJs) return;               // biblioteket lastet ikke
+  supabase = window.supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+  const { data } = await supabase.auth.getSession();
+  synkBruker = data?.session?.user || null;
+
+  supabase.auth.onAuthStateChange((_e, sesjon) => {
+    synkBruker = sesjon?.user || null;
+    tegnSynkStatus();
+    if (synkBruker && harPassfrase()) syncPull();
+  });
+
+  if (synkBruker && harPassfrase()) {
+    await syncPull();
+  } else {
+    settStatus('av', synkBruker ? 'Passfrase mangler' : 'Ikke innlogget');
+  }
+}
+
+function settStatus(status, melding = '') {
+  synkStatus  = status;
+  synkMelding = melding;
+  tegnSynkStatus();
+}
+
+function harPassfrase() {
+  return Boolean(localStorage.getItem(LS_PASSFRASE));
+}
+
+function enhetsnavn() {
+  let n = localStorage.getItem(LS_ENHETSNAVN);
+  if (!n) {
+    n = 'Enhet ' + Math.random().toString(36).slice(2, 6);
+    localStorage.setItem(LS_ENHETSNAVN, n);
+  }
+  return n;
+}
+
+// ────────────────────────────────────────────
+// KRYPTERING (AES-GCM, nøkkel utledet med PBKDF2)
+// ────────────────────────────────────────────
+// Passfrasen forlater aldri enheten. Salt og IV er ikke hemmelige og
+// lagres i klartekst sammen med chifferteksten — de er der for at
+// samme passfrase skal gi ulik chiffertekst hver gang.
+
+const PBKDF2_RUNDER = 250000;
+
+function tilBase64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function fraBase64(s) {
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+async function utledNokkel(passfrase, salt) {
+  const enc = new TextEncoder();
+  const raa = await crypto.subtle.importKey(
+    'raw', enc.encode(passfrase), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_RUNDER, hash: 'SHA-256' },
+    raa,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function krypter(klartekst, passfrase) {
+  const salt   = crypto.getRandomValues(new Uint8Array(16));
+  const iv     = crypto.getRandomValues(new Uint8Array(12));
+  const nokkel = await utledNokkel(passfrase, salt);
+  const buf    = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, nokkel, new TextEncoder().encode(klartekst)
+  );
+  return { ciphertext: tilBase64(buf), salt: tilBase64(salt), iv: tilBase64(iv) };
+}
+
+async function dekrypter(pakke, passfrase) {
+  const salt   = fraBase64(pakke.salt);
+  const iv     = fraBase64(pakke.iv);
+  const nokkel = await utledNokkel(passfrase, salt);
+  const buf    = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv }, nokkel, fraBase64(pakke.ciphertext)
+  );
+  return new TextDecoder().decode(buf);
+}
+
+// ────────────────────────────────────────────
+// HVA SOM SYNKES
+// ────────────────────────────────────────────
+function samleSynkdata() {
+  const ut = {};
+  SYNK_NOKLER.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v !== null) ut[k] = v;
+  });
+  return JSON.stringify(ut);
+}
+
+function skrivSynkdata(json) {
+  const inn = JSON.parse(json);
+  Object.keys(inn).forEach(k => {
+    // Vokter mot at en fremtidig endring smugler navn inn i synken
+    if (!SYNK_NOKLER.includes(k)) return;
+    localStorage.setItem(k, inn[k]);
+  });
+}
+
+// ────────────────────────────────────────────
+// PUSH / PULL
+// ────────────────────────────────────────────
+
+// Kalles fra saveToStorage(). Samler opp endringer i to sekunder slik
+// at en serie raske lagringer blir én opplasting.
+function syncPushDebounced() {
+  if (!klarTilSynk()) return;
+  settStatus('venter');
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(syncPush, 2000);
+}
+
+function klarTilSynk() {
+  return Boolean(supabase && synkBruker && harPassfrase());
+}
+
+async function syncPush() {
+  if (!klarTilSynk()) return;
+  clearTimeout(pushTimer);
+  settStatus('synker');
+  try {
+    const pakke = await krypter(samleSynkdata(), localStorage.getItem(LS_PASSFRASE));
+    const na    = new Date().toISOString();
+
+    const { error } = await supabase.from('sync_data').upsert({
+      user_id:    synkBruker.id,
+      ciphertext: pakke.ciphertext,
+      salt:       pakke.salt,
+      iv:         pakke.iv,
+      updated_at: na,
+      enhet:      enhetsnavn()
+    });
+    if (error) throw error;
+
+    localStorage.setItem(LS_SIST_SYNK, na);
+    settStatus('ok');
+  } catch (e) {
+    console.warn('Synk opp feilet:', e);
+    settStatus('feil', e.message || 'Kunne ikke laste opp');
+  }
+}
+
+async function syncPull({ stille = false } = {}) {
+  if (!klarTilSynk()) return;
+  if (!stille) settStatus('synker');
+  try {
+    const { data, error } = await supabase
+      .from('sync_data')
+      .select('ciphertext, salt, iv, updated_at, enhet')
+      .eq('user_id', synkBruker.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    // Ingen rad ennå — denne enheten er første som laster opp
+    if (!data) { await syncPush(); return; }
+
+    const sist = localStorage.getItem(LS_SIST_SYNK);
+    if (sist && new Date(data.updated_at) <= new Date(sist)) {
+      settStatus('ok');   // vi er allerede oppdatert
+      return;
+    }
+
+    let json;
+    try {
+      json = await dekrypter(data, localStorage.getItem(LS_PASSFRASE));
+    } catch {
+      settStatus('feil', 'Feil passfrase — dataene kunne ikke låses opp');
+      return;
+    }
+
+    skrivSynkdata(json);
+    localStorage.setItem(LS_SIST_SYNK, data.updated_at);
+    settStatus('ok');
+
+    // Last inn på nytt slik at minnet stemmer med det nye innholdet
+    loadFromStorage();
+    render();
+    tegnSynkStatus();
+  } catch (e) {
+    console.warn('Synk ned feilet:', e);
+    settStatus('feil', e.message || 'Kunne ikke hente data');
+  }
+}
+
+async function syncNaa() {
+  if (!klarTilSynk()) { alert('Logg inn og sett passfrase først.'); return; }
+  await syncPull();
+  await syncPush();
+}
+
+// ────────────────────────────────────────────
+// INNLOGGING (magisk lenke på e-post)
+// ────────────────────────────────────────────
+async function synkLoggInn() {
+  const felt = document.getElementById('synkEpost');
+  const epost = (felt?.value || '').trim();
+  if (!epost) { alert('Skriv inn e-postadressen din.'); return; }
+  if (!supabase) { alert('Synk er ikke tilgjengelig — kunne ikke laste Supabase.'); return; }
+
+  settStatus('synker', 'Sender lenke …');
+  const { error } = await supabase.auth.signInWithOtp({
+    email: epost,
+    options: { emailRedirectTo: window.location.href.split('#')[0] }
+  });
+
+  if (error) {
+    settStatus('feil', error.message);
+  } else {
+    settStatus('av', 'Sjekk e-posten din — vi sendte en innloggingslenke til ' + epost);
+  }
+}
+
+async function synkLoggUt() {
+  if (!confirm('Logge ut av synk? Dataene blir liggende på denne enheten.')) return;
+  await supabase.auth.signOut();
+  synkBruker = null;
+  settStatus('av', 'Ikke innlogget');
+}
+
+// ────────────────────────────────────────────
+// PASSFRASE
+// ────────────────────────────────────────────
+// Passfrasen er den eneste nøkkelen til dataene. Mister du den, er det
+// ingen vei tilbake — verken vi eller Supabase kan gjenopprette noe.
+function lagrePassfrase() {
+  const felt = document.getElementById('synkPassfrase');
+  const p = (felt?.value || '').trim();
+  if (p.length < 8) { alert('Passfrasen bør være minst 8 tegn.'); return; }
+
+  const gammel = localStorage.getItem(LS_PASSFRASE);
+  if (gammel && gammel !== p) {
+    if (!confirm('Du endrer passfrasen. Data som allerede ligger i skyen ble kryptert med den gamle, og kan ikke låses opp med den nye.\n\nFortsette?')) return;
+    localStorage.removeItem(LS_SIST_SYNK);
+  }
+
+  localStorage.setItem(LS_PASSFRASE, p);
+  felt.value = '';
+  settStatus('av', 'Passfrase lagret');
+  if (klarTilSynk()) syncPull();
+}
+
+function glemPassfrase() {
+  if (!confirm('Fjerner passfrasen fra denne enheten. Du må skrive den inn igjen for å synke.\n\nFortsette?')) return;
+  localStorage.removeItem(LS_PASSFRASE);
+  localStorage.removeItem(LS_SIST_SYNK);
+  settStatus('av', 'Passfrase fjernet');
+}
+
+// ────────────────────────────────────────────
+// STATUSVISNING
+// ────────────────────────────────────────────
+const STATUS_TEKST = {
+  av:     'Av',
+  venter: 'Endringer venter …',
+  synker: 'Synkroniserer …',
+  ok:     'Synkronisert',
+  feil:   'Feil'
+};
+
+function sistSynkTekst() {
+  const s = localStorage.getItem(LS_SIST_SYNK);
+  if (!s) return 'aldri';
+  const d = new Date(s);
+  const min = Math.round((Date.now() - d.getTime()) / 60000);
+  if (min < 1)   return 'nå nettopp';
+  if (min < 60)  return min + ' min siden';
+  if (min < 1440) return Math.round(min / 60) + ' t siden';
+  return d.toLocaleDateString('nb-NO');
+}
+
+function tegnSynkStatus() {
+  const boks = document.getElementById('synkStatus');
+  if (!boks) return;
+
+  const innlogget = Boolean(synkBruker);
+  const pass      = harPassfrase();
+
+  boks.className = 'synk-status synk-' + synkStatus;
+  boks.innerHTML = `
+    <div class="synk-status-rad">
+      <span class="synk-prikk"></span>
+      <strong>${STATUS_TEKST[synkStatus] || synkStatus}</strong>
+      ${innlogget && pass ? `<span class="synk-sist">Sist: ${sistSynkTekst()}</span>` : ''}
+    </div>
+    ${synkMelding ? `<div class="synk-melding">${synkMelding}</div>` : ''}`;
+
+  const seksjonInn  = document.getElementById('synkInnlogging');
+  const seksjonPass = document.getElementById('synkPassfraseSeksjon');
+  const seksjonAkt  = document.getElementById('synkAktiv');
+  if (seksjonInn)  seksjonInn.style.display  = innlogget ? 'none' : '';
+  if (seksjonPass) seksjonPass.style.display = innlogget ? '' : 'none';
+  if (seksjonAkt)  seksjonAkt.style.display  = innlogget ? '' : 'none';
+
+  const epostVis = document.getElementById('synkBrukerEpost');
+  if (epostVis) epostVis.textContent = synkBruker?.email || '';
+
+  const passVis = document.getElementById('synkPassfraseStatus');
+  if (passVis) {
+    passVis.textContent = pass
+      ? 'Passfrase er satt på denne enheten.'
+      : 'Ingen passfrase på denne enheten — synk er av.';
+  }
+}

@@ -2,7 +2,57 @@
 
 ---
 
-## Siste økt: 3. august 2026 (økt 19) — Pseudonymisering av elevnavn (fullført)
+## Siste økt: 3. august 2026 (økt 20) — Kryptert synk via Supabase (bygget, ikke verifisert i drift)
+
+### Hva ble gjort
+
+**Ny fil `sync.js`.** Holdt utenfor app.js, som allerede er på 2260 linjer.
+Vanlig `<script>`-tag og globale funksjoner — konvensjonen holdes.
+
+**Kryptering.** Passfrase → PBKDF2 (250 000 runder, SHA-256) → AES-GCM-256.
+Tilfeldig salt og IV per opplasting, lagret i klartekst ved siden av
+chifferteksten. Supabase ser bare en base64-streng.
+
+**Datavalg.** `SYNK_NOKLER` lister de ni nøklene som synkes.
+`lp_studentNames` er utelatt, og `skrivSynkdata()` filtrerer innkommende
+data mot samme liste — en fremtidig endring kan altså ikke smugle navn
+inn i synken, og en manipulert nyttelast kan ikke overskrive lokale navn.
+
+**Innlogging.** Magisk lenke på e-post, ingen passord. Supabase-klienten
+lastes som ESM fra jsDelivr og legges på `window.supabaseJs`.
+
+**Push/pull.** `saveToStorage()` kaller `syncPushDebounced()` med to
+sekunders forsinkelse. Ved oppstart hentes skydata hvis `updated_at` er
+nyere enn lokal `lp_sync_sist`. Siste skriving vinner.
+
+**UI.** Egen seksjon i Min side over Data-seksjonen: statusboks med
+fargekodet prikk, e-postinnlogging, passfrasefelt, synk nå, logg ut.
+
+**Tester.** `tests/synk.test.js` — sju tester som kjører sync.js i en
+`node:vm`-kontekst uten Supabase. Dekker rundtur, at chifferteksten ikke
+lekker klartekst, feil passfrase, at samme tekst gir ulik chiffertekst,
+og at navn verken samles opp eller kan overskrives.
+
+### Ikke verifisert
+- Ingenting er testet mot ekte Supabase ennå. Innlogging, RLS-reglene og
+  faktisk synk mellom to enheter gjenstår å prøve i drift.
+- Redirect-URL må være registrert i Supabase, ellers virker ikke lenka.
+
+### Merk
+- Passfrasen ligger i klartekst i `lp_sync_passfrase`. Den beskytter mot
+  at Supabase kan lese dataene, ikke mot noen med tilgang til maskinen.
+- Mister Nikolai passfrasen, er skydataene tapt. Ingen gjenoppretting.
+- `const` på toppnivå blir ikke egenskaper på et `vm`-kontekstobjekt
+  heller — testene henter dem via `vm.runInContext()`.
+
+### Neste steg
+- Prøv synk i drift: logg inn, sett passfrase, verifiser at to enheter
+  får samme data.
+- Vurder påminnelse i notatfeltene om at fritekst kan inneholde navn.
+
+---
+
+## Økt 19: 3. august 2026 — Pseudonymisering av elevnavn (fullført)
 
 Forarbeid til datasynk: elevnavn skal aldri forlate enheten.
 

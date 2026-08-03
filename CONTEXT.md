@@ -16,6 +16,7 @@ Lærerplanlegger/
 │                       # (het ukesoversikt.html t.o.m. økt 17 — omdøpt for GitHub Pages)
 ├── app.css             # All CSS, ~323 linjer. CSS-variabler, layout, modal-stiler, event-stiler, elev-admin-stiler.
 ├── app.js              # All JavaScript, ~1407 linjer. Se seksjoner nedenfor.
+├── sync.js             # Kryptert synk mot Supabase. Egen fil for å holde app.js nede.
 ├── CONTEXT.md          # Dette dokumentet
 ├── SESSION-NOTES.md    # Løpende øktnotater
 ├── funksjonsplan.md    # Originalt kravdokument (referanse)
@@ -58,6 +59,28 @@ Lærerplanlegger/
 - **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`.
 - **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
+
+---
+
+### sync.js — seksjoner
+
+| Seksjon | Innhold |
+|---------|---------|
+| KONFIGURASJON | `SUPABASE_URL`, `SUPABASE_ANON`, `SYNK_NOKLER` (hvilke localStorage-nøkler som synkes — `lp_studentNames` er bevisst utelatt) |
+| OPPSTART | `initSync()`, `settStatus()`, `harPassfrase()`, `enhetsnavn()` |
+| KRYPTERING | `utledNokkel()` (PBKDF2, 250k runder), `krypter()`, `dekrypter()` (AES-GCM) |
+| HVA SOM SYNKES | `samleSynkdata()`, `skrivSynkdata()` — sistnevnte filtrerer mot `SYNK_NOKLER` så innkommende data ikke kan overskrive lokale navn |
+| PUSH / PULL | `syncPushDebounced()` (2 s), `syncPush()`, `syncPull()`, `syncNaa()` |
+| INNLOGGING | `synkLoggInn()` (magisk lenke), `synkLoggUt()` |
+| PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
+| STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
+
+Supabase-tabellen `sync_data` har én rad per bruker: `ciphertext`, `salt`,
+`iv`, `updated_at`, `enhet`. Row Level Security gjør at hver bruker kun
+ser sin egen rad. Serveren ser aldri klartekst.
+
+`saveToStorage()` i app.js kaller `syncPushDebounced()` hvis funksjonen
+finnes — appen fungerer uendret om `sync.js` ikke lastes.
 
 ---
 
