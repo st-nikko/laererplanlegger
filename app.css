@@ -473,6 +473,12 @@
     .data-toolbar-btn:hover { background: var(--border); color: var(--text-primary); }
 
 
+/* Raden som redigeres i skoleruta */
+.rad-redigeres td {
+  background: var(--meny-aktiv-bg, var(--surface));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 /* ────────────────────────────────────────────
    ELEVNAVN SOM MANGLER LOKALT
    ──────────────────────────────────────────── */

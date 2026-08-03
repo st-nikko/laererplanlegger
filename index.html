@@ -152,7 +152,10 @@
           <input type="date" id="frigagTil">
         </div>
         <div class="form-field" style="flex:0 0 auto;align-self:flex-end">
-          <button class="btn btn-primary" onclick="leggTilFridag()">Legg til</button>
+          <button class="btn btn-primary" id="fridagLagreBtn" onclick="leggTilFridag()">Legg til</button>
+        </div>
+        <div class="form-field" style="flex:0 0 auto;align-self:flex-end">
+          <button class="btn" id="fridagAvbrytBtn" style="display:none" onclick="avbrytFridagRedigering()">Avbryt</button>
         </div>
       </div>
     </div>

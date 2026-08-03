@@ -36,6 +36,28 @@ layout, så `getBoundingClientRect` stubbes i testen.
 Testen seeder derfor `lp_skoleaar`. Samme forhold gjelder appen i drift —
 Nikolai må oppdatere skoleåret til 2026/27 for å se timeplanen sin.
 
+### Redigering i skoleruta
+
+Nikolai hadde en skrivefeil i en ferieoppføring og måtte slette og legge
+inn på nytt for å rette den.
+
+Samme skjema brukes nå til både å legge til og redigere.
+`redigererFridagId` styrer modus: er den satt, oppdaterer
+`leggTilFridag()` eksisterende oppføring i stedet for å pushe ny.
+Knappeteksten bytter til «Lagre endring», en Avbryt-knapp dukker opp,
+og raden som redigeres markeres med `.rad-redigeres`.
+
+Detaljer verdt å huske:
+- Endagsoppføringer lagrer `til = fra`. Ved redigering vises til-feltet
+  tomt, ellers ser det ut som brukeren har satt en sluttdato selv.
+- Sletter man raden som redigeres, må skjemaet ut av redigeringsmodus —
+  ellers ville neste lagring skrive til en oppføring som ikke finnes.
+- Sletting fikk en bekreftelsesdialog; den manglet helt før.
+- Ryddet vekk en typo i den gamle koden: `btn.dataset.frigagId` traff
+  aldri, det var bare fallbacket `getAttribute` som virket.
+
+`tests/skolerute.test.js` — ni jsdom-tester.
+
 ### Neste steg
 - Påminnelse i notatfeltene om at fritekst kan inneholde elevnavn.
 - Uke-etiketten viser månedsnavn i Elever/Elevlogg-visning.

@@ -2161,41 +2161,88 @@ function renderSkolerute() {
   sorted.forEach(f => {
     const fra = f.fra.split('-').reverse().join('.');
     const til = f.til !== f.fra ? f.til.split('-').reverse().join('.') : '—';
-    html += `<tr>
+    const redigeres = f.id === redigererFridagId;
+    html += `<tr${redigeres ? ' class="rad-redigeres"' : ''}>
       <td>${f.tittel}</td>
       <td>${typeLabel[f.type] || f.type}</td>
       <td>${fra}</td>
       <td>${til}</td>
-      <td><button class="btn-icon-slett" data-fridag-id="${f.id}" title="Slett">×</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn-small" data-rediger-fridag="${f.id}">Rediger</button>
+        <button class="btn-icon-slett" data-fridag-id="${f.id}" title="Slett">×</button>
+      </td>
     </tr>`;
   });
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Slett-knapper
+  container.querySelectorAll('[data-rediger-fridag]').forEach(btn => {
+    btn.onclick = () => redigerFridag(btn.getAttribute('data-rediger-fridag'));
+  });
   container.querySelectorAll('[data-fridag-id]').forEach(btn => {
-    btn.onclick = () => slettFridag(btn.dataset.frigagId || btn.getAttribute('data-fridag-id'));
+    btn.onclick = () => slettFridag(btn.getAttribute('data-fridag-id'));
   });
 }
 
+// Id-en til oppføringen som redigeres, eller null når vi legger til ny.
+let redigererFridagId = null;
+
+// Samme skjema brukes til begge deler — knappeteksten viser modusen.
 function leggTilFridag() {
   const tittel = document.getElementById('frigagTittel').value.trim();
   const type   = document.getElementById('frigagType').value;
   const fra    = document.getElementById('frigagFra').value;
   const til    = document.getElementById('frigagTil').value || fra;
   if (!tittel || !fra) { alert('Fyll inn navn og fra-dato.'); return; }
-  fridager.push({ id: crypto.randomUUID(), fra, til, tittel, type });
+
+  if (redigererFridagId !== null) {
+    const f = fridager.find(x => x.id === redigererFridagId);
+    if (f) Object.assign(f, { fra, til, tittel, type });
+  } else {
+    fridager.push({ id: crypto.randomUUID(), fra, til, tittel, type });
+  }
+
   saveToStorage();
-  // Nullstill skjema
-  document.getElementById('frigagTittel').value = '';
-  document.getElementById('frigagFra').value    = '';
-  document.getElementById('frigagTil').value    = '';
-  renderSkolerute();
+  avbrytFridagRedigering();   // nullstiller skjema, modus og tabell
   render();
 }
 
+function redigerFridag(id) {
+  const f = fridager.find(x => x.id === id);
+  if (!f) return;
+  redigererFridagId = id;
+
+  document.getElementById('frigagTittel').value = f.tittel;
+  document.getElementById('frigagType').value   = f.type;
+  document.getElementById('frigagFra').value    = f.fra;
+  // Endagsoppføringer lagrer til = fra; da skal til-feltet stå tomt
+  document.getElementById('frigagTil').value    = (f.til && f.til !== f.fra) ? f.til : '';
+
+  document.getElementById('fridagLagreBtn').textContent    = 'Lagre endring';
+  document.getElementById('fridagAvbrytBtn').style.display = '';
+  renderSkolerute();
+  document.getElementById('frigagTittel').focus();
+}
+
+function avbrytFridagRedigering() {
+  redigererFridagId = null;
+  document.getElementById('frigagTittel').value = '';
+  document.getElementById('frigagFra').value    = '';
+  document.getElementById('frigagTil').value    = '';
+
+  const lagre = document.getElementById('fridagLagreBtn');
+  if (lagre) lagre.textContent = 'Legg til';
+  const avbryt = document.getElementById('fridagAvbrytBtn');
+  if (avbryt) avbryt.style.display = 'none';
+  renderSkolerute();
+}
+
 function slettFridag(id) {
-  fridager = fridager.filter(f => f.id !== id);
+  const f = fridager.find(x => x.id === id);
+  if (f && !confirm(`Slette «${f.tittel}»?`)) return;
+  // Redigerer vi nettopp denne, må skjemaet ut av redigeringsmodus
+  if (redigererFridagId === id) avbrytFridagRedigering();
+  fridager = fridager.filter(x => x.id !== id);
   saveToStorage();
   renderSkolerute();
   render();
