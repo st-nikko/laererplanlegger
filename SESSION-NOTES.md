@@ -2,7 +2,48 @@
 
 ---
 
-## Siste økt: 3. august 2026 (økt 18) — Versjonskontroll og publisering (fullført)
+## Siste økt: 3. august 2026 (økt 19) — Pseudonymisering av elevnavn (fullført)
+
+Forarbeid til datasynk: elevnavn skal aldri forlate enheten.
+
+### Hva ble gjort
+
+**Splitting ved lagring.** `allStudents[]` beholder `navn` i minnet, så
+alle 18 rendringspunkter er urørt. `saveToStorage()` deler i to nøkler:
+`lp_students` (struktur, kan synkes) og `lp_studentNames` (navn, lokalt).
+`loadFromStorage()` setter dem sammen igjen via `hydrerNavn()`.
+
+**Fallback-navn.** Mangler navnet på enheten, vises `Elev c123` (siste fire
+tegn av ID-en) og `navnMangler = true` settes. Flagget hindrer at
+fallbacket lagres som om det var et ekte navn. Redigeringsskjemaet viser
+tomt felt, ikke fallbacket.
+
+**Migrering.** Finnes ikke `lp_studentNames`, bygges kartet fra navnene
+som lå i `lp_students` — gamle oppsett fungerer uten inngrep.
+
+**Eksport/import.** Ny knapp «Eksporter uten navn» gir pseudonymisert fil.
+Full eksport har navnene i eget felt `studentNames`. Import leser begge
+formater, og beholder lokale navn for elever fila ikke dekker.
+Eksport tar nå også med `fridager` og `skoleaar`, som manglet før.
+
+**Banner i Elever-fanen** når elever mangler navn lokalt.
+
+**Tester.** `tests/pseudonymisering.test.js` — fem jsdom-tester som dekker
+migrering, fallback, persistering, ny elev via skjema og begge
+eksportvariantene. Alle passerer.
+
+### Merk
+- `const` på toppnivå havner ikke på `window`. Testene henter globale
+  variabler via `window.eval()`.
+- Fritekstnotater kan fortsatt inneholde navn brukeren har skrevet inn.
+  Dette er en vane, ikke en bug — vurder påminnelse i notatfeltet.
+
+### Neste steg
+- Økt B: Supabase-synk med AES-GCM-kryptering (se plan under økt 18).
+
+---
+
+## Økt 18: 3. august 2026 — Versjonskontroll og publisering (fullført)
 
 ### Hva ble gjort
 

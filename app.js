@@ -87,6 +87,50 @@ const allStudents = []; // ingen seed-data
 function studentById(id) { return allStudents.find(s => s.id === id); }
 
 // ────────────────────────────────────────────
+// ELEVNAVN — holdes lokalt, forlater aldri enheten
+// ────────────────────────────────────────────
+// allStudents[] bærer navnet i minnet slik at all rendring fungerer som før,
+// men ved lagring splittes lista i to: strukturen (id, trinn, startDato …)
+// går til lp_students og kan synkes, mens navnene går til lp_studentNames
+// og blir liggende på denne enheten. Elever uten kjent navn får et
+// fallback-navn og flagget navnMangler = true, slik at fallbacket aldri
+// lagres som om det var et ekte navn.
+
+function fallbackNavn(id) {
+  return 'Elev ' + String(id).slice(-4);
+}
+
+function elevNavn(id) {
+  const s = studentById(id);
+  return s ? s.navn : fallbackNavn(id);
+}
+
+// allStudents uten navn — dette er formen som kan forlate enheten
+function elevlisteUtenNavn() {
+  return allStudents.map(({ navn, navnMangler, ...rest }) => rest);
+}
+
+// { id: navn } for elever der vi faktisk kjenner navnet
+function navnekart() {
+  const kart = {};
+  allStudents.forEach(s => { if (!s.navnMangler && s.navn) kart[s.id] = s.navn; });
+  return kart;
+}
+
+// Sett navn på elevobjektene ut fra et navnekart
+function hydrerNavn(kart) {
+  allStudents.forEach(s => {
+    const ekte = kart[s.id];
+    if (ekte) { s.navn = ekte;              s.navnMangler = false; }
+    else      { s.navn = fallbackNavn(s.id); s.navnMangler = true;  }
+  });
+}
+
+function antallUtenNavn() {
+  return allStudents.filter(s => s.navnMangler).length;
+}
+
+// ────────────────────────────────────────────
 // LESSON DATA
 // lessonData: key = `${eventId}_${isoDate}` → { tema, notes, attendance }
 // attendance: { studentId: true/false }
@@ -1285,6 +1329,10 @@ function renderElevView() {
         <button class="btn-primary" onclick="leggTilFlereElever()">Legg til alle</button>
       </div>
     </div>
+    ${antallUtenNavn() ? `<div class="navn-mangler-banner">
+      ${antallUtenNavn()} elev${antallUtenNavn() !== 1 ? 'er' : ''} mangler navn på denne enheten.
+      Elevnavn synkes ikke — klikk «Rediger» for å legge dem inn her.
+    </div>` : ''}
     <table class="elev-table">
       <thead>
         <tr>
@@ -1305,7 +1353,7 @@ function renderElevView() {
     const startStr = s.startDato || '—';
     html += `
         <tr class="elev-table-row elev-hovud-rad" data-student-id="${s.id}">
-          <td><span class="elv-pil">▶</span> ${s.navn}</td>
+          <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span></td>
           <td>${s.trinn}. trinn</td>
           <td>${startStr}</td>
           <td class="${pctClass}">${pctStr} <span class="att-detail">(${att.present}/${att.total})</span></td>
@@ -1452,6 +1500,7 @@ function leggTilFlereElever() {
     allStudents.push({
       id:          crypto.randomUUID(),
       navn:        n,
+      navnMangler: false,
       trinn:       trinnVal,
       startDato:   startDato,
       arkivert:    false,
@@ -1476,7 +1525,9 @@ function openStudentForm(id) {
   if (editingStudentId !== null) {
     const s = allStudents.find(st => String(st.id) === String(editingStudentId));
     title.textContent = 'Rediger elev';
-    navn.value  = s ? s.navn    : '';
+    // Fallback-navn skal ikke fylles inn i skjemaet — feltet står tomt
+    // slik at det ekte navnet kan skrives inn på denne enheten
+    navn.value  = s ? (s.navnMangler ? '' : s.navn) : '';
     trinn.value = s ? s.trinn   : '';
     start.value = s ? (s.startDato || '') : '';
   } else {
@@ -1498,11 +1549,12 @@ function saveStudent() {
 
   if (editingStudentId !== null) {
     const s = allStudents.find(st => String(st.id) === String(editingStudentId));
-    if (s) { s.navn = navn; s.trinn = trinn; s.startDato = start; }
+    if (s) { s.navn = navn; s.navnMangler = false; s.trinn = trinn; s.startDato = start; }
   } else {
     allStudents.push({
       id:          crypto.randomUUID(),
       navn:        navn,
+      navnMangler: false,
       trinn:       trinn,
       startDato:   start,
       arkivert:    false,
@@ -1933,15 +1985,28 @@ function goToToday(){
 
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
 
-function exportData() {
-  const data = { events, todos, planfestetTid, overtid, lessonData, topicsBySubject, allStudents };
+// medNavn = true  → full lokal backup, inneholder elevnavn
+// medNavn = false → pseudonymisert: bare elev-IDer, trygg å dele
+function exportData(medNavn = true) {
+  const data = {
+    events, todos, planfestetTid, overtid, lessonData, topicsBySubject,
+    fridager, skoleaar,
+    allStudents: elevlisteUtenNavn()
+  };
+  if (medNavn) data.studentNames = navnekart();
+
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = 'laererplanlegger-' + isoDate(TODAY) + '.json';
+  a.download = 'laererplanlegger-' + (medNavn ? '' : 'anonym-') + isoDate(TODAY) + '.json';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function exportDataUtenNavn() {
+  if (!confirm('Eksporterer uten elevnavn. Filen inneholder fravær, tema og notater knyttet til anonyme elev-IDer.\n\nHusk at fritekstnotater kan inneholde navn du selv har skrevet inn.\n\nFortsette?')) return;
+  exportData(false);
 }
 
 function importData() {
@@ -1963,7 +2028,25 @@ function importData() {
         if (data.overtid)         localStorage.setItem('lp_overtid',         JSON.stringify(data.overtid));
         if (data.lessonData)      localStorage.setItem('lp_lessonData',      JSON.stringify(data.lessonData));
         if (data.topicsBySubject) localStorage.setItem('lp_topicsBySubject', JSON.stringify(data.topicsBySubject));
-        if (data.allStudents)     localStorage.setItem('lp_students',        JSON.stringify(data.allStudents));
+        if (data.fridager)        localStorage.setItem('lp_fridager',        JSON.stringify(data.fridager));
+        if (data.skoleaar)        localStorage.setItem('lp_skoleaar',        JSON.stringify(data.skoleaar));
+
+        if (data.allStudents) {
+          // Elevliste lagres alltid uten navn
+          const utenNavn = data.allStudents.map(({ navn, navnMangler, ...rest }) => rest);
+          localStorage.setItem('lp_students', JSON.stringify(utenNavn));
+
+          // Navn kan komme fra eget felt (nytt format) eller ligge på
+          // elevobjektene (eksport fra før pseudonymiseringen).
+          let navnKart = data.studentNames || null;
+          if (!navnKart) {
+            navnKart = {};
+            data.allStudents.forEach(s => { if (s.navn) navnKart[s.id] = s.navn; });
+          }
+          // Behold navn vi allerede har lokalt for elever fila ikke dekker
+          const eksisterende = JSON.parse(localStorage.getItem('lp_studentNames') || '{}');
+          localStorage.setItem('lp_studentNames', JSON.stringify({ ...eksisterende, ...navnKart }));
+        }
         location.reload();
       } catch(err) { alert('Kunne ikke lese filen. Kontroller at det er en gyldig JSON-fil.'); }
     };
@@ -2058,7 +2141,9 @@ function saveToStorage() {
     localStorage.setItem('lp_overtid',         JSON.stringify(overtid));
     localStorage.setItem('lp_lessonData',      JSON.stringify(lessonData));
     localStorage.setItem('lp_topicsBySubject', JSON.stringify(topicsBySubject));
-    localStorage.setItem('lp_students',        JSON.stringify(allStudents));
+    // Elever splittes: struktur kan synkes, navn blir liggende lokalt
+    localStorage.setItem('lp_students',        JSON.stringify(elevlisteUtenNavn()));
+    localStorage.setItem('lp_studentNames',    JSON.stringify(navnekart()));
     localStorage.setItem('lp_fridager',        JSON.stringify(fridager));
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
   } catch(e) {
@@ -2138,6 +2223,18 @@ function loadFromStorage() {
         if (s.arkivertDato === undefined) s.arkivertDato = null;
       });
     }
+
+    // Elevnavn fra egen nøkkel. Mangler nøkkelen, er dette et gammelt
+    // oppsett der navnene lå i lp_students — da bygger vi kartet derfra.
+    const storedNames = localStorage.getItem('lp_studentNames');
+    let navnKart;
+    if (storedNames) {
+      navnKart = JSON.parse(storedNames);
+    } else {
+      navnKart = {};
+      allStudents.forEach(s => { if (s.navn) navnKart[s.id] = s.navn; });
+    }
+    hydrerNavn(navnKart);
 
     // Fridager — bruk seed-data som fallback
     const storedFridager = localStorage.getItem('lp_fridager');

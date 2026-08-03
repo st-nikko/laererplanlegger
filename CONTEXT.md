@@ -18,7 +18,8 @@ Lærerplanlegger/
 ├── app.js              # All JavaScript, ~1407 linjer. Se seksjoner nedenfor.
 ├── CONTEXT.md          # Dette dokumentet
 ├── SESSION-NOTES.md    # Løpende øktnotater
-└── funksjonsplan.md    # Originalt kravdokument (referanse)
+├── funksjonsplan.md    # Originalt kravdokument (referanse)
+└── tests/              # jsdom-tester, kjøres med node
 ```
 
 ### app.js — seksjoner
@@ -28,6 +29,7 @@ Lærerplanlegger/
 | CONFIG  | `PERIODS` (skoletimetabell), gridkonstanter, `DAYS_*`, `MONTHS_*`, `TODAY` (hardkodet), navigasjonstilstand |
 | COLORS  | `COLOR_POOL`, `SPECIAL_COLORS`, `getSubjectColor()`, `eventColor()` |
 | STUDENTS + LESSON DATA | `allStudents[]` (`{id,navn,trinn,startDato}`), `lessonData{}`, `topicsBySubject{}`, seed-data |
+| ELEVNAVN | `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes |
 | EVENTS + WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `getWorkTimeForDate()` |
 | HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `calcSFS()`, `parseStudentId()`, `calcAttendance()` |
 | RENDER | `render()`, `renderWeekLabel()`, `renderDayHeaders()`, `renderGrid()`, `renderLegend()` |
@@ -51,7 +53,8 @@ Lærerplanlegger/
 
 - **Ingen rammeverk.** Vanilla JS og CSS. Alt rendres via `innerHTML` og `createElement`. Gjør det enkelt å forstå og endre uten toolchain.
 - **Global scope.** Alle funksjoner og variabler er globale. Enkelt, men kaller på refaktorering om appen vokser.
-- **localStorage-persistens.** Alle 7 datavariabler lagres automatisk ved hver mutasjon via `saveToStorage()`. Lastes ved oppstart via `loadFromStorage()`. Seed-data brukes som fallback hvis localStorage er tom.
+- **localStorage-persistens.** Alle datavariabler lagres automatisk ved hver mutasjon via `saveToStorage()`. Lastes ved oppstart via `loadFromStorage()`. Seed-data brukes som fallback hvis localStorage er tom.
+- **Elevnavn er skilt ut.** `allStudents[]` bærer `navn` i minnet, men ved lagring splittes lista: struktur til `lp_students` (kan synkes), navn til `lp_studentNames` (blir på enheten). Elever uten kjent navn får `Elev xxxx` og `navnMangler = true`, slik at fallbacket aldri lagres som ekte navn. Formålet er at fravær, tema og notater kan forlate maskinen uten å være direkte identifiserbare. **Merk:** fritekstfeltene `notes` og `studentNotes` kan fortsatt inneholde navn brukeren selv har skrevet inn.
 - **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`.
 - **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.

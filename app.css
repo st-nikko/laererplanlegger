@@ -472,3 +472,23 @@
     }
     .data-toolbar-btn:hover { background: var(--border); color: var(--text-primary); }
 
+
+/* ────────────────────────────────────────────
+   ELEVNAVN SOM MANGLER LOKALT
+   ──────────────────────────────────────────── */
+.navn-mangler {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.navn-mangler-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
