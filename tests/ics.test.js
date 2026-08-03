@@ -46,7 +46,8 @@ function lagDom(opsjoner = {}) {
     fridager = [],
     skoleaar = { start: '2026-08-17', slutt: '2026-09-11' },   // fire uker
     elever   = [{ id: 's1', trinn: 10, startDato: '2026-08-17', arkivert: false, arkivertDato: null }],
-    navn     = { s1: 'Esekiel' }
+    navn     = { s1: 'Esekiel' },
+    overtid  = null
   } = opsjoner;
 
   const store = lagStore({
@@ -54,7 +55,8 @@ function lagDom(opsjoner = {}) {
     lp_fridager:     JSON.stringify(fridager),
     lp_skoleaar:     JSON.stringify(skoleaar),
     lp_students:     JSON.stringify(elever),
-    lp_studentNames: JSON.stringify(navn)
+    lp_studentNames: JSON.stringify(navn),
+    ...(overtid ? { lp_overtid: JSON.stringify(overtid) } : {})
   });
 
   const dom = new JSDOM(htmlInline, {
@@ -216,6 +218,143 @@ test('tomt skoleår gir ingen hendelser, ikke krasj', () => {
 
 test('knappen finnes i Min side', () => {
   sant(html.includes('eksporterICS()'), 'mangler knapp i markup');
+});
+
+// ── Arbeidstidskalender ────────────────────────────────────────
+// Hjelper: hent blokkene for én dato som lesbare tidsspenn
+function blokker(w, isoDato) {
+  return w.arbeidstidForDato(new w.Date(isoDato + 'T00:00:00'))
+    .map(iv => w.fraDesimal(iv.fra) + '-' + w.fraDesimal(iv.til));
+}
+
+test('intervaller som overlapper slås sammen', () => {
+  const dom = lagDom(); const w = dom.window;
+  const slaa = iv => w.slaaSammenIntervaller(iv).map(x => [x.fra, x.til]);
+  like(slaa([{ fra: 8, til: 15 }, { fra: 14, til: 16 }]), [[8, 16]], 'overlapp');
+  like(slaa([{ fra: 8, til: 15 }, { fra: 15, til: 16 }]), [[8, 16]], 'kant i kant');
+  like(slaa([{ fra: 8, til: 15 }, { fra: 19, til: 21 }]), [[8, 15], [19, 21]], 'atskilte');
+  like(slaa([{ fra: 19, til: 21 }, { fra: 8, til: 15 }]), [[8, 15], [19, 21]], 'usortert inn');
+  like(slaa([{ fra: 8, til: 16 }, { fra: 10, til: 12 }]), [[8, 16]], 'helt innenfor');
+  dom.window.close();
+});
+
+test('vanlig arbeidsdag gir én blokk fra planfestet tid', () => {
+  const dom = lagDom({ events: [] }); const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['08:00-15:30'], 'mandag uten hendelser');
+  dom.window.close();
+});
+
+test('møte innenfor arbeidstiden endrer ingenting', () => {
+  const dom = lagDom({
+    events: [{ id: 5, title: 'Teammøte', category: 'mote', recurs: false,
+               date: '2026-08-17', start: '14:00', end: '15:00', students: [],
+               gyldigFra: '2020-01-01', gyldigTil: null }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['08:00-15:30'], 'skal fortsatt være én blokk');
+  dom.window.close();
+});
+
+test('møte som varer forbi arbeidsdagen forlenger blokka', () => {
+  const dom = lagDom({
+    events: [{ id: 5, title: 'Foreldremøte', category: 'mote', recurs: false,
+               date: '2026-08-17', start: '15:00', end: '16:30', students: [],
+               gyldigFra: '2020-01-01', gyldigTil: null }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['08:00-16:30'], 'blokka skal strekkes');
+  dom.window.close();
+});
+
+test('kveldsmøte blir en egen blokk', () => {
+  const dom = lagDom({
+    events: [{ id: 5, title: 'Foreldremøte', category: 'mote', recurs: false,
+               date: '2026-08-17', start: '19:00', end: '21:00', students: [],
+               gyldigFra: '2020-01-01', gyldigTil: null }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['08:00-15:30', '19:00-21:00'],
+       'ettermiddagen mellom skal ikke se opptatt ut');
+  dom.window.close();
+});
+
+test('helg uten hendelser gir ingenting', () => {
+  const dom = lagDom({ events: [] }); const w = dom.window;
+  like(blokker(w, '2026-08-22'), [], 'lørdag');
+  like(blokker(w, '2026-08-23'), [], 'søndag');
+  dom.window.close();
+});
+
+test('kurs i helga gir en blokk', () => {
+  const dom = lagDom({
+    events: [{ id: 6, title: 'Kurs', category: 'mote', recurs: false,
+               date: '2026-08-22', start: '10:00', end: '15:00', students: [],
+               gyldigFra: '2020-01-01', gyldigTil: null }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-22'), ['10:00-15:00'], 'lørdag med kurs');
+  dom.window.close();
+});
+
+test('ferie gir ingen arbeidstid', () => {
+  const dom = lagDom({
+    events: [],
+    fridager: [{ id: 'x', fra: '2026-08-17', til: '2026-08-21', tittel: 'Ferie', type: 'ferie' }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), [], 'mandag i ferien');
+  dom.window.close();
+});
+
+test('planleggingsdag er en arbeidsdag', () => {
+  const dom = lagDom({
+    events: [],
+    fridager: [{ id: 'x', fra: '2026-08-17', til: '2026-08-17', tittel: 'Planlegging', type: 'planlegging' }]
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['08:00-15:30'], 'planleggingsdag skal telle som jobb');
+  dom.window.close();
+});
+
+test('registrert overtid overstyrer planfestet tid', () => {
+  const dom = lagDom({
+    events: [],
+    overtid: { '2026-08-17': { start: '07:00', end: '17:00' } }
+  });
+  const w = dom.window;
+  like(blokker(w, '2026-08-17'), ['07:00-17:00'], 'overtid skal vinne');
+  dom.window.close();
+});
+
+test('jobbkalenderen røper ikke hva du gjør', () => {
+  const dom = lagDom({
+    events: [NORSK, ENETIME, { id: 7, title: 'Samtale med rektor', category: 'mote',
+             recurs: false, date: '2026-08-17', start: '16:00', end: '17:00',
+             students: [], gyldigFra: '2020-01-01', gyldigTil: null }]
+  });
+  const { ics } = dom.window.byggArbeidstidICS();
+  ['Norsk', 'Matematikk', 'Esekiel', 'Samtale med rektor', 'B12'].forEach(ord => {
+    sant(!ics.includes(ord), 'fant «' + ord + '» i jobbkalenderen');
+  });
+  sant(ics.includes('SUMMARY:På jobb'), 'alle blokker skal hete det samme');
+  dom.window.close();
+});
+
+test('blokkene markeres som opptatt', () => {
+  const dom = lagDom({ events: [] });
+  const { ics } = dom.window.byggArbeidstidICS();
+  sant(ics.includes('TRANSP:OPAQUE'), 'skal vises som opptatt');
+  sant(ics.includes('X-MICROSOFT-CDO-BUSYSTATUS:BUSY'), 'for Outlook');
+  sant(ics.includes('X-WR-CALNAME:På jobb'), 'kalendernavn');
+  dom.window.close();
+});
+
+test('jobbkalenderen dekker hele skoleåret', () => {
+  const dom = lagDom({ events: [] });
+  const { antall } = dom.window.byggArbeidstidICS();
+  // 17. aug – 11. sep 2026 er fire hele arbeidsuker
+  like(antall, 20, 'fire uker à fem virkedager');
+  dom.window.close();
 });
 
 // ── Kjør ───────────────────────────────────────────────────────

@@ -46,6 +46,7 @@ Lærerplanlegger/
 | SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()` |
 | MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, click-outside-lukking |
 | ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
+| ARBEIDSTIDSKALENDER | `arbeidstidForDato()`, `slaaSammenIntervaller()`, `fraDesimal()`, `byggArbeidstidICS()` — viser bare *når* man er opptatt, aldri hva. Grunnlag: planfestet tid eller registrert overtid, utvidet av hendelser. Blokker slås sammen kun når de overlapper eller møtes, så et kveldsmøte blir en egen blokk framfor å strekke arbeidsdagen. Helger tas med bare når det ligger en hendelse der. Alle blokker heter «På jobb» |
 | MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC |
 | LAGRING | `saveToStorage()`, `loadFromStorage()` + `render()` init-kall |
 
@@ -75,7 +76,7 @@ Lærerplanlegger/
 | INNLOGGING | `synkLoggInn()` / `synkOpprettKonto()` (e-post + passord), `synkLoggUt()`, `synkFeilTekst()` (norske feilmeldinger) |
 | PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
 | STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
-| ICS-PUBLISERING | `icsToken()`, `icsFilsti()`, `icsAdresse()`, `publiserICS()`, `slaAvICSPublisering()`, `tegnICSStatus()` — laster `byggICS()` opp til Storage-bøtta `kalender` under `{user_id}/{token}.ics`. **Fila er ikke kryptert** — bøtta er offentlig så Outlook kan hente uten innlogging, og beskyttelsen er at token ikke lar seg gjette. Elevnavn er uansett ikke med. Oppdateres av `syncPush()` når publisering er på |
+| ICS-PUBLISERING | `ICS_FEEDS` (to kalendere: `undervisning` og `jobb`), `feedToken()`, `feedAdresse()`, `publiserFeed()`, `slaAvFeed()`, `oppdaterPubliserteKalendere()`, `tegnICSStatus()` — laster opp til Storage-bøtta `kalender` under `{user_id}/{feed}-{token}.ics`. Hver kalender har **sin egen nøkkel**, så jobbkalenderen kan deles med familien uten at timeplanen følger med. **Filene er ikke krypterte** — bøtta er offentlig så Outlook og Google kan hente uten innlogging, og beskyttelsen er at token ikke lar seg gjette. Oppdateres av `syncPush()` |
 
 Supabase-tabellen `sync_data` har én rad per bruker: `ciphertext`, `salt`,
 `iv`, `updated_at`, `enhet`. Row Level Security gjør at hver bruker kun

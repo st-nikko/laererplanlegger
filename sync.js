@@ -25,15 +25,14 @@ const SYNK_NOKLER = [
   'lp_events', 'lp_todos', 'lp_planfestetTid', 'lp_overtid',
   'lp_lessonData', 'lp_topicsBySubject', 'lp_students',
   'lp_fridager', 'lp_skoleaar',
-  'lp_ics_token', 'lp_ics_publiser'
+  'lp_ics_token', 'lp_ics_publiser',
+  'lp_jobb_token', 'lp_jobb_publiser'
 ];
 
 // Lokale nøkler for synktilstand
 const LS_PASSFRASE   = 'lp_sync_passfrase';
 const LS_SIST_SYNK   = 'lp_sync_sist';
 const LS_ENHETSNAVN  = 'lp_sync_enhet';
-const LS_ICS_TOKEN   = 'lp_ics_token';
-const LS_ICS_PUBLISER= 'lp_ics_publiser';
 const ICS_BUCKET     = 'kalender';
 
 let supabase       = null;
@@ -195,7 +194,7 @@ async function syncPush() {
 
     // Er kalenderen publisert, holdes den oppdatert i samme slengen.
     // Feiler den, skal ikke selve synken regnes som mislykket.
-    if (icsPubliseres()) await publiserICS({ stille: true });
+    await oppdaterPubliserteKalendere();
   } catch (e) {
     console.warn('Synk opp feilet:', e);
     settStatus('feil', e.message || 'Kunne ikke laste opp');
@@ -444,58 +443,80 @@ function tegnSynkStatus() {
   tegnICSStatus();
 }
 
-// ════════════════════════════════════════════════════════════
-// PUBLISERING AV KALENDER TIL OUTLOOK
-// ════════════════════════════════════════════════════════════
-// Fila legges i en offentlig Storage-bøtte slik at Outlook kan hente
-// den uten innlogging. Den er derfor IKKE kryptert — i motsetning til
-// synkdataene. Beskyttelsen er at adressen inneholder en tilfeldig
-// nøkkel som ikke lar seg gjette. Kommer adressen på avveie, kan hvem
-// som helst lese timeplanen, og da må publiseringen slås av og på
-// igjen for å få ny adresse.
-//
-// Elevnavn er uansett ikke med: byggICS() bruker icsTittel(), som
-// aldri slår opp eleven. Se ICS-EKSPORT i app.js.
 
-function icsToken() {
-  let t = localStorage.getItem(LS_ICS_TOKEN);
+// ════════════════════════════════════════════════════════════
+// PUBLISERTE KALENDERE
+// ════════════════════════════════════════════════════════════
+// To atskilte kalendere med hver sin adresse:
+//
+//   undervisning — timeplanen din, til din egen Outlook
+//   jobb         — bare når du er opptatt, til deling med familien
+//
+// Adressene er ulike med vilje. Deler du arbeidstiden med familien,
+// skal ikke timeplanen følge med på kjøpet.
+//
+// Begge filene ligger i en offentlig Storage-bøtte slik at Outlook og
+// Google kan hente dem uten innlogging. De er derfor IKKE krypterte,
+// til forskjell fra synkdataene. Beskyttelsen er at adressen inneholder
+// en tilfeldig nøkkel som ikke lar seg gjette. Kommer en adresse på
+// avveie, slår man publiseringen av og på igjen — da kastes nøkkelen
+// og man får en ny adresse.
+
+const ICS_FEEDS = {
+  undervisning: {
+    navn:      'Undervisning',
+    tokenKey:  'lp_ics_token',
+    flaggKey:  'lp_ics_publiser',
+    bygg:      () => byggICS()
+  },
+  jobb: {
+    navn:      'På jobb',
+    tokenKey:  'lp_jobb_token',
+    flaggKey:  'lp_jobb_publiser',
+    bygg:      () => byggArbeidstidICS()
+  }
+};
+
+function feedToken(feed) {
+  const f = ICS_FEEDS[feed];
+  let t = localStorage.getItem(f.tokenKey);
   if (!t) {
     t = crypto.randomUUID().replace(/-/g, '');
-    localStorage.setItem(LS_ICS_TOKEN, t);
+    localStorage.setItem(f.tokenKey, t);
   }
   return t;
 }
 
-function icsFilsti() {
+function feedFilsti(feed) {
   if (!synkBruker) return null;
-  return `${synkBruker.id}/${icsToken()}.ics`;
+  return `${synkBruker.id}/${feed}-${feedToken(feed)}.ics`;
 }
 
-function icsAdresse() {
-  const sti = icsFilsti();
+function feedAdresse(feed) {
+  const sti = feedFilsti(feed);
   if (!sti) return null;
   return `${SUPABASE_URL}/storage/v1/object/public/${ICS_BUCKET}/${sti}`;
 }
 
-function icsPubliseres() {
-  return localStorage.getItem(LS_ICS_PUBLISER) === '1';
+function feedPubliseres(feed) {
+  return localStorage.getItem(ICS_FEEDS[feed].flaggKey) === '1';
 }
 
-async function publiserICS({ stille = false } = {}) {
+async function publiserFeed(feed, { stille = false } = {}) {
   if (!supabase || !synkBruker) {
-    if (!stille) alert('Logg inn under Synk mellom enheter først.');
+    if (!stille) alert('Logg inn under «Synk mellom enheter» først.');
     return false;
   }
 
-  const { ics, antall } = byggICS();
+  const { ics, antall } = ICS_FEEDS[feed].bygg();
   if (!antall && !stille) {
-    if (!confirm('Fant ingen undervisningstimer i skoleåret. Publisere en tom kalender likevel?')) return false;
+    if (!confirm('Fant ingenting å publisere i skoleåret. Publisere en tom kalender likevel?')) return false;
   }
 
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const { error } = await supabase.storage
     .from(ICS_BUCKET)
-    .upload(icsFilsti(), blob, {
+    .upload(feedFilsti(feed), blob, {
       contentType: 'text/calendar;charset=utf-8',
       cacheControl: '600',
       upsert: true
@@ -507,50 +528,71 @@ async function publiserICS({ stille = false } = {}) {
     return false;
   }
 
-  localStorage.setItem(LS_ICS_PUBLISER, '1');
+  localStorage.setItem(ICS_FEEDS[feed].flaggKey, '1');
+  saveToStorage();
   tegnICSStatus();
   return true;
 }
 
-async function slaAvICSPublisering() {
-  if (!confirm('Slå av publisering? Adressen slutter å virke, og Outlook mister timeplanen.\n\nSlår du på igjen senere, får du en ny adresse som må legges inn på nytt.')) return;
+async function slaAvFeed(feed) {
+  const f = ICS_FEEDS[feed];
+  if (!confirm(`Slå av «${f.navn}»? Adressen slutter å virke.\n\nSlår du på igjen senere, får du en ny adresse som må legges inn på nytt der du abonnerer.`)) return;
 
   if (supabase && synkBruker) {
-    const { error } = await supabase.storage.from(ICS_BUCKET).remove([icsFilsti()]);
+    const { error } = await supabase.storage.from(ICS_BUCKET).remove([feedFilsti(feed)]);
     if (error) console.warn('Kunne ikke slette publisert fil:', error);
   }
-  // Ny nøkkel neste gang — den gamle adressen skal ikke kunne gjenbrukes
-  localStorage.removeItem(LS_ICS_TOKEN);
-  localStorage.setItem(LS_ICS_PUBLISER, '0');
+  // Ny nøkkel neste gang — en lekket adresse skal ikke kunne gjenbrukes
+  localStorage.removeItem(f.tokenKey);
+  localStorage.setItem(f.flaggKey, '0');
   saveToStorage();
   tegnICSStatus();
 }
 
-async function kopierICSAdresse() {
-  const url = icsAdresse();
+// Kalles etter vellykket synk. Feiler en opplasting, skal ikke selve
+// synken regnes som mislykket — kalenderne er en bekvemmelighet.
+async function oppdaterPubliserteKalendere() {
+  for (const feed of Object.keys(ICS_FEEDS)) {
+    if (feedPubliseres(feed)) {
+      try { await publiserFeed(feed, { stille: true }); }
+      catch (e) { console.warn('Kunne ikke oppdatere ' + feed + ':', e); }
+    }
+  }
+}
+
+async function kopierFeedAdresse(feed) {
+  const url = feedAdresse(feed);
   if (!url) return;
+  const knapp = document.getElementById('kopier-' + feed);
   try {
     await navigator.clipboard.writeText(url);
-    const k = document.getElementById('icsKopierBtn');
-    if (k) { const f = k.textContent; k.textContent = 'Kopiert'; setTimeout(() => { k.textContent = f; }, 1500); }
+    if (knapp) {
+      const f = knapp.textContent;
+      knapp.textContent = 'Kopiert';
+      setTimeout(() => { knapp.textContent = f; }, 1500);
+    }
   } catch {
     prompt('Kopier adressen:', url);
   }
 }
 
 function tegnICSStatus() {
-  const av      = document.getElementById('icsAv');
-  const paa     = document.getElementById('icsPaa');
-  const krevPaalogging = document.getElementById('icsKrevInnlogging');
-  if (!av || !paa) return;
-
   const innlogget = Boolean(synkBruker);
-  const aktiv     = innlogget && icsPubliseres() && localStorage.getItem(LS_ICS_TOKEN);
+  const krev = document.getElementById('icsKrevInnlogging');
+  if (krev) krev.style.display = innlogget ? 'none' : '';
 
-  if (krevPaalogging) krevPaalogging.style.display = innlogget ? 'none' : '';
-  av.style.display  = (innlogget && !aktiv) ? '' : 'none';
-  paa.style.display = aktiv ? '' : 'none';
+  Object.keys(ICS_FEEDS).forEach(feed => {
+    const av  = document.getElementById('av-' + feed);
+    const paa = document.getElementById('paa-' + feed);
+    if (!av || !paa) return;
 
-  const felt = document.getElementById('icsAdresse');
-  if (felt && aktiv) felt.value = icsAdresse();
+    const aktiv = innlogget && feedPubliseres(feed)
+                  && localStorage.getItem(ICS_FEEDS[feed].tokenKey);
+
+    av.style.display  = (innlogget && !aktiv) ? '' : 'none';
+    paa.style.display = aktiv ? '' : 'none';
+
+    const felt = document.getElementById('adresse-' + feed);
+    if (felt && aktiv) felt.value = feedAdresse(feed);
+  });
 }

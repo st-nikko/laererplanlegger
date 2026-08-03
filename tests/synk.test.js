@@ -165,75 +165,90 @@ test('kontoer laget med magisk lenke kan få passord i ettertid', async () => {
        'passordsetting skal ikke røre passfrasen');
 });
 
-// ── Publisering av kalender ────────────────────────────────────
+// ── Publiserte kalendere ───────────────────────────────────────
 test('token lages én gang og gjenbrukes', async () => {
   const store = lagStore();
   const ctx = lagKontekst(store);
-  const a = ctx.icsToken();
-  const b = ctx.icsToken();
+  const a = ctx.feedToken('undervisning');
+  const b = ctx.feedToken('undervisning');
   like(a, b, 'samme token ved gjentatte kall');
   like(store.getItem('lp_ics_token'), a, 'token skal lagres');
-  sant(a.length >= 32, 'token skal være lang nok til å ikke kunne gjettes');
-  sant(!a.includes('-'), 'bindestreker fjernes for penere adresse');
+  sant(a.length >= 32, 'token må være for langt til å gjettes');
 });
 
-test('adressen ligger under brukerens egen mappe', async () => {
+test('de to kalenderne har ulike adresser', async () => {
   const ctx = lagKontekst(lagStore());
-  // synkBruker er let på toppnivå og blir ikke en egenskap på konteksten
   ctx.hent('synkBruker = { id: "bruker-123" }');
-  const url = ctx.icsAdresse();
-  sant(url.includes('/storage/v1/object/public/kalender/'), 'feil bøtte: ' + url);
-  sant(url.includes('bruker-123/'), 'skal ligge under bruker-id — RLS krever det');
-  sant(url.endsWith('.ics'), 'skal ende på .ics');
+  const u = ctx.feedAdresse('undervisning');
+  const j = ctx.feedAdresse('jobb');
+  sant(u !== j, 'adressene må være forskjellige');
+  sant(u.includes('undervisning-'), 'undervisningskalenderen: ' + u);
+  sant(j.includes('jobb-'), 'jobbkalenderen: ' + j);
+  sant(u.includes('bruker-123/') && j.includes('bruker-123/'),
+       'begge skal ligge under bruker-id — RLS krever det');
+});
+
+test('deling av jobbkalenderen avslører ikke timeplanen', async () => {
+  const ctx = lagKontekst(lagStore());
+  ctx.hent('synkBruker = { id: "bruker-123" }');
+  const jobbToken = ctx.feedToken('jobb');
+  const undToken  = ctx.feedToken('undervisning');
+  sant(jobbToken !== undToken, 'kalenderne må ha hver sin nøkkel');
+  sant(!ctx.feedAdresse('jobb').includes(undToken),
+       'jobbadressen skal ikke inneholde undervisningsnøkkelen');
 });
 
 test('ingen adresse uten innlogging', async () => {
   const ctx = lagKontekst(lagStore());
   ctx.hent('synkBruker = null');
-  like(ctx.icsAdresse(), null, 'adresse krever innlogget bruker');
-  like(ctx.icsFilsti(), null, 'filsti krever innlogget bruker');
+  like(ctx.feedAdresse('jobb'), null, 'adresse krever innlogget bruker');
+  like(ctx.feedFilsti('jobb'), null, 'filsti krever innlogget bruker');
 });
 
-test('publisering er av som standard', async () => {
+test('begge kalendere er av som standard', async () => {
   const ctx = lagKontekst(lagStore());
-  like(ctx.icsPubliseres(), false, 'skal være avslått til brukeren velger det');
+  like(ctx.feedPubliseres('undervisning'), false, 'undervisning');
+  like(ctx.feedPubliseres('jobb'), false, 'jobb');
 });
 
-test('token og publiseringsflagg synkes mellom enheter', async () => {
+test('nøkler og valg synkes mellom enheter', async () => {
   const ctx = lagKontekst(lagStore());
   const nokler = ctx.hent('SYNK_NOKLER');
-  sant(nokler.includes('lp_ics_token'), 'uten dette får hver enhet sin egen adresse');
-  sant(nokler.includes('lp_ics_publiser'), 'publiseringsvalget bør følge med');
-  // Men fortsatt ingen navn og ingen passfrase
+  ['lp_ics_token', 'lp_ics_publiser', 'lp_jobb_token', 'lp_jobb_publiser']
+    .forEach(k => sant(nokler.includes(k), 'mangler ' + k + ' — hver enhet ville fått egen adresse'));
   sant(!nokler.includes('lp_studentNames'), 'navn skal aldri synkes');
   sant(!nokler.includes('lp_sync_passfrase'), 'passfrasen skal aldri synkes');
 });
 
 test('avslåing gir ny adresse neste gang', async () => {
   const kilde = fs.readFileSync(path + 'sync.js', 'utf8');
-  const bolk = kilde.slice(kilde.indexOf('async function slaAvICSPublisering'),
-                           kilde.indexOf('async function kopierICSAdresse'));
+  const bolk = kilde.slice(kilde.indexOf('async function slaAvFeed'),
+                           kilde.indexOf('async function oppdaterPubliserteKalendere'));
   sant(bolk.includes('remove('), 'den publiserte fila skal slettes');
-  sant(bolk.includes(`removeItem(LS_ICS_TOKEN)`),
-       'token må nullstilles, ellers kan den gamle adressen gjenbrukes');
+  sant(bolk.includes('removeItem(f.tokenKey)'),
+       'nøkkelen må kastes, ellers kan en lekket adresse gjenbrukes');
 });
 
 test('publisering henger på synk, men velter den ikke', async () => {
   const kilde = fs.readFileSync(path + 'sync.js', 'utf8');
   const push = kilde.slice(kilde.indexOf('async function syncPush()'),
                            kilde.indexOf('async function syncPull'));
-  sant(push.includes('icsPubliseres()'), 'syncPush skal oppdatere publisert kalender');
-  sant(push.includes('stille: true'), 'publiseringen skal ikke gi dialoger under synk');
+  sant(push.includes('oppdaterPubliserteKalendere()'), 'syncPush skal oppdatere kalenderne');
+
+  const oppd = kilde.slice(kilde.indexOf('async function oppdaterPubliserteKalendere'),
+                           kilde.indexOf('async function kopierFeedAdresse'));
+  sant(oppd.includes('try'), 'en feilende opplasting skal ikke velte synken');
+  sant(oppd.includes('stille: true'), 'ingen dialoger under automatisk oppdatering');
 });
 
-test('markup har publiseringsfeltene', async () => {
+test('markup har feltene for begge kalendere', async () => {
   const html = fs.readFileSync(path + 'index.html', 'utf8');
-  ['icsAv', 'icsPaa', 'icsAdresse', 'icsKrevInnlogging'].forEach(id => {
-    sant(html.includes('id="' + id + '"'), 'mangler #' + id);
-  });
-  sant(html.includes('publiserICS()'), 'mangler publiser-knapp');
-  sant(html.includes('slaAvICSPublisering()'), 'mangler av-knapp');
-  sant(/ikke kryptert/i.test(html), 'advarselen om manglende kryptering må stå der');
+  ['av-undervisning', 'paa-undervisning', 'adresse-undervisning',
+   'av-jobb', 'paa-jobb', 'adresse-jobb', 'icsKrevInnlogging']
+    .forEach(id => sant(html.includes('id="' + id + '"'), 'mangler #' + id));
+  sant(html.includes("publiserFeed('jobb')"), 'mangler publiser-knapp for jobb');
+  sant(html.includes("slaAvFeed('undervisning')"), 'mangler av-knapp for undervisning');
+  sant(/ikke krypterte/i.test(html), 'advarselen om manglende kryptering må stå der');
 });
 
 // ── Kjør ───────────────────────────────────────────────────────

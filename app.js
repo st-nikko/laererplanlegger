@@ -2505,6 +2505,109 @@ function byggICS() {
   return { ics: linjer.join('\r\n') + '\r\n', antall };
 }
 
+// ────────────────────────────────────────────
+// ARBEIDSTIDSKALENDER
+// ────────────────────────────────────────────
+// Egen kalender som bare viser NÅR du er opptatt, aldri hva du gjør.
+// Ment for deling med familien. Utgangspunktet er planfestet tid (eller
+// registrert overtid), utvidet av hendelser som stikker utenfor.
+//
+// Blokker slås sammen bare når de faktisk henger sammen. Et kveldsmøte
+// blir en egen blokk framfor å strekke arbeidsdagen fram til kvelden —
+// ellers ville det sett ut som du var borte hele ettermiddagen også.
+
+function slaaSammenIntervaller(intervaller) {
+  const sortert = [...intervaller].sort((a, b) => a.fra - b.fra);
+  const ut = [];
+  sortert.forEach(iv => {
+    const forrige = ut[ut.length - 1];
+    if (forrige && iv.fra <= forrige.til) {
+      forrige.til = Math.max(forrige.til, iv.til);
+    } else {
+      ut.push({ ...iv });
+    }
+  });
+  return ut;
+}
+
+// Desimaltimer → '08:30'
+function fraDesimal(dec) {
+  const t = Math.floor(dec);
+  const m = Math.round((dec - t) * 60);
+  return String(t).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+// Opptatt-perioder for én dato, eller tom liste om det er fri
+function arbeidstidForDato(d) {
+  const key = isoDate(d);
+  if (erUtenforSkoleaar(d)) return [];
+
+  const fridag = erFridag(d);
+  // Ferie og fridag er fri. Planleggingsdager er arbeidsdager.
+  if (fridag && (fridag.type === 'ferie' || fridag.type === 'fridag')) return [];
+
+  const intervaller = [];
+
+  // Grunnlaget: planfestet tid, eller overtid hvis den er registrert.
+  // getWorkTimeForDate() faller tilbake på mandag for helger, så helger
+  // tas bare med når det faktisk ligger en hendelse der.
+  const ukedag = ukedagIndeks(d);
+  if (ukedag < 5) {
+    const wt = getWorkTimeForDate(key);
+    if (wt && wt.start && wt.end) {
+      intervaller.push({ fra: toDec(wt.start), til: toDec(wt.end) });
+    }
+  } else if (overtid[key] && overtid[key].start && overtid[key].end) {
+    intervaller.push({ fra: toDec(overtid[key].start), til: toDec(overtid[key].end) });
+  }
+
+  eventsForDate(d).forEach(ev => {
+    if (ev.start && ev.end) intervaller.push({ fra: toDec(ev.start), til: toDec(ev.end) });
+  });
+
+  return slaaSammenIntervaller(intervaller);
+}
+
+function byggArbeidstidICS() {
+  const fra = new Date(skoleaar.start + 'T00:00:00');
+  const til = new Date(skoleaar.slutt + 'T00:00:00');
+  const stempel = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const linjer = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Laererplanlegger//NO',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:På jobb',
+    'X-WR-TIMEZONE:Europe/Oslo',
+    ...ICS_VTIMEZONE
+  ];
+
+  let antall = 0;
+  for (let d = new Date(fra); d <= til; d.setDate(d.getDate() + 1)) {
+    const dato = isoDate(d);
+    arbeidstidForDato(new Date(d)).forEach((iv, i) => {
+      antall++;
+      linjer.push(
+        'BEGIN:VEVENT',
+        `UID:jobb-${dato.replace(/-/g, '')}-${i}@laererplanlegger`,
+        `DTSTAMP:${stempel}`,
+        `DTSTART;TZID=Europe/Oslo:${icsLokalTid(dato, fraDesimal(iv.fra))}`,
+        `DTEND;TZID=Europe/Oslo:${icsLokalTid(dato, fraDesimal(iv.til))}`,
+        'SUMMARY:På jobb',
+        // Vis som opptatt, ikke ledig — poenget med hele kalenderen
+        'TRANSP:OPAQUE',
+        'X-MICROSOFT-CDO-BUSYSTATUS:BUSY',
+        'END:VEVENT'
+      );
+    });
+  }
+
+  linjer.push('END:VCALENDAR');
+  return { ics: linjer.join('\r\n') + '\r\n', antall };
+}
+
 function eksporterICS() {
   if (!skoleaar || !skoleaar.start || !skoleaar.slutt) {
     alert('Sett skoleårets start- og sluttdato i Min side først.');

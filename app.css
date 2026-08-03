@@ -502,6 +502,21 @@
 /* ────────────────────────────────────────────
    SYNK MELLOM ENHETER
    ──────────────────────────────────────────── */
+.kalender-kort {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.kalender-tittel {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
 .ics-advarsel {
   margin-top: 8px;
   padding: 8px 10px;

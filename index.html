@@ -219,56 +219,85 @@
     </div>
   </div>
   <div class="minside-seksjon">
-    <div class="innst-seksjon-tittel">Outlook</div>
-    <p class="minside-hjelpetekst">
-      Last ned undervisningstimene for skoleåret som kalenderfil og importer
-      den i Outlook. Møter tas ikke med — de kommer allerede som innkallinger.
-      Enetimer får faget som tittel, aldri elevens navn.
+    <div class="innst-seksjon-tittel">Kalendere</div>
+
+    <div id="icsKrevInnlogging" class="minside-hjelpetekst">
+      Logg inn under «Synk mellom enheter» for å kunne publisere kalendere.
+    </div>
+
+    <p class="minside-hjelpetekst ics-advarsel">
+      Publiserte kalendere er <strong>ikke krypterte</strong>, i motsetning til
+      synkdataene. De må ligge lesbare for at Outlook og Google skal få hentet
+      dem. Beskyttelsen er at hver adresse inneholder en tilfeldig nøkkel som
+      ikke lar seg gjette. Slår du en kalender av og på igjen, får du ny adresse.
     </p>
-    <div class="data-toolbar">
-      <button class="data-toolbar-btn" onclick="eksporterICS()">⬇ Last ned kalenderfil (.ics)</button>
-    </div>
-    <p class="minside-hjelpetekst" style="margin-top:8px">
-      Filen er et øyeblikksbilde. Endrer du timeplanen, må du laste ned og
-      importere på nytt.
-    </p>
 
-    <div id="icsKrevInnlogging" class="minside-hjelpetekst" style="margin-top:14px">
-      Logg inn under «Synk mellom enheter» for å kunne publisere en
-      adresse Outlook abonnerer på.
-    </div>
-
-    <div id="icsAv" class="synk-blokk" style="display:none">
-      <label class="synk-label">Abonnement i Outlook</label>
-      <p class="minside-hjelpetekst" style="margin-bottom:6px">
-        Publiserer timeplanen på en adresse Outlook henter fra automatisk.
-        Da slipper du å importere på nytt ved hver endring.
-      </p>
-      <div class="synk-rad">
-        <button class="data-toolbar-btn" onclick="publiserICS()">Publiser kalender</button>
-      </div>
-      <p class="minside-hjelpetekst ics-advarsel">
-        Merk: denne fila er <strong>ikke kryptert</strong>, i motsetning til
-        synkdataene. Alle som kjenner adressen kan lese timeplanen din.
-        Adressen inneholder en tilfeldig nøkkel som ikke lar seg gjette, men
-        del den ikke videre.
-      </p>
-    </div>
-
-    <div id="icsPaa" class="synk-blokk" style="display:none">
-      <label class="synk-label" for="icsAdresse">Abonnementsadresse</label>
-      <div class="synk-rad">
-        <input type="text" id="icsAdresse" class="synk-input" readonly onclick="this.select()">
-        <button class="data-toolbar-btn" id="icsKopierBtn" onclick="kopierICSAdresse()">Kopier</button>
-      </div>
+    <!-- UNDERVISNING -->
+    <div class="kalender-kort">
+      <div class="kalender-tittel">Undervisning</div>
       <p class="minside-hjelpetekst">
-        I Outlook: <em>Legg til kalender → Abonner fra Internett</em>, og lim inn
-        adressen. Outlook henter oppdateringer med noen timers mellomrom, så
-        endringer vises ikke med én gang.
+        Timeplanen din, til din egen Outlook. Møter er ikke med — de kommer
+        allerede som innkallinger. Enetimer får faget som tittel, aldri elevens navn.
       </p>
+
       <div class="synk-rad">
-        <button class="data-toolbar-btn" onclick="publiserICS()">↻ Oppdater nå</button>
-        <button class="data-toolbar-btn" onclick="slaAvICSPublisering()">Slå av publisering</button>
+        <button class="data-toolbar-btn" onclick="eksporterICS()">⬇ Last ned som fil</button>
+      </div>
+
+      <div id="av-undervisning" class="synk-blokk" style="display:none">
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('undervisning')">Publiser som abonnement</button>
+        </div>
+      </div>
+
+      <div id="paa-undervisning" class="synk-blokk" style="display:none">
+        <label class="synk-label" for="adresse-undervisning">Abonnementsadresse</label>
+        <div class="synk-rad">
+          <input type="text" id="adresse-undervisning" class="synk-input" readonly onclick="this.select()">
+          <button class="data-toolbar-btn" id="kopier-undervisning" onclick="kopierFeedAdresse('undervisning')">Kopier</button>
+        </div>
+        <p class="minside-hjelpetekst">
+          Outlook: <em>Legg til kalender → Abonner fra Internett</em>.
+          Oppdateres med noen timers mellomrom.
+        </p>
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('undervisning')">↻ Oppdater nå</button>
+          <button class="data-toolbar-btn" onclick="slaAvFeed('undervisning')">Slå av</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PÅ JOBB -->
+    <div class="kalender-kort">
+      <div class="kalender-tittel">På jobb</div>
+      <p class="minside-hjelpetekst">
+        Viser bare <em>når</em> du er opptatt, aldri hva du gjør — laget for deling
+        med familien. Tar utgangspunkt i planfestet tid, og utvides når møter eller
+        kurs går utenom. Kveldsarrangementer blir egne blokker, slik at det ikke ser
+        ut som du er borte hele ettermiddagen.
+      </p>
+
+      <div id="av-jobb" class="synk-blokk" style="display:none">
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('jobb')">Publiser som abonnement</button>
+        </div>
+      </div>
+
+      <div id="paa-jobb" class="synk-blokk" style="display:none">
+        <label class="synk-label" for="adresse-jobb">Abonnementsadresse</label>
+        <div class="synk-rad">
+          <input type="text" id="adresse-jobb" class="synk-input" readonly onclick="this.select()">
+          <button class="data-toolbar-btn" id="kopier-jobb" onclick="kopierFeedAdresse('jobb')">Kopier</button>
+        </div>
+        <p class="minside-hjelpetekst">
+          Google Kalender: <em>Andre kalendere → Abonner på kalender → Fra URL</em>.
+          Google henter som regel én gang i døgnet, så nye kveldsmøter kan ta et
+          døgn før familien ser dem.
+        </p>
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('jobb')">↻ Oppdater nå</button>
+          <button class="data-toolbar-btn" onclick="slaAvFeed('jobb')">Slå av</button>
+        </div>
       </div>
     </div>
   </div>

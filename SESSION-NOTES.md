@@ -112,9 +112,38 @@ Ni nye tester. En felle underveis: `synkBruker` er `let` på toppnivå og
 blir ikke egenskap på vm-konteksten, så testen må sette den via
 `runInContext`.
 
+Nikolai bekreftet at publisering og Outlook-abonnement fungerer.
+
+### Arbeidstidskalender til familien
+
+Nikolai ville ha en egen kalender som bare viser når han er opptatt,
+til deling med familiekalenderen i Google.
+
+**Egen adresse, ikke samme fil.** Deler man arbeidstiden med familien,
+skal ikke timeplanen følge med. Publiseringen er derfor generalisert:
+`ICS_FEEDS` beskriver to kalendere (`undervisning`, `jobb`) med hver
+sin token, sitt flagg og sin byggfunksjon. Filnavnet er
+`{feed}-{token}.ics`, og tokenene er uavhengige.
+
+**Blokker slås sammen bare når de henger sammen.** Et møte 14–15 smelter
+inn i arbeidsdagen; et foreldremøte 19–21 blir en egen blokk. Å strekke
+én blokk fra 08 til 21 ville sagt at han var borte hele ettermiddagen.
+`slaaSammenIntervaller()` gjør jobben, og har egne tester.
+
+Grunnlaget er planfestet tid, eller registrert overtid der den finnes.
+Helger tas med bare når det ligger en hendelse der — `getWorkTimeForDate()`
+faller nemlig tilbake på mandag for lørdag og søndag, så en naiv løsning
+ville gitt full arbeidsuke hver helg.
+
+Ferie og fridag gir ingen blokker; planleggingsdager teller som arbeid.
+Alle blokker heter «På jobb», med `TRANSP:OPAQUE` og
+`X-MICROSOFT-CDO-BUSYSTATUS:BUSY`. En test går gjennom fag, elevnavn,
+møtetitler og romnavn og slår fast at ingen av dem finnes i fila.
+
+Fjorten nye tester i `ics.test.js`, ni omskrevne i `synk.test.js`.
+
 ### Ikke verifisert
-Publisering mot ekte Supabase Storage, og at Outlook faktisk klarer å
-abonnere på adressen. Krever at SQL-en for bøtta og policyene er kjørt.
+Jobbkalenderen mot Google Kalender.
 
 ### Neste steg
 - SFS2213-beregning.
