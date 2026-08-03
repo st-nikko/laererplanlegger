@@ -45,7 +45,7 @@ Lærerplanlegger/
 | ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
-| VIEW SWITCHING | `setView()`, `changeNav()`, `goToDayView()` |
+| VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning), `changeNav()`, `goToDayView()` |
 | MONTH VIEW | `renderMonthView()` |
 | SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()` |
 | MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, click-outside-lukking |

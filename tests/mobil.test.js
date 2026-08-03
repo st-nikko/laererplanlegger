@@ -9,6 +9,7 @@ const fs   = require('fs');
 const path = require('node:path').join(__dirname, '..') + '/';
 const cssRaa = fs.readFileSync(path + 'app.css', 'utf8');
 const html   = fs.readFileSync(path + 'index.html', 'utf8');
+const js     = fs.readFileSync(path + 'app.js', 'utf8');
 
 // Kommentarer fjernes først — ellers henger de fast foran selektoren
 // og gjør sammenligningen mot mobilblokka meningsløs.
@@ -110,15 +111,17 @@ test('gjøremål-sidebaren dekker ikke halve skjermen', () => {
        'sammenslått sidebar må skjules helt — width: 0 holder ikke når den er fixed');
 });
 
-test('klasser som styles på mobil finnes i grunn-CSS eller markup', () => {
+test('klasser som styles på mobil finnes i grunn-CSS, markup eller app.js', () => {
+  // app.js teller også: klasser som .visning-dag og .uke-kort settes av
+  // koden og står aldri i index.html. Uten den tredje kilden slår testen
+  // ut på fullt levende selektorer.
   const klasser = [...mobil.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(m => m[1]);
   const ukjente = [...new Set(klasser)].filter(k =>
-    !grunn.includes('.' + k) && !html.includes(k));
+    !grunn.includes('.' + k) && !html.includes(k) && !js.includes(k));
   sant(ukjente.length === 0, 'ukjente klasser i mobilblokka: ' + ukjente.join(', '));
 });
 
 // ── Ting som ble meldt fra telefon ─────────────────────────────
-const js = fs.readFileSync(path + 'app.js', 'utf8');
 
 test('kalenderkolonner kan ikke presses bredere av innholdet', () => {
   // 1fr er minmax(auto, 1fr): lange titler og arbeidstid-chipen dyttet

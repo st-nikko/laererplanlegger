@@ -1751,6 +1751,10 @@ function toggleVisArkiverte() {
 // ────────────────────────────────────────────
 function setView(v) {
   currentView = v;
+  // Markør for CSS: dagsvisning har én kolonne og dermed hele skjermbredden
+  // til rådighet, og skal ikke krympes som om den var en av fem.
+  const wrapper = document.getElementById('weekDayView');
+  if (wrapper) wrapper.classList.toggle('visning-dag', v==='day');
   // Header-toggle (Dag/Uke/Måned) gjelder kun kalendervisningen
   ['Day','Week','Month'].forEach(name => {
     const el = document.getElementById('vbtn'+name);

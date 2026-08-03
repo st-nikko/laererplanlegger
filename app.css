@@ -739,6 +739,15 @@
      Sonene bak timene viser rytmen uansett. */
   .event-time-nr { display: none; }
 
+  /* ── Dagsvisning: én kolonne, altså hele skjermbredden ──
+     Reglene over krymper hendelsene fordi fem dager skal dele plassen.
+     I dagsvisning gjelder ikke den begrunnelsen, og da er det ingen grunn
+     til å skjule verken timenummeret eller rom og trinn. Klassen settes
+     av setView(). */
+  .visning-dag .event-title   { font-size: 12px; }
+  .visning-dag .event-sub     { display: block; font-size: 10px; }
+  .visning-dag .event-time-nr { display: inline; }
+
   /* ── Modaler ── */
   .overlay { padding: 0; }
 
