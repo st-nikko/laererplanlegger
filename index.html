@@ -179,6 +179,8 @@
       <p class="minside-hjelpetekst">
         Første gang på denne kontoen?
         <button class="lenke-btn" onclick="synkOpprettKonto()">Opprett konto</button>
+        · Glemt passord eller aldri satt ett?
+        <button class="lenke-btn" onclick="synkGlemtPassord()">Få lenke på e-post</button>
       </p>
     </div>
 
@@ -202,6 +204,15 @@
         <button class="data-toolbar-btn" onclick="synkLoggUt()">Logg ut</button>
         <span class="minside-hjelpetekst">Innlogget som <span id="synkBrukerEpost"></span></span>
       </div>
+
+      <label class="synk-label" for="synkNyttPassord" style="margin-top:14px">Sett eller endre passord</label>
+      <div class="synk-rad">
+        <input type="password" id="synkNyttPassord" class="synk-input" placeholder="Minst 6 tegn" autocomplete="new-password">
+        <button class="data-toolbar-btn" onclick="synkSettPassord()">Lagre passord</button>
+      </div>
+      <p class="minside-hjelpetekst">
+        Dette er passordet du logger inn med — ikke passfrasen som låser opp dataene.
+      </p>
     </div>
   </div>
   <div class="minside-seksjon">

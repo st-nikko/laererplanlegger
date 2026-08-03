@@ -104,6 +104,20 @@ Ukjente meldinger slippes gjennom som de er framfor å skjules.
 Krever at «Confirm email» er av i Supabase, ellers får man konto uten
 sesjon ved registrering — koden håndterer begge tilfeller.
 
+**Oversett først:** kontoen fra den magiske lenka finnes allerede, men
+uten passord. «Opprett konto» feilet med «already registered», og
+innlogging feilet fordi det ikke fantes noe passord. To veier lagt til:
+
+- `synkSettPassord()` — `auth.updateUser({ password })` for den som er
+  innlogget. Ligger i den aktive synk-seksjonen, og fungerer også som
+  vanlig passordbytte senere.
+- `synkGlemtPassord()` — `resetPasswordForEmail()` som reserve når
+  sesjonen er borte. Lenka logger deg inn, så kan passord settes.
+
+Lærdom: når en innloggingsmetode byttes ut, må eksisterende kontoer ha
+en vei over. Å fjerne den gamle metoden uten overgang låser brukeren ute
+av sin egen konto.
+
 ### Fortsatt ikke verifisert
 Visuell kontroll av runde 2 på telefon, og passordinnlogging i drift.
 

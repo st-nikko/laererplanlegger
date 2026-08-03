@@ -308,6 +308,39 @@ async function synkOpprettKonto() {
   }
 }
 
+// Kontoer laget med magisk lenke har ingen passord. Er du innlogget,
+// kan du sette ett her — da virker vanlig innlogging heretter.
+async function synkSettPassord() {
+  const felt = document.getElementById('synkNyttPassord');
+  const nytt = felt?.value || '';
+  if (!synkBruker) { alert('Du må være innlogget for å sette passord.'); return; }
+  if (nytt.length < 6) { alert('Passordet må være minst 6 tegn.'); return; }
+
+  settStatus('synker', 'Lagrer passord …');
+  const { error } = await supabase.auth.updateUser({ password: nytt });
+  if (felt) felt.value = '';
+
+  if (error) settStatus('feil', synkFeilTekst(error.message));
+  else       settStatus(synkStatus === 'feil' ? 'av' : 'ok',
+                        'Passord lagret. Neste gang logger du inn med e-post og passord.');
+}
+
+// Reserve når sesjonen er borte og du ikke har passord ennå.
+// Lenka logger deg inn midlertidig, så kan du sette passord.
+async function synkGlemtPassord() {
+  const epost = (document.getElementById('synkEpost')?.value || '').trim();
+  if (!supabase) { alert('Synk er ikke tilgjengelig.'); return; }
+  if (!epost) { alert('Skriv inn e-postadressen din først.'); return; }
+
+  settStatus('synker', 'Sender lenke …');
+  const { error } = await supabase.auth.resetPasswordForEmail(epost, {
+    redirectTo: window.location.href.split('#')[0]
+  });
+
+  if (error) settStatus('feil', synkFeilTekst(error.message));
+  else       settStatus('av', 'Sjekk e-posten. Lenka logger deg inn, og da kan du sette et passord.');
+}
+
 async function synkLoggUt() {
   if (!confirm('Logge ut av synk? Dataene blir liggende på denne enheten.')) return;
   await supabase.auth.signOut();

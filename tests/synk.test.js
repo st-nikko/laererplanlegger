@@ -145,10 +145,24 @@ test('magisk lenke er faktisk fjernet', async () => {
 
 test('markup har feltene innloggingen leser', async () => {
   const html = fs.readFileSync(path + 'index.html', 'utf8');
-  ['synkEpost', 'synkPassord', 'synkPassfrase'].forEach(id => {
+  ['synkEpost', 'synkPassord', 'synkPassfrase', 'synkNyttPassord'].forEach(id => {
     sant(html.includes('id="' + id + '"'), 'mangler #' + id);
   });
   sant(html.includes('synkOpprettKonto()'), 'mangler knapp for å opprette konto');
+  sant(html.includes('synkSettPassord()'), 'mangler knapp for å sette passord');
+  sant(html.includes('synkGlemtPassord()'), 'mangler reservevei ved glemt passord');
+});
+
+test('kontoer laget med magisk lenke kan få passord i ettertid', async () => {
+  const kilde = fs.readFileSync(path + 'sync.js', 'utf8');
+  sant(kilde.includes('auth.updateUser'), 'updateUser mangler — uten den er slike kontoer låst ute');
+  sant(kilde.includes('resetPasswordForEmail'), 'mangler reservevei når sesjonen er borte');
+
+  // Nytt passord skal aldri hentes fra passfrasefeltet
+  const bolk = kilde.slice(kilde.indexOf('async function synkSettPassord'),
+                           kilde.indexOf('async function synkGlemtPassord'));
+  sant(!bolk.includes('LS_PASSFRASE') && !bolk.includes('synkPassfrase'),
+       'passordsetting skal ikke røre passfrasen');
 });
 
 // ── Kjør ───────────────────────────────────────────────────────
