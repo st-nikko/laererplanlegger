@@ -142,12 +142,19 @@
     /* ── CALENDAR ── */
     .calendar-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
     .calendar-grid { display: grid; grid-template-columns: 48px repeat(5, minmax(0, 1fr)); position: relative; }
-    .time-axis { border-right: 1px solid var(--border); }
-    .time-tick { height: 60px; display: flex; align-items: flex-start; justify-content: flex-end; padding-right: 8px; font-size: 10px; color: var(--text-muted); transform: translateY(-7px); }
+    .time-axis { border-right: 1px solid var(--border); position: relative; }
+    .time-tick {
+      position: absolute; left: 0; right: 0; text-align: right; padding-right: 8px;
+      font-size: 10px; color: var(--text-muted); transform: translateY(-6px);
+      pointer-events: none;
+    }
     .day-col { position: relative; border-right: 1px solid var(--border-faint); cursor: pointer; }
     .day-col.today { background: var(--today-light); }
-    .grid-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-faint); pointer-events: none; }
+    .grid-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border-faint); pointer-events: none; z-index: 1; }
     .grid-line.half { border-top: 1px dashed #F4F1EB; }
+    /* Skoletimene tonet svakt opp i accent-kuløren. Bevisst en annen
+       farge enn den grå .offwork-block, som betyr det motsatte. */
+    .period-band { position: absolute; left: 0; right: 0; background: rgba(47,96,118,0.055); pointer-events: none; z-index: 0; }
     .offwork-block { position: absolute; left: 0; right: 0; background: rgba(34,32,29,0.04); pointer-events: none; z-index: 1; }
     .work-block    { position: absolute; left: 0; right: 0; border-left: 3px solid rgba(47,96,118,0.32); pointer-events: none; z-index: 1; }
 
@@ -159,6 +166,8 @@
     .event:hover { filter: brightness(0.92); }
     .event.parallell { border-left-style: dashed !important; }
     .event-title { font-weight: 600; font-size: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* «1. time · » foran faget — lettere vekt, så faget leses først */
+    .event-time-nr { font-weight: 500; opacity: 0.7; }
     .event-sub   { font-size: 10px; opacity: 0.72; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .event-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; background: rgba(34,32,29,0.10); color: inherit; opacity: 0.8; }
     .event-plan-dot { position: absolute; bottom: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--suksess); opacity: 0.85; }
@@ -726,6 +735,9 @@
   .event-sub     { display: none; }   /* rom og trinn er detaljer for dagsvisning */
   .event-badge   { font-size: 8px; padding: 0 3px; }
   .time-tick     { font-size: 9px; padding-right: 4px; }
+  /* Kolonnen er ~70 px bred; da må faget få hele tittellinja.
+     Sonene bak timene viser rytmen uansett. */
+  .event-time-nr { display: none; }
 
   /* ── Modaler ── */
   .overlay { padding: 0; }

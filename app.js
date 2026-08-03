@@ -327,6 +327,23 @@ function eventDisplayLabel(ev) {
   }
   return ev.title;
 }
+// Hvilke skoletimer dekker hendelsen? Tom liste når den ligger utenfor
+// timeplanen — et trinnmøte klokka 14 er ikke «6. time». En dobbelttime
+// dekker to og skal si det.
+function skoletimerForHendelse(ev) {
+  if (ev.category !== 'undervisning' && ev.category !== 'vikar') return [];
+  const s = toDec(ev.start), e = toDec(ev.end);
+  if (s == null || e == null) return [];
+  return PERIODS.filter(p => s < toDec(p.end) && e > toDec(p.start));
+}
+function skoletimeEtikett(ev) {
+  const t = skoletimerForHendelse(ev);
+  if (!t.length) return '';
+  return t.length === 1
+    ? `${t[0].n}. time`
+    : `${t[0].n}.–${t[t.length - 1].n}. time`;
+}
+
 function eventSubLabel(ev) {
   const room = ev.room ? ` · ${ev.room}` : '';
   if (ev.category === 'vikar') return `Vikar · ${ev.start}–${ev.end}`;
@@ -579,10 +596,17 @@ function renderGrid() {
     : Array.from({length:5},(_,i)=>{ const d=new Date(currentWeekMonday); d.setDate(d.getDate()+i); return d; });
   grid.style.gridTemplateColumns = kalenderKolonner(currentView==='day' ? 1 : 5);
 
+  // TIDSAKSE
+  // Rutenettet starter 07:30, ikke på en hel time. Etikettene plasseres
+  // derfor absolutt på sin egen tid framfor å stables 60 px om gangen —
+  // ellers treffer de aldri strekene. (Den gamle løkka gikk h++ fra 7.5
+  // og traff aldri et helt tall, så aksen sto blank.)
   const axis=document.createElement('div'); axis.className='time-axis';
-  for(let h=GRID_START_H;h<GRID_END_H;h++){
+  axis.style.height=TOTAL_PX+'px';
+  for(let h=Math.ceil(GRID_START_H);h<GRID_END_H;h++){
     const tick=document.createElement('div'); tick.className='time-tick';
-    tick.textContent=Number.isInteger(h)?`${String(h).padStart(2,'0')}:00`:'';
+    tick.style.top=((h-GRID_START_H)*PX_PER_HOUR)+'px';
+    tick.textContent=`${String(h).padStart(2,'0')}:00`;
     axis.appendChild(tick);
   }
   grid.appendChild(axis);
@@ -603,10 +627,23 @@ function renderGrid() {
       col.appendChild(lbl);
     }
 
-    // Grid lines
-    for(let h=0;h<=(GRID_END_H-GRID_START_H);h++){
-      const l=document.createElement('div'); l.className='grid-line'; l.style.top=(h*PX_PER_HOUR)+'px'; col.appendChild(l);
-      if(h<(GRID_END_H-GRID_START_H)){const hl=document.createElement('div');hl.className='grid-line half';hl.style.top=(h*PX_PER_HOUR+30)+'px';col.appendChild(hl);}
+    // Soner for skoletimene — pausene blir stående som lyse mellomrom.
+    // Legges før strekene, så strekene tegnes oppå.
+    PERIODS.forEach(p=>{
+      const b=document.createElement('div'); b.className='period-band';
+      b.style.top=toPx(p.start)+'px';
+      b.style.height=durPx(p.start,p.end)+'px';
+      col.appendChild(b);
+    });
+
+    // Strekene. Heltrukket på hele klokkeslett, stiplet på halvtimene —
+    // avgjort av den faktiske tiden, ikke av tellerens paritet, siden
+    // rutenettet begynner 07:30.
+    for(let t=GRID_START_H;t<=GRID_END_H;t+=0.5){
+      const l=document.createElement('div');
+      l.className='grid-line'+(Number.isInteger(t)?'':' half');
+      l.style.top=((t-GRID_START_H)*PX_PER_HOUR)+'px';
+      col.appendChild(l);
     }
 
     // Work shading
@@ -635,7 +672,12 @@ function renderGrid() {
       if(ev.sessionType==='enetime')   badge=`<span class="event-badge">1:1</span><br>`;
       if(ev.sessionType==='parallell') badge=`<span class="event-badge">↔ parallell</span><br>`;
 
-      block.innerHTML=`${badge}<div class="event-title">${eventDisplayLabel(ev)}</div><div class="event-sub">${eventSubLabel(ev)}</div>`;
+      // Skoletimen står foran faget, i lettere vekt: faget er saken,
+      // timenummeret er sammenhengen. Egen span så mobil kan skjule den —
+      // der er kolonnen for smal til at begge får plass.
+      const timeTekst = skoletimeEtikett(ev);
+      const timePre = timeTekst ? `<span class="event-time-nr">${timeTekst} · </span>` : '';
+      block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div><div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Plan indicator dot
       if(ld && ld.tema){

@@ -36,7 +36,8 @@ Lærerplanlegger/
 | ELEVNAVN | `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes |
 | EVENTS + WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `getWorkTimeForDate()` |
 | HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `calcSFS()`, `parseStudentId()`, `calcAttendance()` |
-| RENDER | `render()`, `renderWeekLabel()`, `renderDayHeaders()`, `renderGrid()`, `renderLegend()` |
+| RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene), `renderLegend()` |
+| SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
 | PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
 | EVENT FORM MODAL | `openEventForm()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. |
@@ -63,6 +64,7 @@ Lærerplanlegger/
 - **Elevnavn er skilt ut.** `allStudents[]` bærer `navn` i minnet, men ved lagring splittes lista: struktur til `lp_students` (kan synkes), navn til `lp_studentNames` (blir på enheten). Elever uten kjent navn får `Elev xxxx` og `navnMangler = true`, slik at fallbacket aldri lagres som ekte navn. Formålet er at fravær, tema og notater kan forlate maskinen uten å være direkte identifiserbare. **Merk:** fritekstfeltene `notes` og `studentNotes` kan fortsatt inneholde navn brukeren selv har skrevet inn.
 - **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`. Ingen hardkodede hex-verdier i `app.css` — se «Visuell identitet» nedenfor.
 - **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
+- **Rutenettet starter 07:30, ikke på en hel time.** `GRID_START_H = 7.5`. Alt som skal ligge på et klokkeslett må derfor plasseres med `(tid - GRID_START_H) * PX_PER_HOUR`, aldri ved å stable elementer eller telle `h++` fra `GRID_START_H`. Sistnevnte var årsaken til at tidsaksen sto blank fram til økt 19: løkka gikk 7.5, 8.5, 9.5 … og `Number.isInteger(h)` slo aldri til, så alle etikettene ble tom streng. Samme feil gjorde at de heltrukne strekene havnet på halvtimene.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
 
 ---
