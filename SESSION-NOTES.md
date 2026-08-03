@@ -59,7 +59,6 @@ Detaljer verdt å huske:
 `tests/skolerute.test.js` — ni jsdom-tester.
 
 ### Neste steg
-- Påminnelse i notatfeltene om at fritekst kan inneholde elevnavn.
 - SFS2213-beregning.
 
 ### Lagt bort
@@ -67,6 +66,15 @@ Detaljer verdt å huske:
 for månedsvisningen, men den fanger også Elever, Elevlogg og Min side —
 derfor står det «August 2026» i visninger uten datonavigasjon.
 Rent kosmetisk. Nikolai vurderte det 3. august og lot det ligge.
+
+**Påminnelse i notatfeltene om elevnavn i fritekst.** Nikolai er eneste
+bruker og kjenner forbeholdet. La bort 3. august.
+
+Merk likevel at forholdet består: skriver man elevnavn i `notes` eller
+`studentNotes`, følger navnet med i synken. Det er kryptert, men
+pseudonymiseringen omgås. Dette er nå den eneste gjenværende veien
+navn kan forlate enheten — relevant hvis appen en gang skal brukes av
+flere enn Nikolai.
 
 ---
 
