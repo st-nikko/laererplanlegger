@@ -60,8 +60,13 @@ Detaljer verdt å huske:
 
 ### Neste steg
 - Påminnelse i notatfeltene om at fritekst kan inneholde elevnavn.
-- Uke-etiketten viser månedsnavn i Elever/Elevlogg-visning.
 - SFS2213-beregning.
+
+### Lagt bort
+**Uke-etiketten i header.** `renderWeekLabel()` har en `else`-gren ment
+for månedsvisningen, men den fanger også Elever, Elevlogg og Min side —
+derfor står det «August 2026» i visninger uten datonavigasjon.
+Rent kosmetisk. Nikolai vurderte det 3. august og lot det ligge.
 
 ---
 
