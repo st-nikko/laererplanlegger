@@ -142,6 +142,27 @@ møtetitler og romnavn og slår fast at ingen av dem finnes i fila.
 
 Fjorten nye tester i `ics.test.js`, ni omskrevne i `synk.test.js`.
 
+### «I dag» og logoen som vei hjem (bygget)
+
+Trykk på «I dag» eller på «Lærerplanlegger» i headeren tar deg tilbake
+til kalenderen uansett hvor du står.
+
+`goToToday()` nullstilte datoene, men rørte ikke `currentView` — sto du
+i Elever, skjedde det derfor ingenting synlig.
+
+Valg jeg tok: visningen byttes bare når du står *utenfor* kalenderen.
+Er du allerede i dag-, uke- eller månedsvisning, beholdes den. Det
+ville vært rart om «I dag» kastet deg fra måned til uke. Ny hjelper
+`erKalendervisning()` gjør skillet.
+
+`setView('week')` kalles framfor å sette `currentView` direkte, slik at
+sidemenyen og fane-knappene markeres riktig.
+
+Logoen er skjult på mobil, og Nikolai vil ha det sånn — der er «I dag»
+eneste vei hjem. Logoen skal ikke hentes tilbake.
+
+`tests/navigasjon.test.js` — sju tester.
+
 ### Ikke verifisert
 Jobbkalenderen mot Google Kalender.
 
@@ -164,20 +185,6 @@ uke. Ren `touchstart`/`touchend` på `#weekDayView`, ingen bibliotek.
 
 Nikolai la den bort 3. august da han så at skillet mot scroll er den
 egentlige jobben.
-
-**«I dag» og logoen som vei hjem.** Trykk på «I dag» skal ta deg til
-ukesvisningen uansett hvor du står — også fra Elever, Elevlogg eller
-Min side. Det samme skal «Lærerplanlegger» i headeren gjøre.
-Foreslått av Nikolai 3. august.
-
-`goToToday()` nullstiller datoene i dag, men rører ikke `currentView`.
-Står du i Elever, skjer det derfor ingenting synlig. Fiksen er å sette
-`currentView = 'week'` før `render()` — eller kalle `setView('week')`
-etter at datoene er nullstilt.
-
-Logoen er skjult på mobil (`.logo { display: none }` i mobilblokka).
-Nikolai vil ha det sånn — på telefonen blir «I dag» eneste vei hjem,
-og det er greit. Logoen skal altså ikke hentes tilbake.
 
 ### Lagt bort
 **Uke-etiketten i header.** `renderWeekLabel()` har en `else`-gren ment

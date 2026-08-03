@@ -2047,11 +2047,20 @@ function renderSkjulteGjøremål() {
 // MISC
 // ────────────────────────────────────────────
 function changeWeek(dir){ changeNav(dir); } // backwards compat
+function erKalendervisning(v) {
+  return v === 'day' || v === 'week' || v === 'month';
+}
+
+// «I dag» og logoen er veien hjem: står du i Elever, Elevlogg eller
+// Min side, tar de deg tilbake til kalenderen. Er du allerede i en
+// kalendervisning, beholdes den — det ville vært rart om «I dag»
+// kastet deg fra måned til uke.
 function goToToday(){
   currentWeekMonday=getMonday(TODAY);
   currentDay=new Date(TODAY);
   currentMonthStart=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);
-  render();
+  if (!erKalendervisning(currentView)) setView('week');
+  else render();
 }
 
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }

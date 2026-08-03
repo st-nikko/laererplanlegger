@@ -27,7 +27,7 @@
       padding: 0 20px; height: 52px; border-bottom: 1px solid var(--border);
       flex-shrink: 0; gap: 12px;
     }
-    .logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; flex-shrink: 0; }
+    .logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; flex-shrink: 0; cursor: pointer; user-select: none; }
     .week-nav { display: flex; align-items: center; gap: 10px; }
     .nav-btn {
       width: 28px; height: 28px; border: 1px solid var(--border); background: var(--bg);
