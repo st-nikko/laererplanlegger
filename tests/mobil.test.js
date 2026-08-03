@@ -111,6 +111,19 @@ test('gjøremål-sidebaren dekker ikke halve skjermen', () => {
        'sammenslått sidebar må skjules helt — width: 0 holder ikke når den er fixed');
 });
 
+test('elevlister har ikke sin egen rulleflate på mobil', () => {
+  // Modalen er fullskjerm og .modal-body ruller. En .student-list låst til
+  // 200px inni der gir scroll i scroll: halve skjermen står tom mens du
+  // drar i en liten boks, og på berøring er det ikke til å se hvilken
+  // flate fingeren treffer. Meldt fra telefon under nærværsføring.
+  sant(/\.student-list\s*\{[^}]*max-height:\s*none/.test(mobil),
+       '.student-list må slippe max-height på mobil');
+  sant(/\.student-list\s*\{[^}]*overflow-y:\s*visible/.test(mobil),
+       '.student-list må slippe sin egen overflow på mobil');
+  sant(/\.modal-body\s*\{[^}]*overflow-y:\s*auto/.test(grunn),
+       'modalkroppen må fortsatt være rulleflaten');
+});
+
 test('klasser som styles på mobil finnes i grunn-CSS, markup eller app.js', () => {
   // app.js teller også: klasser som .visning-dag og .uke-kort settes av
   // koden og står aldri i index.html. Uten den tredje kilden slår testen

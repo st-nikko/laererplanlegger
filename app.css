@@ -762,6 +762,18 @@
     border-radius: 0;
   }
 
+  /* ── Elevlister: én rulleflate, ikke to ──
+     Modalen er allerede fullskjerm og .modal-body ruller. En elevliste
+     låst til 200px inni der gir scroll i scroll: du drar i en liten boks
+     mens resten av skjermen står tom, og på berøring er det ikke til å
+     se hvilken flate du treffer. Her får lista vokse i stedet, så
+     modalkroppen blir det eneste som ruller. Gjelder både nærværslista i
+     timeplanen og elevvelgeren i hendelsesskjemaet. */
+  .student-list {
+    max-height: none;
+    overflow-y: visible;
+  }
+
   /* Små dialoger holder seg som dialoger, men innenfor kanten */
   .simple-modal,
   .after-save-modal {
