@@ -162,6 +162,24 @@ Ellers vil vanlig scrolling utløse ukebytte.
 Bør trolig gjelde dagsvisning også, der sveip bytter dag i stedet for
 uke. Ren `touchstart`/`touchend` på `#weekDayView`, ingen bibliotek.
 
+Nikolai la den bort 3. august da han så at skillet mot scroll er den
+egentlige jobben.
+
+**«I dag» og logoen som vei hjem.** Trykk på «I dag» skal ta deg til
+ukesvisningen uansett hvor du står — også fra Elever, Elevlogg eller
+Min side. Det samme skal «Lærerplanlegger» i headeren gjøre.
+Foreslått av Nikolai 3. august.
+
+`goToToday()` nullstiller datoene i dag, men rører ikke `currentView`.
+Står du i Elever, skjer det derfor ingenting synlig. Fiksen er å sette
+`currentView = 'week'` før `render()` — eller kalle `setView('week')`
+etter at datoene er nullstilt.
+
+Merk: logoen er skjult på mobil (`.logo { display: none }` i
+mobilblokka), så der vil bare «I dag» virke. Skal logoen fungere som
+hjem-knapp på mobil også, må den vises igjen — og da må headeren finne
+plass til den.
+
 ### Lagt bort
 **Uke-etiketten i header.** `renderWeekLabel()` har en `else`-gren ment
 for månedsvisningen, men den fanger også Elever, Elevlogg og Min side —
