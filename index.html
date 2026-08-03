@@ -232,6 +232,45 @@
       Filen er et øyeblikksbilde. Endrer du timeplanen, må du laste ned og
       importere på nytt.
     </p>
+
+    <div id="icsKrevInnlogging" class="minside-hjelpetekst" style="margin-top:14px">
+      Logg inn under «Synk mellom enheter» for å kunne publisere en
+      adresse Outlook abonnerer på.
+    </div>
+
+    <div id="icsAv" class="synk-blokk" style="display:none">
+      <label class="synk-label">Abonnement i Outlook</label>
+      <p class="minside-hjelpetekst" style="margin-bottom:6px">
+        Publiserer timeplanen på en adresse Outlook henter fra automatisk.
+        Da slipper du å importere på nytt ved hver endring.
+      </p>
+      <div class="synk-rad">
+        <button class="data-toolbar-btn" onclick="publiserICS()">Publiser kalender</button>
+      </div>
+      <p class="minside-hjelpetekst ics-advarsel">
+        Merk: denne fila er <strong>ikke kryptert</strong>, i motsetning til
+        synkdataene. Alle som kjenner adressen kan lese timeplanen din.
+        Adressen inneholder en tilfeldig nøkkel som ikke lar seg gjette, men
+        del den ikke videre.
+      </p>
+    </div>
+
+    <div id="icsPaa" class="synk-blokk" style="display:none">
+      <label class="synk-label" for="icsAdresse">Abonnementsadresse</label>
+      <div class="synk-rad">
+        <input type="text" id="icsAdresse" class="synk-input" readonly onclick="this.select()">
+        <button class="data-toolbar-btn" id="icsKopierBtn" onclick="kopierICSAdresse()">Kopier</button>
+      </div>
+      <p class="minside-hjelpetekst">
+        I Outlook: <em>Legg til kalender → Abonner fra Internett</em>, og lim inn
+        adressen. Outlook henter oppdateringer med noen timers mellomrom, så
+        endringer vises ikke med én gang.
+      </p>
+      <div class="synk-rad">
+        <button class="data-toolbar-btn" onclick="publiserICS()">↻ Oppdater nå</button>
+        <button class="data-toolbar-btn" onclick="slaAvICSPublisering()">Slå av publisering</button>
+      </div>
+    </div>
   </div>
   <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Data</div>

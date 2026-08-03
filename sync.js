@@ -20,16 +20,21 @@ const SUPABASE_URL  = 'https://sfghgzktphhraiqiwcym.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmZ2hnemt0cGhocmFpcWl3Y3ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU3NDU1NjUsImV4cCI6MjEwMTMyMTU2NX0.4v9zb_1gyJmZCQW2TiyxFwayFUAf8E86SfjNXJXZPwQ';
 
 // Nøkler som synkes. lp_studentNames er bevisst utelatt.
+// ics-nøklene er med så alle enheter publiserer til samme adresse.
 const SYNK_NOKLER = [
   'lp_events', 'lp_todos', 'lp_planfestetTid', 'lp_overtid',
   'lp_lessonData', 'lp_topicsBySubject', 'lp_students',
-  'lp_fridager', 'lp_skoleaar'
+  'lp_fridager', 'lp_skoleaar',
+  'lp_ics_token', 'lp_ics_publiser'
 ];
 
 // Lokale nøkler for synktilstand
 const LS_PASSFRASE   = 'lp_sync_passfrase';
 const LS_SIST_SYNK   = 'lp_sync_sist';
 const LS_ENHETSNAVN  = 'lp_sync_enhet';
+const LS_ICS_TOKEN   = 'lp_ics_token';
+const LS_ICS_PUBLISER= 'lp_ics_publiser';
+const ICS_BUCKET     = 'kalender';
 
 let supabase       = null;
 let synkBruker     = null;   // innlogget bruker, eller null
@@ -187,6 +192,10 @@ async function syncPush() {
 
     localStorage.setItem(LS_SIST_SYNK, na);
     settStatus('ok');
+
+    // Er kalenderen publisert, holdes den oppdatert i samme slengen.
+    // Feiler den, skal ikke selve synken regnes som mislykket.
+    if (icsPubliseres()) await publiserICS({ stille: true });
   } catch (e) {
     console.warn('Synk opp feilet:', e);
     settStatus('feil', e.message || 'Kunne ikke laste opp');
@@ -431,4 +440,117 @@ function tegnSynkStatus() {
       ? 'Passfrase er satt på denne enheten.'
       : 'Ingen passfrase på denne enheten — synk er av.';
   }
+
+  tegnICSStatus();
+}
+
+// ════════════════════════════════════════════════════════════
+// PUBLISERING AV KALENDER TIL OUTLOOK
+// ════════════════════════════════════════════════════════════
+// Fila legges i en offentlig Storage-bøtte slik at Outlook kan hente
+// den uten innlogging. Den er derfor IKKE kryptert — i motsetning til
+// synkdataene. Beskyttelsen er at adressen inneholder en tilfeldig
+// nøkkel som ikke lar seg gjette. Kommer adressen på avveie, kan hvem
+// som helst lese timeplanen, og da må publiseringen slås av og på
+// igjen for å få ny adresse.
+//
+// Elevnavn er uansett ikke med: byggICS() bruker icsTittel(), som
+// aldri slår opp eleven. Se ICS-EKSPORT i app.js.
+
+function icsToken() {
+  let t = localStorage.getItem(LS_ICS_TOKEN);
+  if (!t) {
+    t = crypto.randomUUID().replace(/-/g, '');
+    localStorage.setItem(LS_ICS_TOKEN, t);
+  }
+  return t;
+}
+
+function icsFilsti() {
+  if (!synkBruker) return null;
+  return `${synkBruker.id}/${icsToken()}.ics`;
+}
+
+function icsAdresse() {
+  const sti = icsFilsti();
+  if (!sti) return null;
+  return `${SUPABASE_URL}/storage/v1/object/public/${ICS_BUCKET}/${sti}`;
+}
+
+function icsPubliseres() {
+  return localStorage.getItem(LS_ICS_PUBLISER) === '1';
+}
+
+async function publiserICS({ stille = false } = {}) {
+  if (!supabase || !synkBruker) {
+    if (!stille) alert('Logg inn under Synk mellom enheter først.');
+    return false;
+  }
+
+  const { ics, antall } = byggICS();
+  if (!antall && !stille) {
+    if (!confirm('Fant ingen undervisningstimer i skoleåret. Publisere en tom kalender likevel?')) return false;
+  }
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const { error } = await supabase.storage
+    .from(ICS_BUCKET)
+    .upload(icsFilsti(), blob, {
+      contentType: 'text/calendar;charset=utf-8',
+      cacheControl: '600',
+      upsert: true
+    });
+
+  if (error) {
+    console.warn('Publisering feilet:', error);
+    if (!stille) alert('Kunne ikke publisere: ' + (error.message || 'ukjent feil'));
+    return false;
+  }
+
+  localStorage.setItem(LS_ICS_PUBLISER, '1');
+  tegnICSStatus();
+  return true;
+}
+
+async function slaAvICSPublisering() {
+  if (!confirm('Slå av publisering? Adressen slutter å virke, og Outlook mister timeplanen.\n\nSlår du på igjen senere, får du en ny adresse som må legges inn på nytt.')) return;
+
+  if (supabase && synkBruker) {
+    const { error } = await supabase.storage.from(ICS_BUCKET).remove([icsFilsti()]);
+    if (error) console.warn('Kunne ikke slette publisert fil:', error);
+  }
+  // Ny nøkkel neste gang — den gamle adressen skal ikke kunne gjenbrukes
+  localStorage.removeItem(LS_ICS_TOKEN);
+  localStorage.setItem(LS_ICS_PUBLISER, '0');
+  saveToStorage();
+  tegnICSStatus();
+}
+
+async function kopierICSAdresse() {
+  const url = icsAdresse();
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    const k = document.getElementById('icsKopierBtn');
+    if (k) { const f = k.textContent; k.textContent = 'Kopiert'; setTimeout(() => { k.textContent = f; }, 1500); }
+  } catch {
+    prompt('Kopier adressen:', url);
+  }
+}
+
+function tegnICSStatus() {
+  const av      = document.getElementById('icsAv');
+  const paa     = document.getElementById('icsPaa');
+  const krevPaalogging = document.getElementById('icsKrevInnlogging');
+  if (!av || !paa) return;
+
+  const innlogget = Boolean(synkBruker);
+  const aktiv     = innlogget && icsPubliseres() && localStorage.getItem(LS_ICS_TOKEN);
+
+  if (krevPaalogging) krevPaalogging.style.display = innlogget ? 'none' : '';
+  av.style.display  = (innlogget && !aktiv) ? '' : 'none';
+  paa.style.display = aktiv ? '' : 'none';
+
+  const felt = document.getElementById('icsAdresse');
+  if (felt && aktiv) felt.value = icsAdresse();
 }

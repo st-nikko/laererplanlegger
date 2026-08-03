@@ -75,6 +75,7 @@ Lærerplanlegger/
 | INNLOGGING | `synkLoggInn()` / `synkOpprettKonto()` (e-post + passord), `synkLoggUt()`, `synkFeilTekst()` (norske feilmeldinger) |
 | PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
 | STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
+| ICS-PUBLISERING | `icsToken()`, `icsFilsti()`, `icsAdresse()`, `publiserICS()`, `slaAvICSPublisering()`, `tegnICSStatus()` — laster `byggICS()` opp til Storage-bøtta `kalender` under `{user_id}/{token}.ics`. **Fila er ikke kryptert** — bøtta er offentlig så Outlook kan hente uten innlogging, og beskyttelsen er at token ikke lar seg gjette. Elevnavn er uansett ikke med. Oppdateres av `syncPush()` når publisering er på |
 
 Supabase-tabellen `sync_data` har én rad per bruker: `ciphertext`, `salt`,
 `iv`, `updated_at`, `enhet`. Row Level Security gjør at hver bruker kun

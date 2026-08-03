@@ -502,6 +502,14 @@
 /* ────────────────────────────────────────────
    SYNK MELLOM ENHETER
    ──────────────────────────────────────────── */
+.ics-advarsel {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid #d97706;
+  background: var(--surface);
+  border-radius: 0 6px 6px 0;
+}
+
 .lenke-btn {
   background: none; border: none; padding: 0;
   font-family: inherit; font-size: inherit;

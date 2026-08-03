@@ -84,11 +84,39 @@ eksport oppdaterer framfor å duplisere.
 `tests/ics.test.js` — fjorten tester, blant annet linjebryting på 75
 tegn og escaping av semikolon og komma.
 
+### ICS steg 2 — abonnementsadresse
+
+Fila lastes opp til Storage-bøtta `kalender` under
+`{user_id}/{token}.ics`. Bøtta er offentlig så Outlook kan hente uten
+innlogging; RLS-policyene tillater skriving bare i brukerens egen mappe.
+
+**Fila er ikke kryptert.** Det er et bevisst brudd med resten av
+opplegget, og eneste måten Outlook kan lese den. Beskyttelsen er at
+token er 32 tilfeldige tegn. UI-et sier dette rett ut i en egen
+advarselsboks — det skal ikke være mulig å skru dette på uten å ha
+lest det.
+
+`lp_ics_token` og `lp_ics_publiser` er lagt til i `SYNK_NOKLER`, ellers
+ville hver enhet publisert til sin egen adresse. Verdiene er ikke
+personopplysninger, og synken av dem er uansett kryptert.
+
+Publisering oppdateres fra `syncPush()` med `stille: true`. Feiler
+opplastingen, regnes ikke selve synken som mislykket — kalenderen er en
+bekvemmelighet, dataene er det som betyr noe.
+
+`slaAvICSPublisering()` sletter fila **og** nullstiller token, slik at
+en adresse på avveie ikke kan gjenbrukes. Ny påslåing gir ny adresse
+som må legges inn i Outlook på nytt — dialogen sier fra.
+
+Ni nye tester. En felle underveis: `synkBruker` er `let` på toppnivå og
+blir ikke egenskap på vm-konteksten, så testen må sette den via
+`runInContext`.
+
+### Ikke verifisert
+Publisering mot ekte Supabase Storage, og at Outlook faktisk klarer å
+abonnere på adressen. Krever at SQL-en for bøtta og policyene er kjørt.
+
 ### Neste steg
-- ICS steg 2: last opp fila til Supabase Storage og gi Outlook en
-  abonnementsadresse. Merk at Outlook henter abonnerte kalendere tregt,
-  ofte flere timer. URL-en må være uråd å gjette — sikkerheten hviler på
-  det, ikke på tilgangskontroll.
 - SFS2213-beregning.
 
 ### Lagt bort

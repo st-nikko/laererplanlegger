@@ -2133,6 +2133,8 @@ function renderMinSide() {
   document.getElementById('skoleaarStart').value = skoleaar.start;
   document.getElementById('skoleaarSlutt').value = skoleaar.slutt;
   renderSkolerute();
+  // Synk- og publiseringsstatus bor i sync.js, som kan mangle
+  if (typeof tegnSynkStatus === 'function') tegnSynkStatus();
 }
 
 function lagreSkoleaar() {
