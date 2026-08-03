@@ -175,10 +175,9 @@ Står du i Elever, skjer det derfor ingenting synlig. Fiksen er å sette
 `currentView = 'week'` før `render()` — eller kalle `setView('week')`
 etter at datoene er nullstilt.
 
-Merk: logoen er skjult på mobil (`.logo { display: none }` i
-mobilblokka), så der vil bare «I dag» virke. Skal logoen fungere som
-hjem-knapp på mobil også, må den vises igjen — og da må headeren finne
-plass til den.
+Logoen er skjult på mobil (`.logo { display: none }` i mobilblokka).
+Nikolai vil ha det sånn — på telefonen blir «I dag» eneste vei hjem,
+og det er greit. Logoen skal altså ikke hentes tilbake.
 
 ### Lagt bort
 **Uke-etiketten i header.** `renderWeekLabel()` har en `else`-gren ment
