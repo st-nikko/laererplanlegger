@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lærerplanlegger</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">Lærerplanlegger</div>
+  <div class="view-toggle">
+    <button class="view-btn"        id="vbtnDay"   onclick="setView('day')">Dag</button>
+    <button class="view-btn active" id="vbtnWeek"  onclick="setView('week')">Uke</button>
+    <button class="view-btn"        id="vbtnMonth" onclick="setView('month')">Måned</button>
+  </div>
+  <div class="week-nav">
+    <button class="nav-btn" onclick="changeNav(-1)">&#8249;</button>
+    <span class="week-label" id="weekLabel"></span>
+    <button class="nav-btn" onclick="changeNav(1)">&#8250;</button>
+  </div>
+  <div class="header-actions">
+    <button class="ghost-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">☰ Gjøremål</button>
+    <button class="ghost-btn" onclick="openPlanfestetTidModal()">Planfestet tid</button>
+    <button class="ghost-btn" onclick="goToToday()">I dag</button>
+    <button class="new-btn" onclick="openEventForm(null)">+ Ny hendelse</button>
+  </div>
+</header>
+
+<!-- MAIN WRAPPER -->
+<div id="mainWrapper">
+
+<!-- SIDEMENY: HOVEDNAVIGASJON -->
+<nav id="sideMeny">
+  <button class="meny-item active" id="menyUkesoversikt" onclick="setView('week')">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span>Timeplan</span>
+  </button>
+  <button class="meny-item" id="menyElever" onclick="setView('elever')">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <span>Elever</span>
+  </button>
+  <button class="meny-item" id="menyElevlogg" onclick="setView('elevlogg')">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    <span>Elevlogg</span>
+  </button>
+  <button class="meny-item" id="menyMinSide" onclick="setView('minside')">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>Min side</span>
+  </button>
+</nav>
+
+<!-- SIDEBAR: GJØREMÅL -->
+<div id="sidebarContent">
+  <div class="sidebar-header">
+    <span class="sidebar-title">Gjøremål</span>
+    <button class="ghost-btn" style="padding:3px 8px;font-size:11px" onclick="toggleSidebar()">Skjul</button>
+  </div>
+  <div class="sidebar-body" id="todoList"></div>
+  <div class="sidebar-footer">
+    <button class="todo-add-btn" onclick="openTodoForm()">+ Nytt gjøremål</button>
+    <button class="todo-skjulte-btn" onclick="openSkjulteGjøremål()">Vis skjulte gjøremål</button>
+  </div>
+</div>
+
+<!-- CONTENT AREA -->
+<div id="contentArea">
+
+<!-- WEEK / DAY VIEW -->
+<div id="weekDayView">
+  <div class="day-headers" id="dayHeaders"></div>
+  <div class="calendar-scroll">
+    <div class="calendar-grid" id="calGrid"></div>
+  </div>
+</div>
+
+<!-- MONTH VIEW -->
+<div id="monthView" style="display:none">
+  <div class="month-dow-row" id="monthDowRow">
+    <div class="month-dow-header">Man</div>
+    <div class="month-dow-header">Tir</div>
+    <div class="month-dow-header">Ons</div>
+    <div class="month-dow-header">Tor</div>
+    <div class="month-dow-header">Fre</div>
+    <div class="month-dow-header">Lør</div>
+    <div class="month-dow-header">Søn</div>
+  </div>
+  <div class="month-days-grid" id="monthGrid"></div>
+</div>
+
+<!-- ELEV-ADMIN VIEW -->
+<div id="elevAdminView" style="display:none; padding:1.5rem;"></div>
+
+<!-- ELEVLOGG VIEW -->
+<div id="elevloggView" style="display:none">
+  <h2 class="elevlogg-view-tittel">Elevlogg</h2>
+  <div class="form-field" style="max-width:340px;margin-bottom:18px">
+    <label>Velg elev</label>
+    <select class="elevlogg-select" id="elevloggViewSelect" onchange="elevloggViewChanged()">
+      <option value="">— Velg elev —</option>
+    </select>
+  </div>
+  <div id="elevloggViewContent">
+    <div class="empty-state">Velg en elev for å se logg over deltakelse og tema.</div>
+  </div>
+</div>
+
+<!-- MIN SIDE VIEW -->
+<div id="minSideView" style="display:none">
+  <h2 class="minside-tittel">Min side</h2>
+  <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Skoleår</div>
+    <div class="form-row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
+      <div class="form-field">
+        <label>Skolestart</label>
+        <input type="date" id="skoleaarStart">
+      </div>
+      <div class="form-field">
+        <label>Skoleslutt</label>
+        <input type="date" id="skoleaarSlutt">
+      </div>
+      <div class="form-field" style="align-self:flex-end">
+        <button class="btn btn-primary" onclick="lagreSkoleaar()">Lagre</button>
+      </div>
+    </div>
+  </div>
+  <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Skolerute</div>
+    <div id="skoleruteTabell"></div>
+    <div class="innst-legg-til">
+      <div class="form-row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
+        <div class="form-field" style="flex:2;min-width:120px">
+          <label>Navn</label>
+          <input type="text" id="frigagTittel" placeholder="Navn på friperiode">
+        </div>
+        <div class="form-field" style="flex:1;min-width:110px">
+          <label>Type</label>
+          <select id="frigagType">
+            <option value="ferie">Ferie</option>
+            <option value="fridag">Fridag</option>
+            <option value="planlegging">Planleggingsdag</option>
+          </select>
+        </div>
+        <div class="form-field" style="flex:1;min-width:110px">
+          <label>Fra</label>
+          <input type="date" id="frigagFra">
+        </div>
+        <div class="form-field" style="flex:1;min-width:110px">
+          <label>Til (valgfritt)</label>
+          <input type="date" id="frigagTil">
+        </div>
+        <div class="form-field" style="flex:0 0 auto;align-self:flex-end">
+          <button class="btn btn-primary" onclick="leggTilFridag()">Legg til</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Data</div>
+    <p class="minside-hjelpetekst">Eksporter all data som JSON-fil, eller importer fra en tidligere eksport.</p>
+    <div class="data-toolbar">
+      <button class="data-toolbar-btn" onclick="exportData()">⬇ Eksporter data</button>
+      <button class="data-toolbar-btn" onclick="importData()">⬆ Importer data</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- LEGEND -->
+<div class="legend" id="legend">
+  <span class="legend-heading">Fag:</span>
+</div>
+
+</div><!-- /contentArea -->
+</div><!-- /mainWrapper -->
+
+<!-- ══════════════════════════════════════
+     PLANFESTET TID MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="planfestetOverlay">
+  <div class="simple-modal" style="width:420px">
+    <div class="modal-title">Planfestet arbeidstid</div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5">
+      Sett start- og sluttid per ukedag. Vises som skygge i kalenderen.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:4px 0;font-weight:500;color:var(--text-secondary);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Dag</th>
+          <th style="padding:4px 8px;font-weight:500;color:var(--text-secondary);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Start</th>
+          <th style="padding:4px 8px;font-weight:500;color:var(--text-secondary);font-size:11px;text-transform:uppercase;letter-spacing:0.5px">Slutt</th>
+        </tr>
+      </thead>
+      <tbody id="pfTableBody"></tbody>
+    </table>
+    <div id="pfSummary" style="margin-top:14px;padding:10px 12px;background:var(--surface);border-radius:6px;font-size:13px;color:var(--text-secondary)"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-secondary" onclick="closeOverlay('planfestetOverlay')">Avbryt</button>
+      <button class="btn btn-primary" onclick="savePlanfestetTid()">Lagre</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     OVERTID MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="overtidOverlay">
+  <div class="simple-modal">
+    <div class="modal-title" id="overtidModalTitle">Registrer overtid</div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5">
+      Avvik fra planfestet tid denne dagen.
+    </p>
+    <div class="field">
+      <label>Møter på jobb</label>
+      <input type="time" id="otStartInput">
+    </div>
+    <div class="field">
+      <label>Slutter</label>
+      <input type="time" id="otSluttInput">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="slettOvertidBtn" onclick="slettOvertid()" style="margin-right:auto">Slett overtid</button>
+      <button class="btn btn-secondary" onclick="closeOverlay('overtidOverlay')">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveOvertid()">Lagre</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     EVENT FORM MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="eventFormOverlay">
+  <div class="event-modal">
+    <div class="modal-hdr">
+      <span class="modal-hdr-title" id="formTitle">Ny time</span>
+      <button class="modal-close" onclick="closeOverlay('eventFormOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="type-tabs">
+        <button class="type-tab active" id="tabUndervisning" onclick="setFormCategory('undervisning')">Undervisning</button>
+        <button class="type-tab" id="tabMote" onclick="setFormCategory('mote')">Møte / Hendelse</button>
+        <button class="type-tab" id="tabVikar" onclick="setFormCategory('vikar')">Vikar</button>
+      </div>
+
+      <!-- Undervisning -->
+      <div id="undervisningSection" class="form-section">
+        <div class="form-field">
+          <label>Fag</label>
+          <input type="text" id="fagInput" list="fagList" placeholder="Norsk, Matematikk, Naturfag…">
+          <datalist id="fagList"></datalist>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Trinn</label>
+            <div class="trinn-checks" id="trinnChecks">
+              <label><input type="checkbox" name="trinnCheck" value="8" onchange="onTrinnChange()"> 8. trinn</label>
+              <label><input type="checkbox" name="trinnCheck" value="9" onchange="onTrinnChange()"> 9. trinn</label>
+              <label><input type="checkbox" name="trinnCheck" value="10" onchange="onTrinnChange()"> 10. trinn</label>
+            </div>
+          </div>
+          <div class="form-field">
+            <label>Rom</label>
+            <input type="text" id="romInput" placeholder="204">
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Økttype</label>
+          <div class="session-pills">
+            <button class="session-pill active" id="pillGruppe"    onclick="setSessionType('gruppe')">Gruppe</button>
+            <button class="session-pill"         id="pillEnetime"   onclick="setSessionType('enetime')">Enetime</button>
+            <button class="session-pill"         id="pillParallell" onclick="setSessionType('parallell')">Parallell time</button>
+          </div>
+        </div>
+        <div class="info-note" id="parallellNote" style="display:none">
+          ↔ Eleven(e) trekkes ut fra ordinær undervisning og har time med deg i stedet.
+        </div>
+      </div>
+
+      <!-- Møte -->
+      <div id="moteSection" class="form-section" style="display:none">
+        <div class="form-field">
+          <label>Tittel</label>
+          <input type="text" id="moteTittelInput" placeholder="Fagmøte, Foreldremøte…">
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Kategori</label>
+            <select id="moteKategori">
+              <option value="mote">Fagmøte / Personalmøte</option>
+              <option value="foreldre">Foreldremøte / Konferansetime</option>
+              <option value="annet">Fagdag / Annet</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Sted</label>
+            <input type="text" id="stedInput" placeholder="Møterom 1">
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Gjelder elev (valgfritt)</label>
+          <select id="moteElevSelect">
+            <option value="">— Ingen elev —</option>
+          </select>
+        </div>
+        <div class="form-field" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <label>Legg til gjøremål</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="moteTodoTittel" placeholder="Tittel på gjøremål" style="flex:1">
+            <button class="btn btn-secondary" onclick="leggTilGjøremålFraMøte()">Legg til</button>
+          </div>
+          <p id="moteTodoBekreftelse" style="display:none;margin:4px 0 0;font-size:12px;color:var(--accent)">Gjøremål lagt til</p>
+        </div>
+      </div>
+
+      <!-- Vikar -->
+      <div id="vikarSection" class="form-section" style="display:none">
+        <div class="form-field">
+          <label>Vikarnotat (valgfritt)</label>
+          <textarea id="vikarNotesInput" rows="3" placeholder="Klasse, fag, rom, hva de skal gjøre…"></textarea>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Dag & time -->
+      <div class="form-section">
+        <div class="form-row">
+          <div class="form-field" id="dagField">
+            <label>Dag</label>
+            <select id="dagSelect">
+              <option value="0">Mandag</option>
+              <option value="1">Tirsdag</option>
+              <option value="2">Onsdag</option>
+              <option value="3">Torsdag</option>
+              <option value="4">Fredag</option>
+            </select>
+          </div>
+          <div class="form-field" id="motoDatoField" style="display:none">
+            <label>Dato</label>
+            <input type="date" id="moteDatoInput">
+          </div>
+          <!-- Undervisning: periode-velger -->
+          <div class="form-field" id="periodeField">
+            <label>Time (fra – til)</label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <select id="periodeSelect" style="flex:1">
+                <option value="1">1. time</option>
+                <option value="2">2. time</option>
+                <option value="3">3. time</option>
+                <option value="4">4. time</option>
+                <option value="5">5. time</option>
+                <option value="6">6. time</option>
+                <option value="7">7. time</option>
+              </select>
+              <span style="color:var(--text-muted);font-size:12px;white-space:nowrap">–</span>
+              <select id="periodeSluttSelect" style="flex:1">
+                <option value="1">1. time</option>
+                <option value="2">2. time</option>
+                <option value="3">3. time</option>
+                <option value="4">4. time</option>
+                <option value="5">5. time</option>
+                <option value="6">6. time</option>
+                <option value="7">7. time</option>
+              </select>
+            </div>
+          </div>
+          <!-- Møte: klokkeslett -->
+          <div class="form-field" id="moteStartField" style="display:none">
+            <label>Fra</label>
+            <input type="time" id="moteStartInput" value="08:30">
+          </div>
+          <div class="form-field" id="moteSluttField" style="display:none">
+            <label>Til</label>
+            <input type="time" id="moteSluttInput" value="09:15">
+          </div>
+        </div>
+        <label class="checkbox-row">
+          <input type="checkbox" id="gjentasCheck" checked onchange="onGjentasChange()">
+          Fast time i timeplanen (gjentas ukentlig)
+        </label>
+        <div class="start-week-row" id="startWeekRow">
+          <div class="form-field" style="max-width:200px">
+            <label>Gjeldende fra uke</label>
+            <input type="number" id="startWeekInput" min="1" max="52" placeholder="f.eks. 34">
+          </div>
+        </div>
+        <div class="week-pattern-row" id="weekPatternRow" style="display:none">
+          <label><input type="radio" name="weekPattern" value="every" id="wpEvery" checked> Hver uke</label>
+          <label><input type="radio" name="weekPattern" value="odd"   id="wpOdd"> Odde uker</label>
+          <label><input type="radio" name="weekPattern" value="even"  id="wpEven"> Partall uker</label>
+        </div>
+      </div>
+
+      <!-- Elever -->
+      <div id="studentSection">
+        <div class="divider"></div>
+        <div class="form-section">
+          <div class="select-all-row">
+            <span class="section-label" id="studentSectionLabel">Elever</span>
+            <button class="select-all-btn" id="selectAllBtn" onclick="toggleAllStudents()" style="display:none">Velg alle / ingen</button>
+          </div>
+          <input class="student-filter" type="text" placeholder="Søk elev…" id="studentSearch" oninput="renderStudentList()">
+          <div class="student-list" id="studentList">
+            <div class="student-list-empty">Velg trinn for å se elever</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <!-- Sletteknapper (vises kun ved redigering) -->
+      <button class="btn btn-secondary" id="avsluttEventBtn" style="display:none" onclick="avsluttEventVisModal()">Avslutt fra dato</button>
+      <button class="btn btn-slett-perm" id="slettPermBtn" style="display:none" onclick="slettEventPermanent()">Slett permanent</button>
+      <!-- Inline datovelger for avslutning (skjult til brukeren klikker "Avslutt fra dato") -->
+      <div id="avsluttPanel" style="display:none; align-items:center; gap:8px; flex-wrap:wrap">
+        <label style="font-size:12px; color:var(--text-secondary); white-space:nowrap">Avslutt fra og med:</label>
+        <input type="date" id="avsluttDatoInput" style="font-size:13px; padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-family:inherit">
+        <button class="btn btn-primary" onclick="avsluttEvent(document.getElementById('avsluttDatoInput').value)">Bekreft</button>
+        <button class="btn btn-secondary" onclick="avsluttEventSkjul()">Avbryt</button>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" id="avbrytEventBtn" onclick="closeOverlay('eventFormOverlay')">Avbryt</button>
+      <button class="btn btn-primary" id="saveEventBtn" onclick="saveEvent()">Lagre</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     AFTER-SAVE PROMPT
+══════════════════════════════════════ -->
+<div class="overlay" id="afterSaveOverlay">
+  <div class="after-save-modal">
+    <h3 id="afterSaveTitle">Time lagret</h3>
+    <p id="afterSaveText">Vil du legge inn plan for denne timen?</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeOverlay('afterSaveOverlay')">Ikke nå</button>
+      <button class="btn btn-primary" onclick="openPlanFromPrompt()">Legg inn plan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     LESSON PLAN MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="planOverlay">
+  <div class="plan-modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-hdr-title" id="planTitle"></div>
+        <div class="modal-subtitle" id="planSubtitle"></div>
+      </div>
+      <button class="modal-close" onclick="closeOverlay('planOverlay')">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-field">
+          <label>Tema</label>
+          <input type="text" id="temaInput" list="temaList" placeholder="Velg eksisterende tema eller skriv nytt…">
+          <datalist id="temaList"></datalist>
+        </div>
+        <div class="form-field">
+          <label>Notater / fritekst</label>
+          <textarea id="planNotes" rows="5" placeholder="Mål for timen, gjennomføring, ressurser, observasjoner…"></textarea>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="form-section">
+        <div class="select-all-row">
+          <span class="section-label">Nærvær</span>
+          <button class="select-all-btn" onclick="toggleAllAttendance()">Alle til stede / ingen</button>
+        </div>
+        <div class="student-list" id="attendanceList"></div>
+      </div>
+    </div>
+
+    <div class="modal-ftr">
+      <button class="btn btn-secondary" onclick="openEditFromPlan()">Rediger time</button>
+      <button class="btn btn-secondary" onclick="kopierEvent()">Kopier time</button>
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="closeOverlay('planOverlay')">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveLessonPlan()">Lagre</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     ELEVLOGG MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="elevloggOverlay">
+  <div class="elevlogg-modal">
+    <div class="modal-hdr">
+      <div class="modal-hdr-title">Elevlogg</div>
+      <button class="modal-close" onclick="closeOverlay('elevloggOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-field">
+          <label>Velg elev</label>
+          <select class="elevlogg-select" id="elevloggSelect" onchange="renderElevlogg()">
+            <option value="">— Velg elev —</option>
+          </select>
+        </div>
+      </div>
+      <div id="elevloggContent">
+        <div class="empty-state">Velg en elev for å se logg over deltakelse og tema.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TODO FORM MODAL
+══════════════════════════════════════ -->
+<div class="overlay" id="todoFormOverlay">
+  <div class="event-modal" style="width:420px">
+    <div class="modal-hdr">
+      <span class="modal-hdr-title" id="todoFormTitle">Nytt gjøremål</span>
+      <button class="modal-close" onclick="closeOverlay('todoFormOverlay')">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-field">
+          <label>Tittel</label>
+          <input type="text" id="todoTittelInput" placeholder="Kort tittel på gjøremålet">
+        </div>
+        <div class="form-field">
+          <label>Beskrivelse (valgfritt)</label>
+          <textarea id="todoTextInput" rows="3" placeholder="Utfyllende beskrivelse…"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Knyttet til fag (valgfritt)</label>
+            <select id="todoFagSelect">
+              <option value="">— Ingen —</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Knyttet til elev (valgfritt)</label>
+            <select id="todoStudentSelect">
+              <option value="">— Ingen —</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Frist (valgfritt)</label>
+          <input type="date" id="todoFristInput">
+        </div>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="closeOverlay('todoFormOverlay')">Avbryt</button>
+          <button class="btn btn-primary" id="todoSaveBtn" onclick="saveTodo()">Lagre</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SKJULTE GJØREMÅL MODAL -->
+<div class="overlay" id="skjulteGjøremålOverlay">
+  <div class="event-modal" style="width:520px">
+    <div class="modal-hdr">
+      <span class="modal-hdr-title">Skjulte gjøremål</span>
+      <button class="modal-close" onclick="closeOverlay('skjulteGjøremålOverlay')">x</button>
+    </div>
+    <div class="modal-body">
+      <div id="skjulteGjøremålListe"></div>
+    </div>
+    <div class="modal-ftr">
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="closeOverlay('skjulteGjøremålOverlay')">Lukk</button>
+    </div>
+  </div>
+</div>
+
+<!-- STUDENT FORM MODAL -->
+<div class="overlay" id="studentFormOverlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h3 id="studentFormTitle">Legg til elev</h3>
+      <button class="close-btn" onclick="closeOverlay('studentFormOverlay')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Navn</label>
+        <input type="text" id="sfNavn" placeholder="Fullt navn">
+      </div>
+      <div class="form-row">
+        <label>Trinn</label>
+        <select id="sfTrinn">
+          <option value="">Velg trinn</option>
+          <option value="8">8. trinn</option>
+          <option value="9">9. trinn</option>
+          <option value="10">10. trinn</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Startdato</label>
+        <input type="date" id="sfStartDato">
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="closeOverlay('studentFormOverlay')">Avbryt</button>
+      <button class="btn btn-primary" onclick="saveStudent()">Lagre</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

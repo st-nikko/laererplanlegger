@@ -1,0 +1,17 @@
+# OS-artefakter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Backup / midlertidige filer
+*.bak
+*.tmp
+*~
+
+# Eksporterte datafiler (inneholder personopplysninger om elever)
+laererplanlegger-*.json
