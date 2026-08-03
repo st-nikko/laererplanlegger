@@ -2,7 +2,7 @@
 
 ---
 
-## Siste økt: 3. august 2026 (økt 20) — Kryptert synk via Supabase (bygget, ikke verifisert i drift)
+## Siste økt: 3. august 2026 (økt 20) — Kryptert synk via Supabase (verifisert i drift)
 
 ### Hva ble gjort
 
@@ -33,10 +33,14 @@ fargekodet prikk, e-postinnlogging, passfrasefelt, synk nå, logg ut.
 lekker klartekst, feil passfrase, at samme tekst gir ulik chiffertekst,
 og at navn verken samles opp eller kan overskrives.
 
-### Ikke verifisert
-- Ingenting er testet mot ekte Supabase ennå. Innlogging, RLS-reglene og
-  faktisk synk mellom to enheter gjenstår å prøve i drift.
-- Redirect-URL må være registrert i Supabase, ellers virker ikke lenka.
+### Verifisert i drift
+Nikolai bekreftet 3. august at innlogging, kryptert synk og
+pseudonymisering fungerer: kalender og elever synkroniseres mellom
+enheter, og elevnavn holdes lokalt som tiltenkt.
+
+Forutsetninger som må være på plass: redirect-URL registrert i Supabase
+under Authentication → URL Configuration, og SQL-en for `sync_data`
+med RLS-policyer kjørt.
 
 ### Merk
 - Passfrasen ligger i klartekst i `lp_sync_passfrase`. Den beskytter mot
@@ -46,9 +50,10 @@ og at navn verken samles opp eller kan overskrives.
   heller — testene henter dem via `vm.runInContext()`.
 
 ### Neste steg
-- Prøv synk i drift: logg inn, sett passfrase, verifiser at to enheter
-  får samme data.
-- Vurder påminnelse i notatfeltene om at fritekst kan inneholde navn.
+- Vurder påminnelse i notatfeltene om at fritekst kan inneholde navn —
+  det er nå den største gjenværende lekkasjeveien.
+- Ekte SFS2213-beregning (nedprioritert av Nikolai 3. august).
+- Uke-etiketten i header viser månedsnavn i Elever/Elevlogg-visning.
 
 ---
 
