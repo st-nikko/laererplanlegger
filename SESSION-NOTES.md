@@ -58,7 +58,37 @@ Detaljer verdt å huske:
 
 `tests/skolerute.test.js` — ni jsdom-tester.
 
+### ICS-eksport til Outlook (steg 1)
+
+Nikolai ville få undervisningstimene inn i Outlook. Avklart:
+**bare undervisning**, siden møter allerede kommer som innkallinger og
+ellers ville ligget i dobbelt. Jobbkonto fra skolen, så Graph API er
+sannsynligvis stengt — ICS er den realistiske veien.
+
+**Gjentakelser utvides til enkelthendelser** i stedet for RRULE. Større
+fil, men vi gjenbruker `eventsForDate()` — samme funksjon som tegner
+kalenderen — og arver ferier, planleggingsdager, annenhver-uke-mønster
+og gyldighetsperioder gratis. Alternativet var å skrive logikken på nytt
+i RRULE- og EXDATE-form og få den subtilt feil.
+
+**`icsTittel()` er en egen funksjon**, ikke `eventDisplayLabel()`.
+Sistnevnte viser elevens fornavn for enetimer — riktig i appen, men
+fila kan komme til å ligge på en offentlig adresse i steg 2. Eksporten
+bruker faget: «Matematikk (enetime)». En test slår fast begge deler
+samtidig, så koblingen ikke går tapt.
+
+VTIMEZONE for Europe/Oslo med overgangsregler, slik at timene ikke
+forskyver seg ved sommertid. Stabile UID-er (`lp-{id}-{dato}`) så en ny
+eksport oppdaterer framfor å duplisere.
+
+`tests/ics.test.js` — fjorten tester, blant annet linjebryting på 75
+tegn og escaping av semikolon og komma.
+
 ### Neste steg
+- ICS steg 2: last opp fila til Supabase Storage og gi Outlook en
+  abonnementsadresse. Merk at Outlook henter abonnerte kalendere tregt,
+  ofte flere timer. URL-en må være uråd å gjette — sikkerheten hviler på
+  det, ikke på tilgangskontroll.
 - SFS2213-beregning.
 
 ### Lagt bort

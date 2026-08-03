@@ -2382,6 +2382,147 @@ function loadFromStorage() {
   }
 }
 
+// ────────────────────────────────────────────
+// ICS-EKSPORT (undervisningstimer til Outlook)
+// ────────────────────────────────────────────
+// Bare undervisning eksporteres. Møter kommer allerede som innkallinger
+// i Outlook, og ville blitt liggende i dobbelt.
+//
+// Gjentakende timer utvides til enkelthendelser i stedet for å bruke
+// ICS-ens egen RRULE. Fila blir større, men vi gjenbruker
+// eventsForDate() — den samme funksjonen som tegner kalenderen — og
+// arver dermed ferier, planleggingsdager, annenhver-uke-mønster og
+// gyldighetsperioder uten å skrive logikken på nytt.
+//
+// Enetimer får tittelen «Enetime», aldri elevens navn: fila kan komme
+// til å ligge på en offentlig adresse.
+
+// Europe/Oslo med overgangsregler, slik at Outlook plasserer timene
+// riktig gjennom sommer- og vintertid.
+const ICS_VTIMEZONE = [
+  'BEGIN:VTIMEZONE',
+  'TZID:Europe/Oslo',
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:+0100',
+  'TZOFFSETTO:+0200',
+  'TZNAME:CEST',
+  'DTSTART:19700329T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:+0200',
+  'TZOFFSETTO:+0100',
+  'TZNAME:CET',
+  'DTSTART:19701025T030000',
+  'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE'
+];
+
+function icsEscape(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+// '2026-08-17' + '08:30' → '20260817T083000'
+function icsLokalTid(isoDato, klokke) {
+  return isoDato.replace(/-/g, '') + 'T' + klokke.replace(':', '') + '00';
+}
+
+// Tittel uten elevnavn. Enetimer identifiseres av faget, ikke eleven.
+function icsTittel(ev) {
+  if (ev.sessionType === 'enetime') {
+    return ev.title ? `${ev.title} (enetime)` : 'Enetime';
+  }
+  return ev.title || 'Undervisning';
+}
+
+function icsBeskrivelse(ev) {
+  const deler = [];
+  const trinn = getEventTrinns(ev);
+  if (trinn.length) deler.push(trinn.map(t => t + '.').join(' + ') + ' trinn');
+  if (ev.sessionType === 'parallell') deler.push('Parallell time');
+  if (ev.sessionType === 'enetime')   deler.push('Enetime');
+  return deler.join(' · ');
+}
+
+// Linjer over 75 oktetter skal brytes med mellomrom først på neste linje.
+function icsBrytLinje(linje) {
+  if (linje.length <= 75) return [linje];
+  const ut = [linje.slice(0, 75)];
+  let rest = linje.slice(75);
+  while (rest.length > 74) { ut.push(' ' + rest.slice(0, 74)); rest = rest.slice(74); }
+  if (rest.length) ut.push(' ' + rest);
+  return ut;
+}
+
+function byggICS() {
+  const fra = new Date(skoleaar.start + 'T00:00:00');
+  const til = new Date(skoleaar.slutt + 'T00:00:00');
+  const stempel = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const linjer = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Laererplanlegger//NO',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Undervisning',
+    'X-WR-TIMEZONE:Europe/Oslo',
+    ...ICS_VTIMEZONE
+  ];
+
+  let antall = 0;
+  for (let d = new Date(fra); d <= til; d.setDate(d.getDate() + 1)) {
+    const dato = isoDate(d);
+    eventsForDate(new Date(d))
+      .filter(ev => ev.category === 'undervisning')
+      .forEach(ev => {
+        antall++;
+        linjer.push(
+          'BEGIN:VEVENT',
+          // Stabil UID: samme time på samme dato får samme id ved ny
+          // eksport, så Outlook oppdaterer i stedet for å duplisere.
+          `UID:lp-${ev.id}-${dato.replace(/-/g, '')}@laererplanlegger`,
+          `DTSTAMP:${stempel}`,
+          `DTSTART;TZID=Europe/Oslo:${icsLokalTid(dato, ev.start)}`,
+          `DTEND;TZID=Europe/Oslo:${icsLokalTid(dato, ev.end)}`,
+          ...icsBrytLinje(`SUMMARY:${icsEscape(icsTittel(ev))}`)
+        );
+        if (ev.room) linjer.push(...icsBrytLinje(`LOCATION:${icsEscape(ev.room)}`));
+        const besk = icsBeskrivelse(ev);
+        if (besk) linjer.push(...icsBrytLinje(`DESCRIPTION:${icsEscape(besk)}`));
+        linjer.push('END:VEVENT');
+      });
+  }
+
+  linjer.push('END:VCALENDAR');
+  return { ics: linjer.join('\r\n') + '\r\n', antall };
+}
+
+function eksporterICS() {
+  if (!skoleaar || !skoleaar.start || !skoleaar.slutt) {
+    alert('Sett skoleårets start- og sluttdato i Min side først.');
+    return;
+  }
+  const { ics, antall } = byggICS();
+  if (!antall) {
+    alert('Fant ingen undervisningstimer i skoleåret ' + skoleaar.start + ' – ' + skoleaar.slutt + '.\n\nSjekk at skoleåret er satt riktig.');
+    return;
+  }
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'undervisning-' + skoleaar.start.slice(0, 4) + '.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Kolonnebredden avhenger av skjermbredden, og settes fra JS. Ved
 // rotasjon eller endret vindusbredde må gridet derfor tegnes på nytt.
 let resizeTimer = null;

@@ -45,6 +45,7 @@ Lærerplanlegger/
 | MONTH VIEW | `renderMonthView()` |
 | SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()` |
 | MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, click-outside-lukking |
+| ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
 | MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC |
 | LAGRING | `saveToStorage()`, `loadFromStorage()` + `render()` init-kall |
 
