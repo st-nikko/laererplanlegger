@@ -117,6 +117,50 @@ test('klasser som styles på mobil finnes i grunn-CSS eller markup', () => {
   sant(ukjente.length === 0, 'ukjente klasser i mobilblokka: ' + ukjente.join(', '));
 });
 
+// ── Ting som ble meldt fra telefon ─────────────────────────────
+const js = fs.readFileSync(path + 'app.js', 'utf8');
+
+test('kalenderkolonner kan ikke presses bredere av innholdet', () => {
+  // 1fr er minmax(auto, 1fr): lange titler og arbeidstid-chipen dyttet
+  // fredag utenfor skjermkanten. minmax(0, 1fr) hindrer det.
+  sant(/repeat\(\$\{?antallDager\}?, minmax\(0, 1fr\)\)/.test(js),
+       'kalenderKolonner() må bruke minmax(0, 1fr)');
+  sant(!/gridTemplateColumns\s*=\s*[`'"][^`'"]*repeat\(5, 1fr\)/.test(js),
+       'ingen inline grid-template med bar 1fr — inline slår media queries');
+  sant(!/grid-template-columns:\s*48px repeat\(5, 1fr\)/.test(css),
+       'grunn-CSS må også bruke minmax(0, 1fr)');
+});
+
+test('dagkolonnen kan ikke vokse ut av gridet', () => {
+  sant(/\.day-header\s*\{[^}]*min-width:\s*0/.test(css.replace(/\n/g, ' ')),
+       '.day-header trenger min-width: 0');
+});
+
+test('datoen står bare én gang i dagoverskriften', () => {
+  sant(!js.includes('day-date'), 'day-date-elementet skal være fjernet fra app.js');
+  sant(!css.includes('day-date'), 'day-date skal være fjernet fra CSS');
+  const treff = js.match(/class="day-header[^`]*`/);
+  sant(treff, 'fant ikke malen for dagoverskriften');
+  sant((treff[0].match(/d\.getDate\(\)/g) || []).length === 1,
+       'datoen skal settes inn nøyaktig én gang');
+});
+
+test('dagens dato markeres fortsatt', () => {
+  sant(/\.day-header\.today\s+\.day-name/.test(css),
+       'markeringen må flyttes til .day-name når .day-date er borte');
+});
+
+test('gjøremål er skjult som standard', () => {
+  sant(/let sidebarVisible\s*=\s*false/.test(js), 'sidebarVisible skal starte som false');
+  sant(/id="sidebarContent"[^>]*class="[^"]*collapsed/.test(html),
+       'sidebarContent skal ha collapsed i markup');
+});
+
+test('gridet tegnes på nytt når skjermbredden endrer seg', () => {
+  sant(js.includes("addEventListener('resize'"), 'mangler resize-lytter');
+  sant(js.includes('erSmalSkjerm'), 'mangler erSmalSkjerm()');
+});
+
 // ── Kjør ───────────────────────────────────────────────────────
 console.log('\nMobiltilpasning (statisk sjekk)\n');
 let alle = true;

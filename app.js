@@ -160,7 +160,25 @@ function addTopic(title, tema) {
 let nextId = 1;
 let nextTodoId = 1;
 let todos = []; // { id, text, linkedFag, linkedStudentId, frist, status }
-let sidebarVisible = true;
+// Gjøremål er skjult som standard — på mobil dekket sidebaren hele
+// kalenderen, og på desktop er det uansett greit å slå den på ved behov.
+let sidebarVisible = false;
+
+// ── Smal skjerm ──
+// Kalendergridet settes med inline-style fra JS, og inline slår enhver
+// media query. Bredden må derfor bestemmes her, ikke i CSS.
+function erSmalSkjerm() {
+  return typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 767px)').matches;
+}
+
+// minmax(0, 1fr) i stedet for 1fr: uten det får kolonnene minstebredde
+// fra innholdet, og lange titler eller arbeidstid-chipen presser fredag
+// utenfor skjermkanten.
+function kalenderKolonner(antallDager) {
+  const gutter = erSmalSkjerm() ? '32px' : '48px';
+  return `${gutter} repeat(${antallDager}, minmax(0, 1fr))`;
+}
 let editingTodoId = null;
 let events = []; // ingen seed-data
 
@@ -427,8 +445,7 @@ function renderDayHeaders() {
   const days = currentView==='day'
     ? [currentDay]
     : Array.from({length:5},(_,i)=>{ const d=new Date(currentWeekMonday); d.setDate(d.getDate()+i); return d; });
-  const cols = currentView==='day' ? '48px 1fr' : '48px repeat(5, 1fr)';
-  el.style.gridTemplateColumns=cols;
+  el.style.gridTemplateColumns = kalenderKolonner(currentView==='day' ? 1 : 5);
   const wn__=currentView==='week'?weekNumber(currentWeekMonday):(currentView==='day'?weekNumber(currentDay):null);
   el.innerHTML=`<div class="time-gutter-top" style="display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.3px">${wn__!==null?'U'+wn__:''}</div>`;
   days.forEach((d,i)=>{
@@ -445,7 +462,9 @@ function renderDayHeaders() {
     }
     const frigagHeader = erFridag(d);
     const frigagHeaderHtml = frigagHeader ? `<span class="fridag-label">${frigagHeader.tittel}</span>` : '';
-    el.innerHTML+=`<div class="day-header ${today?'today':''}"><span class="day-name">${DAYS_SHORT[dayIdx]} ${d.getDate()}.</span><span class="day-date">${d.getDate()}</span>${frigagHeaderHtml}${chip}</div>`;
+    // Datoen sto tidligere to ganger — «Man 10.» og et stort «10» under.
+    // Nå bare én gang.
+    el.innerHTML+=`<div class="day-header ${today?'today':''}"><span class="day-name">${DAYS_SHORT[dayIdx]} ${d.getDate()}.</span>${frigagHeaderHtml}${chip}</div>`;
   });
 }
 
@@ -517,7 +536,7 @@ function renderGrid() {
   const days = currentView==='day'
     ? [currentDay]
     : Array.from({length:5},(_,i)=>{ const d=new Date(currentWeekMonday); d.setDate(d.getDate()+i); return d; });
-  grid.style.gridTemplateColumns = currentView==='day' ? '48px 1fr' : '48px repeat(5, 1fr)';
+  grid.style.gridTemplateColumns = kalenderKolonner(currentView==='day' ? 1 : 5);
 
   const axis=document.createElement('div'); axis.className='time-axis';
   for(let h=GRID_START_H;h<GRID_END_H;h++){
@@ -2267,7 +2286,20 @@ function loadFromStorage() {
   }
 }
 
+// Kolonnebredden avhenger av skjermbredden, og settes fra JS. Ved
+// rotasjon eller endret vindusbredde må gridet derfor tegnes på nytt.
+let resizeTimer = null;
+let sisteSmal   = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const smal = erSmalSkjerm();
+    if (smal !== sisteSmal) { sisteSmal = smal; render(); }
+  }, 150);
+});
+
 // Init: last lagret data og tegn første visning
 loadFromStorage();
 if (maaSkrivesTilbake) saveToStorage();
+sisteSmal = erSmalSkjerm();
 render();

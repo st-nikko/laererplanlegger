@@ -51,13 +51,42 @@ Fant tre modaler ved første kjøring — men det var falske treff fordi
 CSS-kommentarer hang fast foran selektoren. Kommentarene strippes nå
 før parsing.
 
-### Ikke verifisert
-Visuell kontroll på faktisk telefon gjenstår. Statisk analyse fanger
-overflow fra faste bredder, ikke fra innhold som ikke får plass.
+### Runde 2 — etter tilbakemelding fra telefon
+
+Nikolai meldte at bunn-navigasjonen gjorde appen brukbar på samme måte
+som på PC, men tre ting gjensto.
+
+**Fredag var ikke synlig, og gridet lot seg ikke scrolle.** Årsaken var
+ikke manglende scroll, men at `1fr` er `minmax(auto, 1fr)`: kolonnene
+fikk minstebredde fra innholdet, og arbeidstid-chipen i dagoverskriften
+presset gridet bredere enn skjermen. Løst med `minmax(0, 1fr)` pluss
+`min-width: 0; overflow: hidden` på `.day-header`. Da fikk alle fem
+dagene plass, og scrolling ble unødvendig.
+
+Viktig detalj: kolonnene settes med **inline style fra JS**, og inline
+slår enhver media query. Bredden måtte derfor bestemmes i JS, ikke CSS
+— derav `erSmalSkjerm()` og `kalenderKolonner()`. En resize-lytter
+tegner på nytt når terskelen krysses, så rotasjon fungerer.
+
+**Gjøremål lå åpen som standard** og dekket kalenderen på mobil.
+`sidebarVisible` starter nå som `false`, og `#sidebarContent` har
+`collapsed` i markup. Nikolai godtok at dette også gjelder desktop.
+
+**Datoen sto to ganger** i dagoverskriften — «Man 10.» og et stort «10»
+under. `.day-date` er fjernet fra både markup, CSS og JS. Dagens
+markering flyttet til `.day-header.today .day-name`.
+
+`.reg-btn` («+ Overtid») skjules på mobil — registrering gjøres på PC,
+og knappen bidro til bredden.
+
+Seks nye statiske tester dekker disse, blant annet at ingen inline
+grid-template bruker bar `1fr`.
+
+### Fortsatt ikke verifisert
+Visuell kontroll av runde 2 på telefon gjenstår.
 
 ### Neste steg
-- Nikolai tester på telefon og melder hva som fortsatt skurrer.
-- Hvis ukesvisningen er for trang: la mobilen åpne i dagsvisning.
+- Hvis ukesvisningen fortsatt er for trang: la mobilen åpne i dagsvisning.
 
 ---
 
