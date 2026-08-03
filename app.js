@@ -71,19 +71,30 @@ let currentView = 'week';
 // ────────────────────────────────────────────
 // COLORS
 // ────────────────────────────────────────────
+// Dempet palett, konstruert i LCH slik at fargene deler lyshet og
+// metning og bare skiller seg på kulør — da ser en full uke sammensatt
+// ut framfor broket. To regler holder den lesbar:
+//
+//   1. Fag ligger på lyshet 89, kategorier på 94,5. Et blokkslag skal
+//      kunne leses som «fag» eller «ikke fag» på lysheten alene.
+//   2. Ingen to bakgrunner er nærmere hverandre enn ΔE 5 (unntatt møte
+//      og vikar, som skilles av stripemønsteret i app.css). Til
+//      sammenligning hadde den gamle paletten tre par under ΔE 5.
+//
+// Alle tekstfarger ligger over 4,5:1 mot sin egen bakgrunn (WCAG AA).
 const COLOR_POOL = [
-  { bg:'#dbeafe', text:'#1e40af', border:'#60a5fa' },
-  { bg:'#d1fae5', text:'#065f46', border:'#34d399' },
-  { bg:'#fef3c7', text:'#78350f', border:'#fbbf24' },
-  { bg:'#ede9fe', text:'#5b21b6', border:'#a78bfa' },
-  { bg:'#ccfbf1', text:'#0f766e', border:'#2dd4bf' },
-  { bg:'#fee2e2', text:'#991b1b', border:'#fca5a5' },
-  { bg:'#fdf2f8', text:'#9d174d', border:'#f0abfc' },
+  { bg:'#D0E2F1', text:'#1B4E69', border:'#6AA1C7' }, // fjord
+  { bg:'#C8E5E5', text:'#005253', border:'#56A8A9' }, // sjøgrønn
+  { bg:'#D5E4D4', text:'#335033', border:'#7FA57E' }, // mose
+  { bg:'#E8DFCD', text:'#554826', border:'#AD996D' }, // oker
+  { bg:'#F3DAD3', text:'#673F33', border:'#C68E7D' }, // terrakotta
+  { bg:'#F2D9E2', text:'#673C4E', border:'#C58BA2' }, // plomme
+  { bg:'#E3DDEF', text:'#4D4466', border:'#A294C2' }, // lyng
 ];
 const SPECIAL_COLORS = {
-  mote:     { bg:'#f3f4f6', text:'#374151', border:'#9ca3af' },
-  foreldre: { bg:'#fce7f3', text:'#831843', border:'#f472b6' },
-  annet:    { bg:'#f0fdf4', text:'#166534', border:'#86efac' },
+  mote:     { bg:'#F4EEE8', text:'#695C4B', border:'#BFAE98' },
+  foreldre: { bg:'#FAECF1', text:'#705861', border:'#C8A8B4' },
+  annet:    { bg:'#E9F2E8', text:'#536252', border:'#A2B6A0' },
 };
 const subjectColorMap = {};
 let colorPoolIdx = 0;
@@ -96,7 +107,7 @@ function eventColor(ev) {
   if (ev.category === 'mote')     return SPECIAL_COLORS.mote;
   if (ev.category === 'foreldre') return SPECIAL_COLORS.foreldre;
   if (ev.category === 'annet')    return SPECIAL_COLORS.annet;
-  if (ev.category === 'vikar')    return { bg:'#f3f4f6', text:'#6b7280', border:'#9ca3af' };
+  if (ev.category === 'vikar')    return { bg:'#F4EEE8', text:'#695C4B', border:'#BFAE98' };
   return getSubjectColor(ev.title);
 }
 
@@ -1275,13 +1286,13 @@ function renderElevloggInnhold(studentId, container) {
       const present=raw.filter(Boolean).length;
       if(total>0&&present<total){
         if(present===0){
-          attendanceBadge={label:'Fraværende',style:'background:var(--danger,#e74c3c);color:#fff'};
+          attendanceBadge={label:'Fraværende',style:'background:var(--fare);color:var(--paa-accent)'};
         } else {
-          attendanceBadge={label:`${present}/${total} t`,style:'background:var(--warning,#f39c12);color:#fff'};
+          attendanceBadge={label:`${present}/${total} t`,style:'background:var(--overtid);color:var(--paa-accent)'};
         }
       }
     } else if(raw===false){
-      attendanceBadge={label:'Fraværende',style:'background:var(--danger,#e74c3c);color:#fff'};
+      attendanceBadge={label:'Fraværende',style:'background:var(--fare);color:var(--paa-accent)'};
     }
     // raw===true eller undefined → ingen badge
 

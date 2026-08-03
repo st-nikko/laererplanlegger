@@ -12,11 +12,14 @@ Målbruker: én lærer, personlig verktøy, rask tilgang mellom timer.
 
 ```
 Lærerplanlegger/
-├── index.html          # HTML-markup, ~474 linjer. Alle modaler, header, kalendergrid-placeholders, student-form.
+├── index.html          # HTML-markup, ~800 linjer. Alle modaler, header, kalendergrid-placeholders, student-form.
 │                       # (het ukesoversikt.html t.o.m. økt 17 — omdøpt for GitHub Pages)
-├── app.css             # All CSS, ~323 linjer. CSS-variabler, layout, modal-stiler, event-stiler, elev-admin-stiler.
-├── app.js              # All JavaScript, ~1407 linjer. Se seksjoner nedenfor.
+├── app.css             # All CSS, ~760 linjer. CSS-variabler, layout, modal-stiler, event-stiler, elev-admin-stiler.
+├── app.js              # All JavaScript, ~2670 linjer. Se seksjoner nedenfor.
 ├── sync.js             # Kryptert synk mot Supabase. Egen fil for å holde app.js nede.
+├── favicon.svg         # Logomerket. Toppraden har to celler, ikke tre — se «Visuell identitet»
+├── favicon.ico         # 16+32 px fallback for eldre nettlesere
+├── apple-touch-icon.png # 180×180, fullflate (iOS avrunder selv)
 ├── CONTEXT.md          # Dette dokumentet
 ├── SESSION-NOTES.md    # Løpende øktnotater
 ├── funksjonsplan.md    # Originalt kravdokument (referanse)
@@ -58,9 +61,89 @@ Lærerplanlegger/
 - **Global scope.** Alle funksjoner og variabler er globale. Enkelt, men kaller på refaktorering om appen vokser.
 - **localStorage-persistens.** Alle datavariabler lagres automatisk ved hver mutasjon via `saveToStorage()`. Lastes ved oppstart via `loadFromStorage()`. Seed-data brukes som fallback hvis localStorage er tom.
 - **Elevnavn er skilt ut.** `allStudents[]` bærer `navn` i minnet, men ved lagring splittes lista: struktur til `lp_students` (kan synkes), navn til `lp_studentNames` (blir på enheten). Elever uten kjent navn får `Elev xxxx` og `navnMangler = true`, slik at fallbacket aldri lagres som ekte navn. Formålet er at fravær, tema og notater kan forlate maskinen uten å være direkte identifiserbare. **Merk:** fritekstfeltene `notes` og `studentNotes` kan fortsatt inneholde navn brukeren selv har skrevet inn.
-- **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`.
+- **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`. Ingen hardkodede hex-verdier i `app.css` — se «Visuell identitet» nedenfor.
 - **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
+
+---
+
+## Visuell identitet
+
+Redesignet i økt 19 (3. august 2026). Retningen er «rolig nordisk»: varm
+nøytral grunnflate, dempet kontrast, én tydelig accent. Appen ses på i
+timevis om dagen, så flaten skal være kjedelig og fargene skal jobbe.
+
+### Palett
+
+Alle verdier ligger i `:root` i `app.css`. Ingen hardkodede farger utenfor
+den blokka — unntaket er `COLOR_POOL`/`SPECIAL_COLORS` i `app.js`, som må
+være JS fordi de settes som inline stil på hver hendelse.
+
+| Gruppe | Variabler |
+|--------|-----------|
+| Flate | `--bg` `#FCFBF9`, `--surface`, `--border`, `--border-faint`, `--border-strong`, `--border-input` |
+| Tekst | `--text-primary` `#22201D`, `--text-secondary`, `--text-muted`, `--paa-accent` |
+| Accent (fjord) | `--accent` `#2F6076`, `--accent-hover`, `--accent-deep`, `--accent-kant`, `--meny-aktiv-bg`, `--today-light` |
+| Semantisk | `--suksess`, `--overtid`, `--fare`, `--naa`, `--lyng-*`, `--fridag-bg`, `--utenfor-skoleaar-bg` — hver med `-soft` og `-kant` der de brukes som merkelapp |
+| Skygge | `--skygge-svak`, `--skygge-modal`, `--skygge-modal-lett` — varme (`rgba(34,32,29,…)`), ikke svarte |
+| Font | `--font-ui` (Inter), `--font-display` (Figtree) |
+
+Nøytralene har varm undertone, ikke den kjølige Tailwind-grå appen brukte
+til og med økt 18. Accenten er dyp og lite mettet med vilje: den lyse blå
+`#3b82f6` konkurrerte med de fargede timeblokkene i kalenderen.
+
+Alle tekstfarger ligger over 4,5:1 mot sin bakgrunn, og interaktive kanter
+over 3:1 (WCAG AA / 1.4.11). `--text-muted` er akkurat 3,49:1 og skal bare
+brukes til små versal-etiketter, ikke brødtekst.
+
+### Fag- og kategorifarger
+
+`COLOR_POOL` (7 fag) og `SPECIAL_COLORS` (møte, foreldre, annet) + vikar i
+`eventColor()`. Konstruert i LCH, ikke plukket for hånd. To regler:
+
+1. **Fag ligger på lyshet 89, kategorier på 94,5.** Et blokkslag skal kunne
+   leses som «fag» eller «ikke fag» på lysheten alene.
+2. **Ingen to bakgrunner er nærmere hverandre enn ΔE 5.** Unntaket er møte
+   og vikar, som er identiske i JS og skilles av stripemønsteret i
+   `.event.vikar` / `.month-event-pill.vikar`.
+
+Regel 2 er verdt å holde på: første utkast til denne paletten hadde åtte par
+under ΔE 5 (mose/annet lå på 1,1 — praktisk talt samme farge). Den gamle
+Tailwind-paletten hadde tre. Endrer du en av de elleve fargene, mål
+avstanden til de andre før du committer.
+
+### Logo og favicon
+
+Motivet er et kalenderkort med én uthevet blokk — den okergule er «timen
+som skjer nå». Ordmerket deler navnet i **Lærer** (vekt 600) og
+planlegger (vekt 400, `--text-secondary`), som gjør et langt navn lettere å
+lese og gir headeren et fast punkt.
+
+**Merket finnes i to versjoner, og det er med vilje:**
+
+- **Header** (`index.html`, inline SVG i `.logo`): tre celler i toppraden.
+- **Favicon** (`favicon.svg`): to bredere celler. På 16 px gror tre celler
+  sammen til én grå stripe — testet ved å rendre SVG-en til PNG og se på
+  den. Endrer du header-merket, husk at faviconen ikke arver endringen.
+
+`apple-touch-icon.png` er fullflate uten kortformen, siden iOS avrunder
+selv. `<meta name="theme-color">` er satt til accenten.
+
+### Typografi
+
+Figtree til logo og titler, Inter til all UI-tekst. Begge fra Google Fonts i
+én forespørsel med `display=swap`. Uten nett faller de tilbake til
+systemfonten — appen fungerer, men mister litt av uttrykket.
+
+- Skala: 10 / 11 / 12 / 13 / 14 / 15 px. Basis er fortsatt 14 px; kalenderens
+  layout henger på det, så ikke flytt den uten å sjekke gridet.
+- Vekter: 400 brødtekst, 500 knapper og etiketter, 600 titler og
+  timeblokk-navn, 700 kun til `.event-badge`.
+- `font-variant-numeric: tabular-nums` på alt som viser klokkeslett, uketall
+  eller prosent — se lista øverst i `app.css`. Uten den hopper tidsaksen
+  sidelengs mellom `11:00` og `08:00`.
+- Titler får `--font-display` via en samleregel øverst i fila. Legger du til
+  en ny tittelklasse, meld den inn der.
 
 ---
 
@@ -96,3 +179,5 @@ finnes — appen fungerer uendret om `sync.js` ikke lastes.
 5. **Mobil, steg 1** — to seksjoner i app.css: «BUNN-NAVIGASJON (mobil)» gjør `#sideMeny` til en bunn-rad, og «MOBIL (under 768px)» nederst i fila tar resten — header over to rader, smalere tidskolonne i gridet, fullskjermmodaler, gjøremål-sidebar som overlegg, `100dvh`, horisontalt rullbar elevtabell. Alt er ren CSS pluss klassene `desktop-kun` og `rullbar-x` i markup. Ukesvisningen er fortsatt trang på 390px; blir det et problem, er neste grep å la mobilen åpne i dagsvisning.
 6. **SFS2213-beregning (`calcSFS`)** returnerer demo-tall, ikke ekte aggregering fra registrert tid.
 7. **Annenhver-uke vises ikke i Måned-visning** — `eventsForDate` håndterer weekPattern i uke/dag, men månedvisningen arver dette riktig.
+8. **Logoen er skjult på mobil** — `.logo { display: none }` i «MOBIL (under 768px)». Merket er nå lite nok (22 px) til at symbolet alene kunne stått der som vei hjem, men det er ikke prøvd på 390 px. Skal du gjøre det: vis `.logo`, skjul `.logo-navn`, og sjekk at headeren ikke sprekker over tre rader.
+9. **Fontene krever nett ved første last** — Inter og Figtree hentes fra Google Fonts. `display=swap` gjør at appen alltid tegnes, men uten nett brukes systemfonten. Skal appen bli helt frittstående, må fontfilene inn i repoet og `@font-face` erstatte `<link>`-en.
