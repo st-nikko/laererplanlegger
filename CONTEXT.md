@@ -71,7 +71,7 @@ Lærerplanlegger/
 | KRYPTERING | `utledNokkel()` (PBKDF2, 250k runder), `krypter()`, `dekrypter()` (AES-GCM) |
 | HVA SOM SYNKES | `samleSynkdata()`, `skrivSynkdata()` — sistnevnte filtrerer mot `SYNK_NOKLER` så innkommende data ikke kan overskrive lokale navn |
 | PUSH / PULL | `syncPushDebounced()` (2 s), `syncPush()`, `syncPull()`, `syncNaa()` |
-| INNLOGGING | `synkLoggInn()` (magisk lenke), `synkLoggUt()` |
+| INNLOGGING | `synkLoggInn()` / `synkOpprettKonto()` (e-post + passord), `synkLoggUt()`, `synkFeilTekst()` (norske feilmeldinger) |
 | PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
 | STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
 

@@ -242,24 +242,69 @@ async function syncNaa() {
 }
 
 // ────────────────────────────────────────────
-// INNLOGGING (magisk lenke på e-post)
+// INNLOGGING (e-post og passord)
 // ────────────────────────────────────────────
+// Passordet slipper deg inn hos Supabase. Passfrasen lenger nede er noe
+// helt annet: den låser opp dataene og sendes aldri til serveren.
+// De må være forskjellige.
+
+// Supabase svarer på engelsk. Oversett det vi faktisk kan treffe på.
+function synkFeilTekst(melding) {
+  const m = (melding || '').toLowerCase();
+  if (m.includes('invalid login credentials')) return 'Feil e-post eller passord.';
+  if (m.includes('user already registered')) return 'Det finnes allerede en konto på denne adressen — logg inn i stedet.';
+  if (m.includes('password should be'))      return 'Passordet er for kort. Bruk minst 6 tegn.';
+  if (m.includes('email not confirmed'))     return 'E-posten er ikke bekreftet. Slå av «Confirm email» i Supabase, eller bekreft via lenka du fikk tilsendt.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'For mange forsøk. Vent litt før du prøver igjen.';
+  return melding || 'Noe gikk galt.';
+}
+
+function lesInnloggingsfelt() {
+  const epost   = (document.getElementById('synkEpost')?.value || '').trim();
+  const passord =  document.getElementById('synkPassord')?.value || '';
+  if (!supabase) { alert('Synk er ikke tilgjengelig — kunne ikke laste Supabase.'); return null; }
+  if (!epost)    { alert('Skriv inn e-postadressen din.'); return null; }
+  if (!passord)  { alert('Skriv inn passordet ditt.'); return null; }
+  return { epost, passord };
+}
+
+function tomInnloggingsfelt() {
+  const p = document.getElementById('synkPassord');
+  if (p) p.value = '';
+}
+
 async function synkLoggInn() {
-  const felt = document.getElementById('synkEpost');
-  const epost = (felt?.value || '').trim();
-  if (!epost) { alert('Skriv inn e-postadressen din.'); return; }
-  if (!supabase) { alert('Synk er ikke tilgjengelig — kunne ikke laste Supabase.'); return; }
+  const felt = lesInnloggingsfelt();
+  if (!felt) return;
 
-  settStatus('synker', 'Sender lenke …');
-  const { error } = await supabase.auth.signInWithOtp({
-    email: epost,
-    options: { emailRedirectTo: window.location.href.split('#')[0] }
+  settStatus('synker', 'Logger inn …');
+  const { error } = await supabase.auth.signInWithPassword({
+    email: felt.epost, password: felt.passord
   });
+  tomInnloggingsfelt();
 
-  if (error) {
-    settStatus('feil', error.message);
+  if (error) settStatus('feil', synkFeilTekst(error.message));
+  else       settStatus('av', harPassfrase() ? '' : 'Innlogget. Sett en passfrase for å starte synk.');
+}
+
+async function synkOpprettKonto() {
+  const felt = lesInnloggingsfelt();
+  if (!felt) return;
+  if (felt.passord.length < 6) { alert('Passordet må være minst 6 tegn.'); return; }
+
+  settStatus('synker', 'Oppretter konto …');
+  const { data, error } = await supabase.auth.signUp({
+    email: felt.epost, password: felt.passord
+  });
+  tomInnloggingsfelt();
+
+  if (error) { settStatus('feil', synkFeilTekst(error.message)); return; }
+
+  // Er e-postbekreftelse påslått, finnes brukeren men uten sesjon
+  if (!data.session) {
+    settStatus('av', 'Konto opprettet. Bekreft e-posten din, så kan du logge inn.');
   } else {
-    settStatus('av', 'Sjekk e-posten din — vi sendte en innloggingslenke til ' + epost);
+    settStatus('av', 'Konto opprettet. Sett en passfrase for å starte synk.');
   }
 }
 

@@ -82,8 +82,30 @@ og knappen bidro til bredden.
 Seks nye statiske tester dekker disse, blant annet at ingen inline
 grid-template bruker bar `1fr`.
 
+### Runde 3 — innlogging med passord
+
+Nikolai spurte om han kunne logge inn med e-post i stedet for å vente
+på magisk lenke. Byttet til `signInWithPassword` og `signUp`.
+`signInWithOtp` er fjernet helt.
+
+Gevinsten er at synken ikke lenger avhenger av Supabases innebygde
+e-postutsending, som var den skjøreste delen av oppsettet.
+
+To hemmeligheter nå, og de må ikke blandes:
+- **passordet** slipper deg inn hos Supabase
+- **passfrasen** låser opp dataene og sendes aldri til serveren
+
+UI-teksten sier dette eksplisitt, og en test sjekker at
+innloggingskoden ikke rører `LS_PASSFRASE`.
+
+`synkFeilTekst()` oversetter Supabases engelske feilmeldinger.
+Ukjente meldinger slippes gjennom som de er framfor å skjules.
+
+Krever at «Confirm email» er av i Supabase, ellers får man konto uten
+sesjon ved registrering — koden håndterer begge tilfeller.
+
 ### Fortsatt ikke verifisert
-Visuell kontroll av runde 2 på telefon gjenstår.
+Visuell kontroll av runde 2 på telefon, og passordinnlogging i drift.
 
 ### Neste steg
 - Hvis ukesvisningen fortsatt er for trang: la mobilen åpne i dagsvisning.

@@ -168,16 +168,26 @@
     <div id="synkStatus" class="synk-status synk-av"></div>
 
     <div id="synkInnlogging" class="synk-blokk">
-      <label class="synk-label" for="synkEpost">E-postadresse</label>
+      <label class="synk-label" for="synkEpost">E-post og passord</label>
       <div class="synk-rad">
         <input type="email" id="synkEpost" class="synk-input" placeholder="deg@example.com" autocomplete="email">
-        <button class="data-toolbar-btn" onclick="synkLoggInn()">Send innloggingslenke</button>
       </div>
-      <p class="minside-hjelpetekst">Du får en lenke på e-post. Ingen passord.</p>
+      <div class="synk-rad" style="margin-top:8px">
+        <input type="password" id="synkPassord" class="synk-input" placeholder="Passord" autocomplete="current-password">
+        <button class="data-toolbar-btn" onclick="synkLoggInn()">Logg inn</button>
+      </div>
+      <p class="minside-hjelpetekst">
+        Første gang på denne kontoen?
+        <button class="lenke-btn" onclick="synkOpprettKonto()">Opprett konto</button>
+      </p>
     </div>
 
     <div id="synkPassfraseSeksjon" class="synk-blokk" style="display:none">
-      <label class="synk-label" for="synkPassfrase">Passfrase</label>
+      <label class="synk-label" for="synkPassfrase">Passfrase (krypteringsnøkkel)</label>
+      <p class="minside-hjelpetekst" style="margin-bottom:6px">
+        Ikke det samme som passordet over. Passfrasen låser opp dataene og
+        sendes aldri til serveren. Bruk samme passfrase på alle enhetene dine.
+      </p>
       <div class="synk-rad">
         <input type="password" id="synkPassfrase" class="synk-input" placeholder="Minst 8 tegn" autocomplete="off">
         <button class="data-toolbar-btn" onclick="lagrePassfrase()">Lagre</button>

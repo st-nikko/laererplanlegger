@@ -114,6 +114,43 @@ test('alle synknøkler er lp-nøkler og navn er utelatt', async () => {
   sant(!nokler.includes('lp_sync_passfrase'), 'passfrasen skal ikke synkes');
 });
 
+// ── Innlogging ─────────────────────────────────────────────────
+test('passfrasen sendes aldri som passord', async () => {
+  const kilde = fs.readFileSync(path + 'sync.js', 'utf8');
+  // Innloggingen skal lese passordfeltet, aldri passfrasenøkkelen
+  const innlogging = kilde.slice(kilde.indexOf('function lesInnloggingsfelt'),
+                                 kilde.indexOf('async function synkLoggUt'));
+  sant(!innlogging.includes('LS_PASSFRASE'),
+       'innloggingen skal ikke røre passfrasen');
+  sant(innlogging.includes('synkPassord'), 'innloggingen skal lese passordfeltet');
+});
+
+test('feilmeldinger oversettes til norsk', async () => {
+  const ctx = lagKontekst(lagStore());
+  like(ctx.synkFeilTekst('Invalid login credentials'), 'Feil e-post eller passord.',
+       'vanligste feil');
+  like(ctx.synkFeilTekst('User already registered'),
+       'Det finnes allerede en konto på denne adressen — logg inn i stedet.',
+       'konto finnes');
+  sant(ctx.synkFeilTekst('noe ukjent') === 'noe ukjent', 'ukjent feil slippes gjennom');
+  sant(ctx.synkFeilTekst('') === 'Noe gikk galt.', 'tom feil får standardtekst');
+});
+
+test('magisk lenke er faktisk fjernet', async () => {
+  const kilde = fs.readFileSync(path + 'sync.js', 'utf8');
+  sant(!kilde.includes('signInWithOtp'), 'signInWithOtp skal være borte');
+  sant(kilde.includes('signInWithPassword'), 'signInWithPassword mangler');
+  sant(kilde.includes('auth.signUp'), 'signUp mangler');
+});
+
+test('markup har feltene innloggingen leser', async () => {
+  const html = fs.readFileSync(path + 'index.html', 'utf8');
+  ['synkEpost', 'synkPassord', 'synkPassfrase'].forEach(id => {
+    sant(html.includes('id="' + id + '"'), 'mangler #' + id);
+  });
+  sant(html.includes('synkOpprettKonto()'), 'mangler knapp for å opprette konto');
+});
+
 // ── Kjør ───────────────────────────────────────────────────────
 (async () => {
   console.log('\nSynk og kryptering\n');
