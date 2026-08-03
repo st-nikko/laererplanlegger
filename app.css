@@ -98,6 +98,12 @@
     }
     .nav-btn:hover { background: var(--surface); }
     .week-label { font-size: 15px; font-weight: 600; min-width: 210px; text-align: center; }
+    /* Ukelabelen skrives i to varianter av renderWeekLabel(); her velges
+       den lange. Mobilblokka nederst i fila bytter til den korte. */
+    .uke-lang { display: inline; }
+    .uke-kort { display: none; }
+    /* Bunnmeny-elementer som ikke hører hjemme i sidemenyen på PC */
+    .mobil-kun { display: none; }
     .header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .ghost-btn {
       padding: 5px 12px; border: 1px solid var(--border); background: var(--bg);
@@ -379,6 +385,9 @@
         border-radius: 8px;
       }
       .meny-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+      /* Gjøremål hører hjemme her når headeren blir trang — samme brytpunkt
+         som bunnmenyen selv, ellers ville den mangle på nøyaktig 768 px */
+      .mobil-kun { display: flex; }
       /* Frigjør plass nederst så innhold ikke skjules bak bunn-navigasjonen */
       #mainWrapper { margin-bottom: 58px; }
     }
@@ -670,14 +679,20 @@
     gap: 6px;
     row-gap: 6px;
   }
-  /* Logo og planfestet tid er desktop-pynt og -oppgaver */
-  .logo,
+  /* Planfestet tid registreres på PC. Gjøremål-knappen også — på mobil
+     åpnes panelet fra bunnmenyen i stedet, der det er plass til den. */
   .desktop-kun { display: none; }
 
+  /* Logoen vises som symbol alene, uten ordmerket. Den ligger i sin egen
+     flex-celle mellom visningsvelgeren og knappene, så den lander nær
+     midten uten at den noen gang kan overlappe naboene: blir raden trang,
+     krymper cella framfor å la merket flyte oppå noe. */
   .view-toggle    { order: 1; }
-  .header-actions { order: 2; margin-left: auto; gap: 6px; }
+  .logo           { order: 2; flex: 1 1 auto; justify-content: center; min-width: 0; }
+  .logo-navn      { display: none; }
+  .header-actions { order: 3; gap: 6px; }
   .week-nav {
-    order: 3;
+    order: 4;
     flex: 1 1 100%;
     justify-content: space-between;
     gap: 6px;
@@ -687,6 +702,9 @@
     flex: 1;
     font-size: 13px;
   }
+  /* «Uke 37 · 7.–11. sep» framfor «Uke 37 · 7. sep – 11. sep 2026» */
+  .uke-lang { display: none; }
+  .uke-kort { display: inline; }
 
   .ghost-btn, .new-btn, .view-btn {
     padding: 7px 10px;

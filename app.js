@@ -453,22 +453,32 @@ function render() {
   renderTodoList();
 }
 
+// Etiketten skrives i to varianter i hver sin span. CSS velger hvilken som
+// vises, slik at den korte formen slår inn på mobil uten at JS må vite noe
+// om skjermbredde — og uten at den blir hengende igjen ved rotasjon.
 function renderWeekLabel() {
   const el = document.getElementById('weekLabel');
+  let lang, kort;
   if (currentView === 'week') {
     const end=new Date(currentWeekMonday); end.setDate(end.getDate()+4);
     const wn=weekNumber(currentWeekMonday);
     const s=`${currentWeekMonday.getDate()}. ${MONTHS_SHORT[currentWeekMonday.getMonth()]}`;
     const e=`${end.getDate()}. ${MONTHS_SHORT[end.getMonth()]} ${end.getFullYear()}`;
-    el.textContent=`Uke ${wn}  ·  ${s} – ${e}`;
+    lang=`Uke ${wn}  ·  ${s} – ${e}`;
+    // Sluttmåneden tas bare med når uka går over et månedsskifte
+    const sammeMnd = currentWeekMonday.getMonth()===end.getMonth();
+    kort=`Uke ${wn} · ${currentWeekMonday.getDate()}.${sammeMnd?'':' '+MONTHS_SHORT[currentWeekMonday.getMonth()]}–${end.getDate()}. ${MONTHS_SHORT[end.getMonth()]}`;
   } else if (currentView === 'day') {
     const d=currentDay;
     const wd=d.getDay()===0?6:d.getDay()-1;
-    el.textContent=`${DAYS_LONG[wd]} ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    lang=`${DAYS_LONG[wd]} ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    kort=`${DAYS_SHORT[wd]} ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
   } else {
     const mn=MONTHS[currentMonthStart.getMonth()];
-    el.textContent=`${mn.charAt(0).toUpperCase()+mn.slice(1)} ${currentMonthStart.getFullYear()}`;
+    lang=`${mn.charAt(0).toUpperCase()+mn.slice(1)} ${currentMonthStart.getFullYear()}`;
+    kort=lang;
   }
+  el.innerHTML=`<span class="uke-lang">${lang}</span><span class="uke-kort">${kort}</span>`;
 }
 
 function renderDayHeaders() {
@@ -1838,6 +1848,9 @@ function renderMonthView() {
 function toggleSidebar() {
   sidebarVisible = !sidebarVisible;
   document.getElementById('sidebarContent').classList.toggle('collapsed', !sidebarVisible);
+  // Bunnmenyen på mobil åpner samme panel, og skal lyse opp mens det står åpent
+  const menyknapp = document.getElementById('menyGjoeremaal');
+  if (menyknapp) menyknapp.classList.toggle('active', sidebarVisible);
 }
 
 function openTodoForm(editId) {
