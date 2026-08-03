@@ -2,7 +2,48 @@
 
 ---
 
-## Siste økt: 10. juli 2026 (økt 17) — Frontend-redesign: sidemeny + mobil bunn-navigasjon (fullført)
+## Siste økt: 3. august 2026 (økt 18) — Versjonskontroll og publisering (fullført)
+
+### Hva ble gjort
+
+**Git:** `git init` med `main` som branch. Lokal identitet satt på repoet
+(Nikolai / nstallemo@gmail.com), ikke globalt. To commits:
+`e8b7cc3` baseline etter økt 17, `0f7985d` omdøping av HTML-fila.
+
+**.gitignore:** OS-artefakter, editor-mapper, backup-filer, og —
+viktigst — `laererplanlegger-*.json`. Eksportfilene inneholder
+elevnavn og fraværsdata og skal aldri havne i et offentlig repo.
+
+**`ukesoversikt.html` → `index.html`:** GitHub Pages serverer `index.html`
+fra rota, så appen åpnes på ren URL. Filreferansen i CONTEXT.md oppdatert;
+historiske omtaler i dette dokumentet står urørt.
+
+**GitHub Pages:** repo `st-nikko/laererplanlegger` (public),
+publisert fra `main` / root. Live på
+https://st-nikko.github.io/laererplanlegger/ — verifisert ved henting
+av sida. Fungerer på mobil og hjemme-PC.
+
+### Merk
+- Repoet er **offentlig** (kreves for gratis Pages). Selve appen er åpen,
+  men ingen elevdata ligger i repoet — de bor i `localStorage` per enhet.
+- Push må kjøres fra Nikolais egen PowerShell; GitHub-innloggingen ligger
+  der, ikke i verktøyets sandkasse.
+- Første Pages-deploy tok noen minutter og ga 404 i mellomtiden.
+
+### Neste steg
+- **Datasynk mellom enheter.** Appen er nå tilgjengelig overalt, men hver
+  enhet har sin egen `localStorage`. Skissert løsning: hele datasettet som
+  én JSON-blob i skyen med tidsstempel, hektet på `saveToStorage()` og
+  `loadFromStorage()` — de to funksjonene er allerede samlingspunkt, så
+  inngrepet blir lite. Kandidater: Supabase (gratis, Postgres + innlogging),
+  Firebase, Cloudflare Workers KV. Forbehold: siste skriving vinner, så
+  samtidig redigering på to enheter gir tap. Vis «sist synkronisert» i UI.
+  Innlogging må designes samtidig.
+- Ekte SFS2213-beregning (`calcSFS()` returnerer fortsatt demo-tall).
+
+---
+
+## Økt 17: 10. juli 2026 — Frontend-redesign: sidemeny + mobil bunn-navigasjon (fullført)
 
 ### Hva ble gjort
 
