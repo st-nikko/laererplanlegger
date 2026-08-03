@@ -28,9 +28,17 @@ Eksport tar nå også med `fridager` og `skoleaar`, som manglet før.
 
 **Banner i Elever-fanen** når elever mangler navn lokalt.
 
-**Tester.** `tests/pseudonymisering.test.js` — fem jsdom-tester som dekker
-migrering, fallback, persistering, ny elev via skjema og begge
-eksportvariantene. Alle passerer.
+**Migreringen skrives tilbake ved oppstart.** Første utkast lot
+`loadFromStorage()` migrere i minnet uten å skrive tilbake, så navnene
+ble liggende i `lp_students` helt til neste mutasjon utløste en lagring.
+Nikolai fant dette ved å inspisere localStorage. Flagget
+`maaSkrivesTilbake` settes nå når gammelt format oppdages, og `init`
+kaller `saveToStorage()` med én gang.
+
+**Tester.** `tests/pseudonymisering.test.js` — sju jsdom-tester som dekker
+migrering, fallback, persistering, ny elev via skjema, begge
+eksportvariantene, tilbakeskriving ved oppstart, og at tilbakeskriving
+*ikke* trigges når formatet allerede er nytt. Alle passerer.
 
 ### Merk
 - `const` på toppnivå havner ikke på `window`. Testene henter globale

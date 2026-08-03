@@ -138,5 +138,30 @@ alle &= kjor('eksport uten navn utelater navnekartet', {
   like(fanget.studentNames, { a1: 'Emma' }, 'full eksport skal ha navn');
 });
 
+// ── 6. Migreringen skrives tilbake med én gang ─────────────────
+// Uten dette blir navnene liggende i lp_students helt til neste
+// mutasjon utløser en lagring.
+alle &= kjor('gammelt format skrives tilbake ved oppstart', {
+  lp_students: JSON.stringify([
+    { id: 'a1', navn: 'Esekiel', trinn: 10, startDato: '2026-06-08', arkivert: false, arkivertDato: null }
+  ])
+}, (w, store) => {
+  // Ingen saveToStorage() her — dette skal ha skjedd under init
+  const lagret = JSON.parse(store.getItem('lp_students'));
+  sant(!('navn' in lagret[0]), 'lp_students skal være renset rett etter lasting');
+  like(JSON.parse(store.getItem('lp_studentNames')), { a1: 'Esekiel' }, 'navnet flyttet til eget kart');
+});
+
+// ── 7. Ingen unødig skriving når formatet allerede er nytt ─────
+alle &= kjor('nytt format skrives ikke tilbake i unødig grad', {
+  lp_students: JSON.stringify([
+    { id: 'a1', trinn: 10, startDato: '2026-06-08', arkivert: false, arkivertDato: null }
+  ]),
+  lp_studentNames: JSON.stringify({ a1: 'Esekiel' })
+}, (w) => {
+  like(w.hent('maaSkrivesTilbake'), false, 'flagget skal ikke settes');
+  like(w.hent('allStudents')[0].navn, 'Esekiel', 'navn hydrert fra kartet');
+});
+
 console.log('\n' + (alle ? 'Alle tester passerte.' : 'Noen tester feilet.') + '\n');
 process.exit(alle ? 0 : 1);

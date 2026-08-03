@@ -130,6 +130,9 @@ function antallUtenNavn() {
   return allStudents.filter(s => s.navnMangler).length;
 }
 
+// Settes av loadFromStorage() når data ble migrert og må skrives tilbake
+let maaSkrivesTilbake = false;
+
 // ────────────────────────────────────────────
 // LESSON DATA
 // lessonData: key = `${eventId}_${isoDate}` → { tema, notes, attendance }
@@ -2233,6 +2236,10 @@ function loadFromStorage() {
     } else {
       navnKart = {};
       allStudents.forEach(s => { if (s.navn) navnKart[s.id] = s.navn; });
+      // Gammelt format: navnene ligger fortsatt i lp_students. Skriv tilbake
+      // med én gang — venter vi på neste mutasjon, blir navnene liggende
+      // i den synkbare nøkkelen i mellomtiden.
+      maaSkrivesTilbake = true;
     }
     hydrerNavn(navnKart);
 
@@ -2257,4 +2264,5 @@ function loadFromStorage() {
 
 // Init: last lagret data og tegn første visning
 loadFromStorage();
+if (maaSkrivesTilbake) saveToStorage();
 render();
