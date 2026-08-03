@@ -118,8 +118,9 @@ Lærdom: når en innloggingsmetode byttes ut, må eksisterende kontoer ha
 en vei over. Å fjerne den gamle metoden uten overgang låser brukeren ute
 av sin egen konto.
 
-### Fortsatt ikke verifisert
-Visuell kontroll av runde 2 på telefon, og passordinnlogging i drift.
+### Verifisert
+Nikolai bekreftet 3. august at runde 2 på telefon og passordinnlogging
+fungerer.
 
 ### Neste steg
 - Hvis ukesvisningen fortsatt er for trang: la mobilen åpne i dagsvisning.
