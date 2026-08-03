@@ -14,6 +14,26 @@ function periodFromStart(start) {
   const idx = PERIODS.findIndex(p => p.start === start);
   return idx >= 0 ? idx + 1 : 1;
 }
+
+// Hvilken skoletime hører et klokkeslett til?
+// Treffer klikket en pause, velges nærmeste time framfor å gjette.
+function periodeFraKlokkeslett(dec) {
+  for (let i = 0; i < PERIODS.length; i++) {
+    const start = toDec(PERIODS[i].start), slutt = toDec(PERIODS[i].end);
+    if (dec >= start && dec < slutt) return i + 1;
+  }
+  let beste = 1, minste = Infinity;
+  PERIODS.forEach((p, i) => {
+    const avstand = Math.min(Math.abs(dec - toDec(p.start)), Math.abs(dec - toDec(p.end)));
+    if (avstand < minste) { minste = avstand; beste = i + 1; }
+  });
+  return beste;
+}
+
+// Ukedag 0–6 med mandag først (Date bruker søndag = 0)
+function ukedagIndeks(d) {
+  return d.getDay() === 0 ? 6 : d.getDay() - 1;
+}
 function periodLabel(start) {
   const p = PERIODS.find(p => p.start === start);
   return p ? `${p.label}  (${p.start}–${p.end})` : `${start}`;
@@ -608,6 +628,20 @@ function renderGrid() {
       col.appendChild(block);
     });
 
+    // Klikk på ledig flate → nytt arrangement på det tidspunktet.
+    // Hendelsene er absolutt posisjonerte barn av kolonnen, så klikk på
+    // dem bobler hit opp; de har sin egen håndtering og skal ignoreres.
+    col.addEventListener('click', e => {
+      if (e.target.closest('.event')) return;
+      const rect = col.getBoundingClientRect();
+      const dec  = GRID_START_H + (e.clientY - rect.top) / PX_PER_HOUR;
+      openEventForm(null, {
+        dato:    key,
+        weekday: ukedagIndeks(d),
+        periode: periodeFraKlokkeslett(dec)
+      });
+    });
+
     // Now line
     if(today){
       const nowDec = new Date().getHours() + new Date().getMinutes() / 60; // Dynamisk — nåværende tidspunkt
@@ -753,7 +787,9 @@ let formCategory    = 'undervisning';
 let formSessionType = 'gruppe';
 let selectedStudentIds = new Set();
 
-function openEventForm(ev) {
+// forslag = { dato, weekday, periode } fra klikk i kalenderen.
+// Brukes bare for nye hendelser; ved redigering styrer hendelsen selv.
+function openEventForm(ev, forslag) {
   editingEventId = ev ? ev.id : null;
   document.getElementById('formTitle').textContent = ev ? 'Rediger time' : 'Ny time';
   // Vis/skjul sletteknapper kun ved redigering
@@ -805,6 +841,19 @@ function openEventForm(ev) {
   const wpEl_ = document.querySelector('input[name="weekPattern"][value="'+wp_+'"]');
   if(wpEl_) wpEl_.checked = true;
   onGjentasChange();
+
+  // Fyll inn tidspunktet det ble klikket på. Settes etter blokka over,
+  // slik at forslaget vinner over standardverdiene for nye hendelser.
+  if (!ev && forslag) {
+    const p = PERIODS[forslag.periode - 1] || PERIODS[0];
+    document.getElementById('dagSelect').value          = String(forslag.weekday);
+    document.getElementById('periodeSelect').value      = String(forslag.periode);
+    document.getElementById('periodeSluttSelect').value = String(forslag.periode);
+    document.getElementById('moteDatoInput').value      = forslag.dato;
+    document.getElementById('moteStartInput').value     = p.start;
+    document.getElementById('moteSluttInput').value     = p.end;
+    onGjentasChange();
+  }
 
   selectedStudentIds = new Set(ev ? ev.students||[] : []);
   document.getElementById('studentSearch').value = '';

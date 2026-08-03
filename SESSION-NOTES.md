@@ -2,7 +2,48 @@
 
 ---
 
-## Siste økt: 3. august 2026 (økt 21) — Mobiltilpasning, steg 1 (venter på visuell kontroll)
+## Siste økt: 3. august 2026 (økt 22) — Klikk i kalenderen oppretter hendelse
+
+Nikolai foreslo at klikk på ledig flate i kalenderen skulle åpne
+hendelsesskjemaet med tidspunktet fylt ut.
+
+### Hva ble gjort
+
+Klikklytter på `.day-col` i `renderGrid()`. Y-posisjonen regnes om til
+klokkeslett via `GRID_START_H` og `PX_PER_HOUR`, og videre til skoletime
+med nye `periodeFraKlokkeslett()`. Treffer klikket en pause, velges
+nærmeste time framfor å gjette.
+
+`openEventForm()` tar nå et valgfritt andre argument
+`{ dato, weekday, periode }`. Det brukes kun for nye hendelser og settes
+etter standardverdiene, slik at forslaget vinner. Ved redigering styrer
+hendelsen selv — dekket av test.
+
+Hendelsene er absolutt posisjonerte barn av kolonnen, så klikk på dem
+bobler opp til kolonnelytteren. Løst med `e.target.closest('.event')`.
+
+Kategorien beholdes som før (`formCategory` husker forrige valg) — etter
+Nikolais valg.
+
+`.day-col` fikk `cursor: pointer` som hint.
+
+### Tester
+`tests/kalenderklikk.test.js` — sju jsdom-tester. jsdom regner ikke
+layout, så `getBoundingClientRect` stubbes i testen.
+
+**Verdt å merke:** første forsøk feilet fordi standard `skoleaar` slutter
+19. juni 2026, og `eventsForDate()` filtrerer bort alt utenfor skoleåret.
+Testen seeder derfor `lp_skoleaar`. Samme forhold gjelder appen i drift —
+Nikolai må oppdatere skoleåret til 2026/27 for å se timeplanen sin.
+
+### Neste steg
+- Påminnelse i notatfeltene om at fritekst kan inneholde elevnavn.
+- Uke-etiketten viser månedsnavn i Elever/Elevlogg-visning.
+- SFS2213-beregning.
+
+---
+
+## Økt 21: 3. august 2026 — Mobiltilpasning, steg 1 (venter på visuell kontroll)
 
 Nikolai meldte at UI-et var ubrukelig på telefon — headeren måtte
 scrolles horisontalt. Årsak: hele CSS-en var skrevet for desktop, med

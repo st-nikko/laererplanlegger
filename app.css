@@ -76,7 +76,7 @@
     .calendar-grid { display: grid; grid-template-columns: 48px repeat(5, minmax(0, 1fr)); position: relative; }
     .time-axis { border-right: 1px solid var(--border); }
     .time-tick { height: 60px; display: flex; align-items: flex-start; justify-content: flex-end; padding-right: 8px; font-size: 10px; color: var(--text-muted); transform: translateY(-7px); }
-    .day-col { position: relative; border-right: 1px solid var(--border-faint); }
+    .day-col { position: relative; border-right: 1px solid var(--border-faint); cursor: pointer; }
     .day-col.today { background: var(--today-light); }
     .grid-line { position: absolute; left: 0; right: 0; border-top: 1px solid #f0f0f0; pointer-events: none; }
     .grid-line.half { border-top: 1px dashed #f5f5f5; }
