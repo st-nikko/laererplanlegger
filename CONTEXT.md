@@ -22,7 +22,8 @@ Lærerplanlegger/
 ├── apple-touch-icon.png # 180×180, fullflate (iOS avrunder selv)
 ├── CONTEXT.md          # Dette dokumentet
 ├── SESSION-NOTES.md    # Løpende øktnotater
-├── funksjonsplan.md    # Originalt kravdokument (referanse)
+├── funksjonsplan.md    # Originalt kravdokument fra juni 2026 (referanse, fase 1–3 er gjennomført)
+├── veikart.md          # Vurderte, men ikke besluttede utvidelser — med de tekniske funnene
 └── tests/              # jsdom-tester, kjøres med node
 ```
 
