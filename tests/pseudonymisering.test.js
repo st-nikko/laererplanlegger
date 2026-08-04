@@ -168,5 +168,42 @@ alle &= kjor('nytt format skrives ikke tilbake i unødig grad', {
   like(w.hent('allStudents')[0].navn, 'Esekiel', 'navn hydrert fra kartet');
 });
 
+// ── 8. Elev-ID-lappen er gjenopprettingsveien for navn ─────────
+// Navnene synkes ikke. Mister man dem, er lappen det eneste som knytter
+// «Elev 4f2a» på én enhet til «Kari Nordmann» på en annen. Da må de to
+// enhetene vise nøyaktig samme tegn, og lappen må ikke dubleres for elever
+// som allerede vises med fallback-navnet.
+alle &= kjor('elev-ID-lappen er lik på tvers av enheter', {
+  lp_students: JSON.stringify([
+    { id: 'aaaa-bbbb-cccc-4f2a', trinn: 8, startDato: '2026-08-17', arkivert: false, arkivertDato: null },
+    { id: 'dddd-eeee-ffff-0d1e', trinn: 9, startDato: '2026-08-17', arkivert: false, arkivertDato: null }
+  ]),
+  // Bare den første er kjent på denne enheten
+  lp_studentNames: JSON.stringify({ 'aaaa-bbbb-cccc-4f2a': 'Kari Nordmann' })
+}, (w) => {
+  const lapp = w.hent('elevLapp');
+  const fallback = w.hent('fallbackNavn');
+
+  // Samme utsnitt begge steder — ellers stemmer ikke skjermene overens
+  ['aaaa-bbbb-cccc-4f2a', 7, 'abc'].forEach(id => {
+    like(fallback(id), 'Elev ' + lapp(id), 'fallbackNavn må bygge på elevLapp for ' + id);
+  });
+
+  w.renderElevView();
+  const rader = [...w.document.querySelectorAll('.elev-table tbody tr')]
+    .map(r => r.querySelector('td'))
+    .filter(td => td && td.textContent.trim());
+
+  const medNavn  = rader.find(td => td.textContent.includes('Kari'));
+  const utenNavn = rader.find(td => td.textContent.includes('Elev '));
+
+  sant(medNavn && medNavn.querySelector('.elev-lapp'),
+       'elev med navn må vise lappen — den er nøkkelen den andre enheten leser av');
+  like(medNavn.querySelector('.elev-lapp').textContent, '4f2a', 'lappen skal være de fire siste tegnene');
+  sant(utenNavn && !utenNavn.querySelector('.elev-lapp'),
+       'elev uten navn viser lappen i fallback-navnet allerede — den skal ikke dubleres');
+  sant(utenNavn.textContent.includes('0d1e'), 'fallback-navnet inneholder lappen');
+});
+
 console.log('\n' + (alle ? 'Alle tester passerte.' : 'Noen tester feilet.') + '\n');
 process.exit(alle ? 0 : 1);

@@ -127,8 +127,16 @@ function studentById(id) { return allStudents.find(s => s.id === id); }
 // fallback-navn og flagget navnMangler = true, slik at fallbacket aldri
 // lagres som om det var et ekte navn.
 
+// De fire tegnene som identifiserer eleven når navnet ikke finnes lokalt.
+// Én kilde med vilje: en enhet som mangler navnene viser «Elev 4f2a», og en
+// enhet som har dem viser «Kari Nordmann 4f2a». Skal de kunne leses av mot
+// hverandre, må utsnittet være nøyaktig det samme begge steder.
+function elevLapp(id) {
+  return String(id).slice(-4);
+}
+
 function fallbackNavn(id) {
-  return 'Elev ' + String(id).slice(-4);
+  return 'Elev ' + elevLapp(id);
 }
 
 function elevNavn(id) {
@@ -1124,14 +1132,19 @@ function slettEventPermanent() {
   const ev = events.find(e => e.id === editingEventId);
   const tittel = ev ? ev.title : 'denne timen';
   const ok = confirm(
-    `Er du sikker? All historikk for ${tittel}, inkludert elevlogg og oppmøtedata, vil slettes permanent. Dette kan ikke angres.`
+    `Slette ${tittel}? All elevlogg og oppmøtehistorikk for timen følger med.\n\nDen legges i papirkurven på Min side, og kan hentes tilbake i ${PAPIRKURV_DAGER} dager.`
   );
   if (!ok) return;
-  // Fjern event fra listen
-  events = events.filter(e => e.id !== editingEventId);
-  // Fjern alle tilhørende lessonData-nøkler
+
+  // Ta vare på timen og hele historikken før noe fjernes
   const prefiks = String(editingEventId) + '_';
-  Object.keys(lessonData).forEach(k => { if (k.startsWith(prefiks)) delete lessonData[k]; });
+  const berortLogg = {};
+  Object.keys(lessonData).forEach(k => {
+    if (k.startsWith(prefiks)) { berortLogg[k] = lessonData[k]; delete lessonData[k]; }
+  });
+  if (ev) leggIPapirkurv('hendelse', tittel, { event: { ...ev }, lessonData: berortLogg });
+
+  events = events.filter(e => e.id !== editingEventId);
   saveToStorage();
   closeOverlay('eventFormOverlay');
   render();
@@ -1432,6 +1445,12 @@ let editingStudentId = null;
 let ekspandertElevId = null; // ID til elev med åpen detaljrad
 let visArkiverte     = false; // Vis/skjul arkivert-seksjon
 
+// Lappen vises bare når eleven har et ekte navn. Mangler navnet, står det
+// «Elev 4f2a» allerede, og lappen ville blitt dobbel.
+function elevLappHtml(s) {
+  return s.navnMangler ? '' : ` <span class="elev-lapp" title="Elev-ID. Bruk denne til å finne igjen navnet fra en enhet som har det.">${elevLapp(s.id)}</span>`;
+}
+
 function renderElevView() {
   const container = document.getElementById('elevAdminView');
   if (!container) return;
@@ -1465,7 +1484,9 @@ function renderElevView() {
     </div>
     ${antallUtenNavn() ? `<div class="navn-mangler-banner">
       ${antallUtenNavn()} elev${antallUtenNavn() !== 1 ? 'er' : ''} mangler navn på denne enheten.
-      Elevnavn synkes ikke — klikk «Rediger» for å legge dem inn her.
+      Elevnavn synkes ikke, så de må skrives inn her.
+      Tallkoden bak «Elev» er den samme på alle enhetene dine — åpne Elever
+      på en enhet som har navnene, finn samme kode, og klikk «Rediger».
     </div>` : ''}
     <table class="elev-table">
       <thead>
@@ -1487,7 +1508,7 @@ function renderElevView() {
     const startStr = s.startDato || '—';
     html += `
         <tr class="elev-table-row elev-hovud-rad" data-student-id="${s.id}">
-          <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span></td>
+          <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span>${elevLappHtml(s)}</td>
           <td>${s.trinn}. trinn</td>
           <td>${startStr}</td>
           <td class="${pctClass}">${pctStr} <span class="att-detail">(${att.present}/${att.total})</span></td>
@@ -1528,7 +1549,7 @@ function renderElevView() {
       const datoStr = s.arkivertDato || '—';
       html += `
           <tr>
-            <td>${s.navn}</td>
+            <td><span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span>${elevLappHtml(s)}</td>
             <td>${s.trinn}. trinn</td>
             <td>${datoStr}</td>
             <td>
@@ -1704,7 +1725,13 @@ function saveStudent() {
 function deleteStudent(id) {
   const s = allStudents.find(st => String(st.id) === String(id));
   if (!s) return;
-  if (!confirm(`Slett ${s.navn}? Dette kan ikke angres.`)) return;
+  if (!confirm(`Slette ${s.navn}?\n\nEleven legges i papirkurven på Min side, og kan hentes tilbake i ${PAPIRKURV_DAGER} dager.`)) return;
+
+  // Hvilke timer eleven sto i — trengs for å melde ham inn igjen
+  const medlemskap = events
+    .filter(ev => ev.students && ev.students.some(sid => String(sid) === String(id)))
+    .map(ev => ev.id);
+  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap });
 
   // Fjern fra allStudents
   const idx = allStudents.findIndex(st => String(st.id) === String(id));
@@ -2084,7 +2111,9 @@ function renderSkjulteGjøremål() {
       saveToStorage(); renderTodoList(); renderSkjulteGjøremål();
     };
     rad.querySelector('.skjult-btn-slett').onclick = () => {
-      if (!confirm(`Slette "${t.tittel||t.text||''}" permanent? Dette kan ikke angres.`)) return;
+      const tittel = t.tittel || t.text || '';
+      if (!confirm(`Slette "${tittel}"?\n\nDet legges i papirkurven på Min side, og kan hentes tilbake i ${PAPIRKURV_DAGER} dager.`)) return;
+      leggIPapirkurv('gjøremål', tittel, { todo: { ...t } });
       todos = todos.filter(x => x.id !== t.id);
       saveToStorage(); renderTodoList(); renderSkjulteGjøremål();
       if (currentView === 'month') renderMonthView();
@@ -2212,8 +2241,70 @@ function renderMinSide() {
   document.getElementById('skoleaarStart').value = skoleaar.start;
   document.getElementById('skoleaarSlutt').value = skoleaar.slutt;
   renderSkolerute();
+  renderPapirkurv();
   // Synk- og publiseringsstatus bor i sync.js, som kan mangle
   if (typeof tegnSynkStatus === 'function') tegnSynkStatus();
+}
+
+const PAPIRKURV_ETIKETT = { hendelse: 'Time', elev: 'Elev', 'gjøremål': 'Gjøremål' };
+
+function papirkurvBeskrivelse(post) {
+  const d = post.data || {};
+  if (post.type === 'hendelse') {
+    const antall = Object.keys(d.lessonData || {}).length;
+    return antall ? `${antall} loggført${antall !== 1 ? 'e' : ''} time${antall !== 1 ? 'r' : ''} følger med` : 'ingen loggførte timer';
+  }
+  if (post.type === 'elev') {
+    const antall = (d.medlemskap || []).length;
+    return antall ? `sto i ${antall} time${antall !== 1 ? 'r' : ''}` : 'sto ikke i noen timer';
+  }
+  return '';
+}
+
+function papirkurvDatoTekst(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const dager = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const igjen = PAPIRKURV_DAGER - dager;
+  const naar = dager === 0 ? 'i dag' : dager === 1 ? 'i går' : `for ${dager} dager siden`;
+  return `Slettet ${naar} · ${igjen} dag${igjen !== 1 ? 'er' : ''} igjen`;
+}
+
+function renderPapirkurv() {
+  const el = document.getElementById('papirkurvListe');
+  if (!el) return;
+
+  ryddPapirkurv();
+
+  if (!papirkurv.length) {
+    el.innerHTML = '<p class="minside-hjelpetekst" style="margin:0">Papirkurven er tom.</p>';
+    return;
+  }
+
+  el.innerHTML = papirkurv.map(p => {
+    const besk = papirkurvBeskrivelse(p);
+    return `
+      <div class="skjult-rad">
+        <div class="skjult-rad-info">
+          <span class="skjult-rad-tittel">${PAPIRKURV_ETIKETT[p.type] || p.type}: ${p.tittel}</span>
+          <span class="skjult-rad-meta">${papirkurvDatoTekst(p.tidspunkt)}${besk ? ' · ' + besk : ''}</span>
+        </div>
+        <div class="skjult-rad-handlinger">
+          <button class="btn-small skjult-btn-gjenopprett" data-pk-gjenopprett="${p.id}">Gjenopprett</button>
+          <button class="btn-small btn-danger skjult-btn-slett" data-pk-slett="${p.id}">Fjern</button>
+        </div>
+      </div>`;
+  }).join('') +
+    `<div class="arkivert-toggle-rad">
+       <button class="arkivert-toggle-btn" onclick="tomPapirkurv()">Tøm papirkurven</button>
+     </div>`;
+
+  el.querySelectorAll('[data-pk-gjenopprett]').forEach(b => {
+    b.onclick = () => gjenopprettFraPapirkurv(b.dataset.pkGjenopprett);
+  });
+  el.querySelectorAll('[data-pk-slett]').forEach(b => {
+    b.onclick = () => slettFraPapirkurv(b.dataset.pkSlett);
+  });
 }
 
 function lagreSkoleaar() {
@@ -2332,6 +2423,101 @@ function slettFridag(id) {
 // ────────────────────────────────────────────
 // LAGRING (localStorage)
 // ────────────────────────────────────────────
+// ────────────────────────────────────────────
+// PAPIRKURV
+// ────────────────────────────────────────────
+// Sletting av en hendelse tar med seg all elevlogg og oppmøtehistorikk for
+// den hendelsen. Det er den dyreste operasjonen i appen, og fram til nå var
+// den beskyttet av én confirm(). Her mellomlagres det som fjernes.
+//
+// Papirkurven synkes ikke — den står bevisst utenfor SYNK_NOKLER i sync.js.
+// To grunner: den inneholder elevnavn, som ellers aldri forlater enheten,
+// og den inneholder data brukeren aktivt har valgt å slette. Ingen av
+// delene bør reise mellom enheter.
+//
+// Derfor lagres elevobjektet her *med* navnet, i motsetning til
+// lp_students. Uten navnet ville en gjenoppretting gitt «Elev 4f2a».
+
+const PAPIRKURV_MAKS  = 20;
+const PAPIRKURV_DAGER = 30;
+let papirkurv = [];
+
+function papirkurvId() {
+  return (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'pk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+function leggIPapirkurv(type, tittel, data) {
+  papirkurv.unshift({
+    id: papirkurvId(),
+    type,
+    tittel: tittel || '(uten navn)',
+    tidspunkt: new Date().toISOString(),
+    data
+  });
+  if (papirkurv.length > PAPIRKURV_MAKS) papirkurv.length = PAPIRKURV_MAKS;
+}
+
+// Kjøres ved oppstart. En papirkurv som aldri tømmes blir et arkiv over
+// slettede elever, og det er ikke det brukeren ba om da han slettet dem.
+function ryddPapirkurv() {
+  const grense = Date.now() - PAPIRKURV_DAGER * 24 * 60 * 60 * 1000;
+  const foer = papirkurv.length;
+  papirkurv = papirkurv.filter(p => {
+    const t = new Date(p.tidspunkt).getTime();
+    return !isNaN(t) && t >= grense;
+  });
+  return foer - papirkurv.length;
+}
+
+function gjenopprettFraPapirkurv(id) {
+  const idx = papirkurv.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const post = papirkurv[idx];
+  const d = post.data || {};
+
+  if (post.type === 'hendelse' && d.event) {
+    if (!events.some(e => String(e.id) === String(d.event.id))) events.push(d.event);
+    Object.entries(d.lessonData || {}).forEach(([k, v]) => { lessonData[k] = v; });
+
+  } else if (post.type === 'elev' && d.elev) {
+    if (!allStudents.some(s => String(s.id) === String(d.elev.id))) allStudents.push(d.elev);
+    // Meld eleven inn igjen i timene han sto i, men bare i de som fortsatt finnes
+    (d.medlemskap || []).forEach(evId => {
+      const ev = events.find(e => String(e.id) === String(evId));
+      if (!ev) return;
+      if (!ev.students) ev.students = [];
+      if (!ev.students.some(sid => String(sid) === String(d.elev.id))) ev.students.push(d.elev.id);
+    });
+
+  } else if (post.type === 'gjøremål' && d.todo) {
+    if (!todos.some(t => String(t.id) === String(d.todo.id))) todos.push(d.todo);
+  }
+
+  papirkurv.splice(idx, 1);
+  saveToStorage();
+  renderPapirkurv();
+  render();
+}
+
+function slettFraPapirkurv(id) {
+  const post = papirkurv.find(p => p.id === id);
+  if (!post) return;
+  if (!confirm(`Fjerne «${post.tittel}» fra papirkurven? Da er den borte for godt.`)) return;
+  papirkurv = papirkurv.filter(p => p.id !== id);
+  saveToStorage();
+  renderPapirkurv();
+}
+
+function tomPapirkurv() {
+  if (!papirkurv.length) return;
+  if (!confirm(`Tømme papirkurven? ${papirkurv.length} oppføring${papirkurv.length !== 1 ? 'er' : ''} blir borte for godt.`)) return;
+  papirkurv = [];
+  saveToStorage();
+  renderPapirkurv();
+}
+
 function saveToStorage() {
   try {
     localStorage.setItem('lp_events',          JSON.stringify(events));
@@ -2345,6 +2531,8 @@ function saveToStorage() {
     localStorage.setItem('lp_studentNames',    JSON.stringify(navnekart()));
     localStorage.setItem('lp_fridager',        JSON.stringify(fridager));
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
+    // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
+    localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
   } catch(e) {
     console.warn('Kunne ikke lagre til localStorage:', e);
   }
@@ -2456,6 +2644,16 @@ function loadFromStorage() {
     const storedSkoleaar = localStorage.getItem('lp_skoleaar');
     if (storedSkoleaar) {
       skoleaar = JSON.parse(storedSkoleaar);
+    }
+
+    const storedPapirkurv = localStorage.getItem('lp_papirkurv');
+    if (storedPapirkurv) {
+      const lest = JSON.parse(storedPapirkurv);
+      if (Array.isArray(lest)) papirkurv = lest;
+      // Utløpte oppføringer kastes med én gang, før noe kan vise dem
+      if (ryddPapirkurv() > 0) {
+        localStorage.setItem('lp_papirkurv', JSON.stringify(papirkurv));
+      }
     }
 
   } catch(e) {

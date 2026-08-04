@@ -567,6 +567,18 @@
   font-style: italic;
 }
 
+/* Elev-ID ved siden av navnet. Finnes bare for å kunne leses av mot en
+   enhet som mangler navnene — derfor monospace, så tegnene ikke kan
+   forveksles, og user-select: all så ett klikk tar hele koden. */
+.elev-lapp {
+  margin-left: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  user-select: all;
+}
+
 .navn-mangler-banner {
   margin: 0 0 12px;
   padding: 10px 12px;

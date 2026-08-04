@@ -120,12 +120,19 @@ relevant. Skrives det i siste time før sommeren, skjer det bare ingenting.
 
 ---
 
-## 3. Elev-ID synlig ved siden av navnet
+## 3. Elev-ID synlig ved siden av navnet ✅
 
-**Idéen:** Vis «Kari Nordmann (4f2a)» i elevlista, ikke bare navnet.
+**Idéen:** Vis «Kari Nordmann 4f2a» i elevlista, ikke bare navnet.
 
-**Status:** Klar til å tas. Liten, og den eneste posten her som er
-forsikring mot tap av data framfor en ny funksjon.
+**Status: gjennomført 3. august 2026 (økt 19).** `elevLapp()` er eneste
+kilde til utsnittet, `fallbackNavn()` bygger på den, og `elevLappHtml()`
+viser lappen ved siden av ekte navn i både den aktive og den arkiverte
+elevtabellen. Banneret som vises når navn mangler forklarer nå
+gjenopprettingsveien. `pseudonymisering.test.js` vokter at de to visningene
+ikke kan drifte fra hverandre — verifisert ved å bryte invarianten med
+vilje og se testen slå ut.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Hvorfor
 
@@ -196,11 +203,19 @@ leser koden senere.
 
 ---
 
-## 5. Papirkurv for slettede hendelser
+## 5. Papirkurv for slettede hendelser ✅
 
 **Idéen:** Kunne angre en sletting.
 
-**Status:** Ønsket. Avgrenset arbeid.
+**Status: gjennomført 3. august 2026 (økt 19).** Alternativ 2 under ble
+valgt. Slettede timer, elever og gjøremål legges i `lp_papirkurv` og kan
+hentes tilbake fra Min side i 30 dager. En slettet time tar med seg hele
+elevloggen, og den følger med tilbake. Papirkurven står utenfor
+`SYNK_NOKLER`, og `tests/papirkurv.test.js` vokter både gjenopprettingen og
+den avgrensningen — verifisert ved å fjerne elevlogg-gjenopprettingen med
+vilje og se testen slå ut.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Hvorfor
 

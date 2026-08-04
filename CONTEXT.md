@@ -34,7 +34,7 @@ Lærerplanlegger/
 | CONFIG  | `PERIODS` (skoletimetabell), gridkonstanter, `DAYS_*`, `MONTHS_*`, `TODAY` (hardkodet), navigasjonstilstand |
 | COLORS  | `COLOR_POOL`, `SPECIAL_COLORS`, `getSubjectColor()`, `eventColor()` |
 | STUDENTS + LESSON DATA | `allStudents[]` (`{id,navn,trinn,startDato}`), `lessonData{}`, `topicsBySubject{}`, seed-data |
-| ELEVNAVN | `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes |
+| ELEVNAVN | `elevLapp()`, `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes. `elevLapp()` er eneste kilde til hvilke fire tegn som vises: `fallbackNavn()` bygger på den, og `elevLappHtml()` viser den ved siden av ekte navn i elevtabellen. Siden navnene ikke synkes, er denne lappen gjenopprettingsveien — man leser den av på en enhet som har navnene og skriver dem inn på en som mangler dem. Endres utsnittet ett sted, må det endres begge; `pseudonymisering.test.js` vokter det |
 | EVENTS + WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `getWorkTimeForDate()` |
 | HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `calcSFS()`, `parseStudentId()`, `calcAttendance()` |
 | RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene), `renderLegend()` |
@@ -53,6 +53,7 @@ Lærerplanlegger/
 | ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
 | ARBEIDSTIDSKALENDER | `arbeidstidForDato()`, `slaaSammenIntervaller()`, `fraDesimal()`, `byggArbeidstidICS()` — viser bare *når* man er opptatt, aldri hva. Grunnlag: planfestet tid eller registrert overtid, utvidet av hendelser. Blokker slås sammen kun når de overlapper eller møtes, så et kveldsmøte blir en egen blokk framfor å strekke arbeidsdagen. Helger tas med bare når det ligger en hendelse der. Alle blokker heter «På jobb» |
 | MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC |
+| PAPIRKURV | `leggIPapirkurv()`, `gjenopprettFraPapirkurv()`, `slettFraPapirkurv()`, `tomPapirkurv()`, `ryddPapirkurv()`, `renderPapirkurv()` — mellomlager for slettede timer, elever og gjøremål. Lagres i `lp_papirkurv`, **bevisst utenfor `SYNK_NOKLER`**: den inneholder elevnavn og data brukeren har valgt å slette, og skal ikke reise mellom enheter. Derfor lagres elevobjektet her *med* navnet, i motsetning til `lp_students`. Ryddes for oppføringer eldre enn `PAPIRKURV_DAGER` (30) ved oppstart, og holdes under `PAPIRKURV_MAKS` (20) |
 | LAGRING | `saveToStorage()`, `loadFromStorage()` + `render()` init-kall |
 
 ---
