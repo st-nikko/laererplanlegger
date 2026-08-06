@@ -344,6 +344,16 @@ function skoletimerForHendelse(ev) {
   if (s == null || e == null) return [];
   return PERIODS.filter(p => s < toDec(p.end) && e > toDec(p.start));
 }
+// Trinnet i kortform, til mobilens ukesvisning. Der er kolonnen ~70 px og
+// undertittelen skjult, så «8. trinn · 204 · 08:30–09:15» får ikke plass —
+// men trinnet alene gjør det, og det er det man trenger for å se hvem man
+// har time med.
+function trinnKortEtikett(ev) {
+  if (ev.category !== 'undervisning') return '';
+  const t = getEventTrinns(ev);
+  return t.length ? t.join('+') : '';
+}
+
 function skoletimeEtikett(ev) {
   const t = skoletimerForHendelse(ev);
   if (!t.length) return '';
@@ -685,7 +695,9 @@ function renderGrid() {
       // der er kolonnen for smal til at begge får plass.
       const timeTekst = skoletimeEtikett(ev);
       const timePre = timeTekst ? `<span class="event-time-nr">${timeTekst} · </span>` : '';
-      block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div><div class="event-sub">${eventSubLabel(ev)}</div>`;
+      const trinnKort = trinnKortEtikett(ev);
+      const trinnPre = trinnKort ? `<span class="event-trinn-kort">${trinnKort}</span>` : '';
+      block.innerHTML=`${badge}<div class="event-title">${timePre}${trinnPre}${eventDisplayLabel(ev)}</div><div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Plan indicator dot
       if(ld && ld.tema){
@@ -1023,7 +1035,22 @@ let pendingPlanDate    = null;
 function saveEvent() {
   const erMoteKat = (formCategory !== 'undervisning' && formCategory !== 'vikar');
   const recurs  = document.getElementById('gjentasCheck').checked;
-  const weekday = erMoteKat ? 0 : parseInt(document.getElementById('dagSelect').value);
+
+  // Undervisning velger ukedag i en nedtrekksliste; møter velger dato.
+  // Gjentas et møte, er det den valgte datoens ukedag som skal gjenta seg.
+  // Her sto det tidligere en hardkodet 0, som gjorde at *alle* gjentakende
+  // møter havnet på mandag uansett hvilken dato som var valgt.
+  const moteDato = erMoteKat ? document.getElementById('moteDatoInput').value : null;
+  const weekday = erMoteKat
+    ? (moteDato ? getDayOfWeekFromDate(moteDato) : ukedagIndeks(TODAY))
+    : parseInt(document.getElementById('dagSelect').value);
+
+  // Ukesvisningen har bare mandag–fredag. Et ukentlig møte i helga ville
+  // bare dukket opp i månedsvisningen, og det er verre enn et klart nei.
+  if (recurs && weekday > 4) {
+    alert('Ukentlige møter må ligge mandag–fredag. Velg en dato på en hverdag, eller fjern haken for «gjentas».');
+    return;
+  }
   let start, end, elevId = null;
   if(formCategory==='undervisning'||formCategory==='vikar'){
     const periodeStartIdx = parseInt(document.getElementById('periodeSelect').value)-1;
@@ -2552,6 +2579,17 @@ function loadFromStorage() {
       events.forEach(ev => {
         if (!ev.gyldigFra) ev.gyldigFra = '2025-08-18';
         if (ev.gyldigTil === undefined) ev.gyldigTil = null;
+      });
+
+      // Gjentakende møter ble tidligere lagret med weekday 0 uansett hvilken
+      // dato brukeren valgte, så alle havnet på mandag. Datoen ble lagret
+      // riktig, og kan derfor brukes til å rette opp ukedagen. Møter som
+      // faktisk hørte hjemme på mandag har en mandagsdato og røres ikke.
+      events.forEach(ev => {
+        const erMote = ev.category !== 'undervisning' && ev.category !== 'vikar';
+        if (!erMote || !ev.recurs || !ev.date || ev.weekday !== 0) return;
+        const riktig = getDayOfWeekFromDate(ev.date);
+        if (riktig !== 0 && riktig <= 4) ev.weekday = riktig;
       });
       // Gjenoppbygg fargekartet og synkroniser ID-teller
       events.forEach(ev => { if (ev.category === 'undervisning') getSubjectColor(ev.title); });

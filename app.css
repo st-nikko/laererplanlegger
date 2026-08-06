@@ -168,6 +168,9 @@
     .event-title { font-weight: 600; font-size: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* «1. time · » foran faget — lettere vekt, så faget leses først */
     .event-time-nr { font-weight: 500; opacity: 0.7; }
+    /* Trinnet i kortform. Skjult her: på PC står det allerede i
+       undertittelen. Slås på i mobilblokka, der undertittelen er borte. */
+    .event-trinn-kort { display: none; }
     .event-sub   { font-size: 10px; opacity: 0.72; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .event-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; background: rgba(34,32,29,0.10); color: inherit; opacity: 0.8; }
     .event-plan-dot { position: absolute; bottom: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--suksess); opacity: 0.85; }
@@ -751,6 +754,20 @@
      Sonene bak timene viser rytmen uansett. */
   .event-time-nr { display: none; }
 
+  /* Trinnet er det ene fra undertittelen som må overleve på liten skjerm —
+     man må kunne se hvem man har time med. «8» tar ~8 px, «8+9» ~18. */
+  .event-trinn-kort {
+    display: inline-block;
+    margin-right: 4px;
+    padding: 0 3px;
+    border-radius: 3px;
+    background: rgba(34,32,29,0.09);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1.5;
+    vertical-align: 1px;
+  }
+
   /* ── Dagsvisning: én kolonne, altså hele skjermbredden ──
      Reglene over krymper hendelsene fordi fem dager skal dele plassen.
      I dagsvisning gjelder ikke den begrunnelsen, og da er det ingen grunn
@@ -759,6 +776,8 @@
   .visning-dag .event-title   { font-size: 12px; }
   .visning-dag .event-sub     { display: block; font-size: 10px; }
   .visning-dag .event-time-nr { display: inline; }
+  /* Undertittelen er tilbake her, og den har trinnet — merket ville dublert */
+  .visning-dag .event-trinn-kort { display: none; }
 
   /* ── Modaler ── */
   .overlay { padding: 0; }

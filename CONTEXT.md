@@ -68,6 +68,7 @@ Lærerplanlegger/
 - **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
 - **Rutenettet starter 07:30, ikke på en hel time.** `GRID_START_H = 7.5`. Alt som skal ligge på et klokkeslett må derfor plasseres med `(tid - GRID_START_H) * PX_PER_HOUR`, aldri ved å stable elementer eller telle `h++` fra `GRID_START_H`. Sistnevnte var årsaken til at tidsaksen sto blank fram til økt 19: løkka gikk 7.5, 8.5, 9.5 … og `Number.isInteger(h)` slo aldri til, så alle etikettene ble tom streng. Samme feil gjorde at de heltrukne strekene havnet på halvtimene.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
+- **`weekday` er 0-basert med mandag som 0**, og er *eneste* felt `eventsForDate()` bruker for gjentakende hendelser — `date` ignoreres da. Merk at skjemaet samler ukedagen på to måter: undervisning og vikar velger den i `dagSelect`, mens møter velger en dato og ukedagen utledes med `getDayOfWeekFromDate()`. Fram til økt 19 var den utledningen en hardkodet `0`, så alle gjentakende møter havnet på mandag. `loadFromStorage()` reparerer gamle møter ut fra datoen deres, og `tests/gjentakende-moter.test.js` vokter begge deler.
 
 ---
 
