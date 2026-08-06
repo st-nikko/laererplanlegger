@@ -162,9 +162,43 @@ systemfonten — appen fungerer, men mister litt av uttrykket.
 | HVA SOM SYNKES | `samleSynkdata()`, `skrivSynkdata()` — sistnevnte filtrerer mot `SYNK_NOKLER` så innkommende data ikke kan overskrive lokale navn |
 | PUSH / PULL | `syncPushDebounced()` (2 s), `syncPush()`, `syncPull()`, `syncNaa()` |
 | INNLOGGING | `synkLoggInn()` / `synkOpprettKonto()` (e-post + passord), `synkLoggUt()`, `synkFeilTekst()` (norske feilmeldinger) |
+| VERN MOT DATATAP | `harPulletDenneEnheten()`, `merkPullet()`, `harUlagredeEndringer()`, `taSynkKopi()`, `synkKopiInfo()`, `gjenopprettForSynk()` — se avsnittet «Synken kan spise data» nedenfor |
 | PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
 | STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
 | ICS-PUBLISERING | `ICS_FEEDS` (to kalendere: `undervisning` og `jobb`), `feedToken()`, `feedAdresse()`, `publiserFeed()`, `slaAvFeed()`, `oppdaterPubliserteKalendere()`, `tegnICSStatus()` — laster opp til Storage-bøtta `kalender` under `{user_id}/{feed}-{token}.ics`. Hver kalender har **sin egen nøkkel**, så jobbkalenderen kan deles med familien uten at timeplanen følger med. **Filene er ikke krypterte** — bøtta er offentlig så Outlook og Google kan hente uten innlogging, og beskyttelsen er at token ikke lar seg gjette. Oppdateres av `syncPush()` |
+
+### Synken kan spise data — les dette før du rører sync.js
+
+Synken er **«siste skriver vinner» på én stor kryptert blokk**. Det finnes
+ingen sammenslåing: `skrivSynkdata()` skriver nøkkel for nøkkel oppå det som
+lå der. Den 6. august 2026 spiste den en times arbeid — elever, møter og
+undervisning lagt inn mellom 18:07 og 19:10 forsvant ved et hardt refresh.
+
+Tre feil virket sammen, og alle tre er nå rettet:
+
+1. **Pullen sammenlignet feil ting.** Den så på `lp_sync_sist`, altså når vi
+   sist snakket med serveren — ikke når dataene sist ble endret her. Alt
+   lokalt arbeid etter siste synk var usynlig for sjekken. Nå settes
+   `lp_sist_endret` ved hver `saveToStorage()`, og `harUlagredeEndringer()`
+   stopper pullen og spør brukeren framfor å overskrive.
+2. **Pushen kunne laste opp uten å ha lest.** `syncPush()` sjekket bare
+   innlogging og passfrase. En enhet der pullen feilet — typisk fordi
+   passfrasen manglet — kjørte videre som normalt og lastet opp sin egen
+   tomme tilstand oppå alt. Nå kreves `lp_sync_pullet`, som *ikke* settes
+   når dekrypteringen feiler.
+3. **`lp_sync_sist` ble satt til vår egen klokke etter push**, mens serveren
+   kan sette sin egen `updated_at`. Da tror neste pull at skyen er nyere, og
+   henter ned ved hvert oppstart. Det var den unødvendige pullen som gjorde
+   overskrivingen mulig i det hele tatt. Nå leses raden tilbake med
+   `.select('updated_at')`, og serverens verdi lagres.
+
+I tillegg tas `taSynkKopi()` rett før hver pull som faktisk overskriver, og
+«Angre siste synk» i Min side legger den tilbake *og* laster den opp — uten
+det siste ville neste pull hentet ned den dårlige kopien igjen.
+
+`tests/synk.test.js` gjenskaper hendelsen med en falsk Supabase. Fjerner du
+vernet, feiler testen «pull overskriver ikke lokale endringer som ikke er
+lastet opp» — verifisert.
 
 Supabase-tabellen `sync_data` har én rad per bruker: `ciphertext`, `salt`,
 `iv`, `updated_at`, `enhet`. Row Level Security gjør at hver bruker kun

@@ -33,6 +33,15 @@ const SYNK_NOKLER = [
 const LS_PASSFRASE   = 'lp_sync_passfrase';
 const LS_SIST_SYNK   = 'lp_sync_sist';
 const LS_ENHETSNAVN  = 'lp_sync_enhet';
+
+// ── Vern mot at synken spiser data ──
+// Synken er «siste skriver vinner» på én stor blokk. Uten disse tre
+// nøklene kan en enhet som aldri har lest serverkopien overskrive den, og
+// en pull kan viske ut lokale endringer som aldri rakk å bli lastet opp.
+// Begge deler skjedde 6. august 2026.
+const LS_SIST_ENDRET = 'lp_sist_endret';   // når data sist ble endret her
+const LS_PULLET      = 'lp_sync_pullet';   // har denne enheten lest skyen?
+const LS_SYNK_KOPI   = 'lp_synk_kopi';     // lokal kopi tatt før siste pull
 const ICS_BUCKET     = 'kalender';
 
 let supabase       = null;
@@ -171,25 +180,127 @@ function klarTilSynk() {
   return Boolean(supabase && synkBruker && harPassfrase());
 }
 
+// ────────────────────────────────────────────
+// VERN MOT DATATAP
+// ────────────────────────────────────────────
+
+// Har denne enheten faktisk fått ned serverkopien? En pull som feiler på
+// dekrypteringen lar appen kjøre videre som normalt — og uten dette
+// flagget ville første lagring lastet opp enhetens egen, tomme tilstand
+// oppå alt som lå i skyen.
+function harPulletDenneEnheten() {
+  return localStorage.getItem(LS_PULLET) === 'ja';
+}
+function merkPullet() {
+  localStorage.setItem(LS_PULLET, 'ja');
+}
+
+// Finnes det lokale endringer som aldri ble lastet opp? LS_SIST_SYNK sier
+// når vi sist snakket med serveren, LS_SIST_ENDRET når dataene sist ble
+// rørt her. Er det siste nyere enn det første, ligger det arbeid her som
+// skyen ikke kjenner til.
+function harUlagredeEndringer() {
+  const endret = localStorage.getItem(LS_SIST_ENDRET);
+  if (!endret) return false;
+  const sist = localStorage.getItem(LS_SIST_SYNK);
+  if (!sist) return true;
+  return new Date(endret) > new Date(sist);
+}
+
+// Tas rett før en pull skriver over. Uten den er en feilaktig synk
+// endelig; med den er den til å angre.
+function taSynkKopi() {
+  try {
+    const data = {};
+    SYNK_NOKLER.forEach(k => {
+      const v = localStorage.getItem(k);
+      if (v !== null) data[k] = v;
+    });
+    localStorage.setItem(LS_SYNK_KOPI, JSON.stringify({
+      tidspunkt: new Date().toISOString(),
+      data
+    }));
+  } catch (e) {
+    console.warn('Kunne ikke ta sikkerhetskopi før synk:', e);
+  }
+}
+
+function synkKopiInfo() {
+  try {
+    const raa = localStorage.getItem(LS_SYNK_KOPI);
+    if (!raa) return null;
+    const kopi = JSON.parse(raa);
+    const antallTimer = JSON.parse(kopi.data.lp_events || '[]').length;
+    const antallLogg  = Object.keys(JSON.parse(kopi.data.lp_lessonData || '{}')).length;
+    return { tidspunkt: kopi.tidspunkt, antallTimer, antallLogg };
+  } catch { return null; }
+}
+
+// Legger tilbake det som lå her før forrige pull, og laster det opp så
+// skyen slutter å sende ned den dårlige kopien.
+async function gjenopprettForSynk() {
+  const raa = localStorage.getItem(LS_SYNK_KOPI);
+  if (!raa) { alert('Det finnes ingen sikkerhetskopi å gjenopprette fra.'); return; }
+  const info = synkKopiInfo();
+  const naar = info ? new Date(info.tidspunkt).toLocaleString('nb-NO') : 'ukjent tidspunkt';
+  if (!confirm(
+    `Legge tilbake dataene slik de var før forrige synk (${naar})?\n\n` +
+    `Kopien har ${info ? info.antallTimer : '?'} timer og ${info ? info.antallLogg : '?'} loggførte timer.\n\n` +
+    `Det som ligger her nå blir erstattet.`
+  )) return;
+
+  const kopi = JSON.parse(raa);
+  Object.entries(kopi.data).forEach(([k, v]) => {
+    if (SYNK_NOKLER.includes(k)) localStorage.setItem(k, v);
+  });
+  localStorage.setItem(LS_SIST_ENDRET, new Date().toISOString());
+  if (typeof loadFromStorage === 'function') loadFromStorage();
+  if (typeof render === 'function') render();
+  // Last opp med én gang, ellers henter neste pull ned den dårlige kopien igjen
+  await syncPush();
+  alert('Dataene er lagt tilbake og lastet opp.');
+}
+
 async function syncPush() {
   if (!klarTilSynk()) return;
+
+  // En enhet som ikke har lest skyen, får ikke skrive til den. Dette er
+  // vernet mot at en telefon uten passfrase, eller en enhet der pullen
+  // feilet, laster opp sin egen tomme tilstand oppå alt.
+  if (!harPulletDenneEnheten()) {
+    await syncPull({ stille: true });
+    if (!harPulletDenneEnheten()) {
+      settStatus('feil', 'Venter på å få ned skykopien før noe lastes opp');
+      return;
+    }
+  }
+
   clearTimeout(pushTimer);
   settStatus('synker');
   try {
     const pakke = await krypter(samleSynkdata(), localStorage.getItem(LS_PASSFRASE));
     const na    = new Date().toISOString();
 
-    const { error } = await supabase.from('sync_data').upsert({
+    // Les tilbake raden vi nettopp skrev. Serveren kan sette sin egen
+    // updated_at, og lagrer vi vår egen klokke i stedet, vil neste pull
+    // tro at skyen er nyere enn oss — og hente ned igjen ved hvert eneste
+    // oppstart. Det er den unødvendige pullen som gjorde overskrivingen
+    // 6. august 2026 mulig i det hele tatt.
+    const { data: rad, error } = await supabase.from('sync_data').upsert({
       user_id:    synkBruker.id,
       ciphertext: pakke.ciphertext,
       salt:       pakke.salt,
       iv:         pakke.iv,
       updated_at: na,
       enhet:      enhetsnavn()
-    });
+    }).select('updated_at').maybeSingle();
     if (error) throw error;
 
-    localStorage.setItem(LS_SIST_SYNK, na);
+    const kvittert = (rad && rad.updated_at) ? rad.updated_at : na;
+    localStorage.setItem(LS_SIST_SYNK, kvittert);
+    // Vi er nå i takt med skyen: det som ligger her, ligger også der
+    localStorage.setItem(LS_SIST_ENDRET, kvittert);
+    merkPullet();
     settStatus('ok');
 
     // Er kalenderen publisert, holdes den oppdatert i samme slengen.
@@ -213,10 +324,11 @@ async function syncPull({ stille = false } = {}) {
     if (error) throw error;
 
     // Ingen rad ennå — denne enheten er første som laster opp
-    if (!data) { await syncPush(); return; }
+    if (!data) { merkPullet(); await syncPush(); return; }
 
     const sist = localStorage.getItem(LS_SIST_SYNK);
     if (sist && new Date(data.updated_at) <= new Date(sist)) {
+      merkPullet();       // vi har sett skyen, selv om vi ikke trengte den
       settStatus('ok');   // vi er allerede oppdatert
       return;
     }
@@ -225,12 +337,38 @@ async function syncPull({ stille = false } = {}) {
     try {
       json = await dekrypter(data, localStorage.getItem(LS_PASSFRASE));
     } catch {
+      // Merk: LS_PULLET settes *ikke* her. Uten den kan denne enheten
+      // heller ikke laste opp, og kan dermed ikke overskrive skyen med
+      // en tilstand den aldri har sett.
       settStatus('feil', 'Feil passfrase — dataene kunne ikke låses opp');
       return;
     }
 
+    // Ligger det lokalt arbeid her som aldri ble lastet opp, skal det ikke
+    // forsvinne uten at brukeren får si sin mening. Det var nettopp dette
+    // som spiste en dags arbeid 6. august 2026.
+    if (harUlagredeEndringer()) {
+      const endret = new Date(localStorage.getItem(LS_SIST_ENDRET)).toLocaleString('nb-NO');
+      const beholdLokalt = confirm(
+        `Denne enheten har endringer fra ${endret} som ikke er lastet opp, ` +
+        `og det ligger en nyere kopi i skyen.\n\n` +
+        `OK = behold det som ligger her, og last det opp\n` +
+        `Avbryt = hent ned skykopien og forkast de lokale endringene`
+      );
+      merkPullet();
+      if (beholdLokalt) {
+        settStatus('ok');
+        await syncPush();
+        return;
+      }
+    }
+
+    taSynkKopi();          // slik at en dårlig synk er til å angre
     skrivSynkdata(json);
     localStorage.setItem(LS_SIST_SYNK, data.updated_at);
+    // Vi er nå identiske med skyen — ingen upushede endringer igjen
+    localStorage.setItem(LS_SIST_ENDRET, data.updated_at);
+    merkPullet();
     settStatus('ok');
 
     // Last inn på nytt slik at minnet stemmer med det nye innholdet
@@ -353,6 +491,9 @@ async function synkLoggUt() {
   if (!confirm('Logge ut av synk? Dataene blir liggende på denne enheten.')) return;
   await supabase.auth.signOut();
   synkBruker = null;
+  // Neste innlogging må lese skyen på nytt før den får skrive til den —
+  // kontoen kan være en annen, eller dataene endret i mellomtiden
+  localStorage.removeItem(LS_PULLET);
   settStatus('av', 'Ikke innlogget');
 }
 

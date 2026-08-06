@@ -251,6 +251,129 @@ test('markup har feltene for begge kalendere', async () => {
   sant(/ikke krypterte/i.test(html), 'advarselen om manglende kryptering må stå der');
 });
 
+// ── Vern mot datatap ───────────────────────────────────────────
+// 6. august 2026 spiste synken en times arbeid: enheten hadde endringer
+// fra 19:10 som aldri ble lastet opp, siste synk var 18:07, og en pull ved
+// oppstart la skyens 18:07-kopi rett oppå. Testene under gjenskaper akkurat
+// det, og et par nabotilfeller.
+
+// Bygger et miljø med en falsk Supabase som svarer med én rad.
+async function lagSynkKontekst(store, serverInnhold, serverTid, { svarPaaSporsmal = true } = {}) {
+  const ctx = lagKontekst(store);
+  const pakke = await ctx.krypter(JSON.stringify(serverInnhold), 'passfrase123');
+  ctx.confirm = () => svarPaaSporsmal;
+  ctx.hent(`
+    supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: {
+          ciphertext: ${JSON.stringify(pakke.ciphertext)},
+          salt: ${JSON.stringify(pakke.salt)},
+          iv: ${JSON.stringify(pakke.iv)},
+          updated_at: ${JSON.stringify(serverTid)},
+          enhet: 'annen enhet'
+        }, error: null }) }) }),
+        upsert: () => ({ select: () => ({ maybeSingle: async () => {
+          globalThis.__pushet = true;
+          return { data: { updated_at: new Date().toISOString() }, error: null };
+        } }) })
+      })
+    };
+    synkBruker = { id: 'u1' };
+  `);
+  return ctx;
+}
+
+const LOKALT  = { lp_events: '[{"id":1},{"id":2},{"id":3}]', lp_lessonData: '{"a":1,"b":2}' };
+const SKYKOPI = { lp_events: '[{"id":9}]',                    lp_lessonData: '{}' };
+
+test('pull overskriver ikke lokale endringer som ikke er lastet opp', async () => {
+  const store = lagStore({
+    ...LOKALT,
+    lp_sync_passfrase: 'passfrase123',
+    lp_sync_sist:   '2026-08-06T18:07:00.000Z',   // siste synk
+    lp_sist_endret: '2026-08-06T19:10:00.000Z',   // siste lokale endring
+    lp_sync_pullet: 'ja'
+  });
+  // Brukeren svarer OK = behold det lokale
+  const ctx = await lagSynkKontekst(store, SKYKOPI, '2026-08-06T18:30:00.000Z', { svarPaaSporsmal: true });
+  await ctx.hent('syncPull()');
+
+  like(store.getItem('lp_events'), LOKALT.lp_events, 'de lokale timene skal stå urørt');
+  like(store.getItem('lp_lessonData'), LOKALT.lp_lessonData, 'elevloggen skal stå urørt');
+  sant(ctx.hent('globalThis.__pushet'), 'det lokale skal lastes opp i stedet');
+});
+
+test('velger brukeren skykopien, tas det sikkerhetskopi først', async () => {
+  const store = lagStore({
+    ...LOKALT,
+    lp_sync_passfrase: 'passfrase123',
+    lp_sync_sist:   '2026-08-06T18:07:00.000Z',
+    lp_sist_endret: '2026-08-06T19:10:00.000Z',
+    lp_sync_pullet: 'ja'
+  });
+  // Avbryt = hent ned skykopien likevel
+  const ctx = await lagSynkKontekst(store, SKYKOPI, '2026-08-06T18:30:00.000Z', { svarPaaSporsmal: false });
+  await ctx.hent('syncPull()');
+
+  like(store.getItem('lp_events'), SKYKOPI.lp_events, 'skykopien skal være lastet inn');
+  const info = ctx.hent('synkKopiInfo()');
+  sant(info, 'det skal finnes en sikkerhetskopi');
+  like(info.antallTimer, 3, 'kopien har de tre lokale timene');
+  like(info.antallLogg, 2, 'og de to loggførte timene');
+});
+
+test('uten lokale endringer hentes skykopien uten spørsmål', async () => {
+  const store = lagStore({
+    ...LOKALT,
+    lp_sync_passfrase: 'passfrase123',
+    lp_sync_sist:   '2026-08-06T18:07:00.000Z',
+    lp_sist_endret: '2026-08-06T18:07:00.000Z',   // i takt med skyen
+    lp_sync_pullet: 'ja'
+  });
+  let spurt = false;
+  const ctx = await lagSynkKontekst(store, SKYKOPI, '2026-08-06T18:30:00.000Z');
+  ctx.confirm = () => { spurt = true; return false; };
+  await ctx.hent('syncPull()');
+
+  sant(!spurt, 'ingen grunn til å spørre når ingenting kan gå tapt');
+  like(store.getItem('lp_events'), SKYKOPI.lp_events, 'skykopien lastet inn');
+  like(store.getItem('lp_sist_endret'), store.getItem('lp_sync_sist'),
+       'etter pull er lokalt og sky i takt');
+});
+
+test('enhet som ikke har lest skyen får ikke laste opp', async () => {
+  const store = lagStore({
+    lp_events: '[]',                       // tom enhet, som en fersk telefon
+    lp_sync_passfrase: 'feil-passfrase',   // pullen vil feile på dekrypteringen
+    lp_lessonData: '{}'
+  });
+  const ctx = await lagSynkKontekst(store, SKYKOPI, '2026-08-06T18:30:00.000Z');
+  await ctx.hent('syncPush()');
+
+  sant(!ctx.hent('globalThis.__pushet'), 'den tomme tilstanden skal ikke nå skyen');
+  sant(!ctx.hent('harPulletDenneEnheten()'), 'enheten skal ikke regnes som oppdatert');
+});
+
+test('sist_endret sammenlignes riktig', async () => {
+  const ctx = lagKontekst(lagStore({
+    lp_sync_sist:   '2026-08-06T18:00:00.000Z',
+    lp_sist_endret: '2026-08-06T19:00:00.000Z'
+  }));
+  sant(ctx.hent('harUlagredeEndringer()'), 'nyere endring enn synk = ulagret arbeid');
+
+  const ctx2 = lagKontekst(lagStore({
+    lp_sync_sist:   '2026-08-06T19:00:00.000Z',
+    lp_sist_endret: '2026-08-06T18:00:00.000Z'
+  }));
+  sant(!ctx2.hent('harUlagredeEndringer()'), 'eldre endring enn synk = alt er lastet opp');
+
+  const ctx3 = lagKontekst(lagStore({ lp_sist_endret: '2026-08-06T19:00:00.000Z' }));
+  sant(ctx3.hent('harUlagredeEndringer()'), 'endringer men aldri synket = ulagret arbeid');
+
+  const ctx4 = lagKontekst(lagStore({}));
+  sant(!ctx4.hent('harUlagredeEndringer()'), 'tom enhet har ingenting å miste');
+});
+
 // ── Kjør ───────────────────────────────────────────────────────
 (async () => {
   console.log('\nSynk og kryptering\n');

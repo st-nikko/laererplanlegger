@@ -2269,8 +2269,22 @@ function renderMinSide() {
   document.getElementById('skoleaarSlutt').value = skoleaar.slutt;
   renderSkolerute();
   renderPapirkurv();
+  renderSynkKopiStatus();
   // Synk- og publiseringsstatus bor i sync.js, som kan mangle
   if (typeof tegnSynkStatus === 'function') tegnSynkStatus();
+}
+
+function renderSynkKopiStatus() {
+  const el = document.getElementById('synkKopiStatus');
+  if (!el) return;
+  // synkKopiInfo() bor i sync.js, som kan mangle
+  const info = (typeof synkKopiInfo === 'function') ? synkKopiInfo() : null;
+  if (!info) {
+    el.textContent = 'Ingen sikkerhetskopi ennå — det tas én første gang synken henter ned noe.';
+    return;
+  }
+  const naar = new Date(info.tidspunkt).toLocaleString('nb-NO');
+  el.textContent = `Kopi fra ${naar}: ${info.antallTimer} time${info.antallTimer !== 1 ? 'r' : ''}, ${info.antallLogg} loggført${info.antallLogg !== 1 ? 'e' : ''}.`;
 }
 
 const PAPIRKURV_ETIKETT = { hendelse: 'Time', elev: 'Elev', 'gjøremål': 'Gjøremål' };
@@ -2560,6 +2574,10 @@ function saveToStorage() {
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
+    // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
+    // enheten har arbeid skyen ikke kjenner til, og nekter å overskrive
+    // det i det stille. Skrives sist, så den bare settes når resten gikk.
+    localStorage.setItem('lp_sist_endret',     new Date().toISOString());
   } catch(e) {
     console.warn('Kunne ikke lagre til localStorage:', e);
   }
