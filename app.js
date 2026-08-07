@@ -695,9 +695,11 @@ function renderGrid() {
       // der er kolonnen for smal til at begge får plass.
       const timeTekst = skoletimeEtikett(ev);
       const timePre = timeTekst ? `<span class="event-time-nr">${timeTekst} · </span>` : '';
+      // Trinnet står på egen linje under faget, ikke foran det: i en 70 px
+      // bred mobilkolonne stjal merket plassen fra selve fagnavnet.
       const trinnKort = trinnKortEtikett(ev);
-      const trinnPre = trinnKort ? `<span class="event-trinn-kort">${trinnKort}</span>` : '';
-      block.innerHTML=`${badge}<div class="event-title">${timePre}${trinnPre}${eventDisplayLabel(ev)}</div><div class="event-sub">${eventSubLabel(ev)}</div>`;
+      const trinnLinje = trinnKort ? `<div class="event-trinn-kort">${trinnKort}. trinn</div>` : '';
+      block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Plan indicator dot
       if(ld && ld.tema){
