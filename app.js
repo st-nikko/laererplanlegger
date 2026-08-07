@@ -736,6 +736,11 @@ function renderGrid() {
   });
 }
 
+// Legenden viser fargeforklaringen, og til høyre en opptelling av ukens
+// undervisningstimer. Opptellingen finnes for å kunne kontrollere mot den
+// offisielle timeplanen at alt er lagt inn. Den er bevisst *ett* tall og
+// ikke per fag: «Norsk 4» er tvetydig når samme fag går på flere trinn,
+// og å skille på trinn ble mer støy enn nytte.
 function renderLegend() {
   const el=document.getElementById('legend'); el.innerHTML='<span class="legend-heading">Fag:</span>';
   const seen=new Set();
@@ -754,6 +759,38 @@ function renderLegend() {
     item.innerHTML=`<div class="legend-swatch" style="background:${c.border}"></div>${label}`;
     el.appendChild(item);
   });
+
+  // Opptelling til høyre: brukes til å kontrollere mot den offisielle
+  // timeplanen at alle timene er lagt inn. Vises bare i uke- og dagsvisning,
+  // der «denne uka» betyr noe.
+  if (currentView === 'week' || currentView === 'day') {
+    const mandag = currentView === 'week' ? currentWeekMonday : getMonday(currentDay);
+    const n = ukensUndervisningstimer(mandag);
+    const sum = document.createElement('div');
+    sum.className = 'legend-total';
+    sum.textContent = `${n} undervisningstime${n !== 1 ? 'r' : ''} denne uka`;
+    sum.title = 'Skoletimer mandag–fredag i uka som vises. En dobbelttime teller som to. '
+              + 'Vikartimer og møter er ikke med. Ferier og fridager trekker fra.';
+    el.appendChild(sum);
+  }
+}
+
+// Antall skoletimer med egen undervisning i uka som starter på gitt mandag.
+// Teller skoletimer, ikke klokketimer, og ikke hendelser — det er samme
+// enhet som den offisielle timeplanen bruker, så tallene kan sammenlignes.
+function ukensUndervisningstimer(mandag) {
+  let n = 0;
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(mandag);
+    d.setDate(d.getDate() + i);
+    eventsForDate(d).forEach(ev => {
+      if (ev.category !== 'undervisning') return;
+      // Timer som ligger utenfor timeplanrutenettet gir tom liste, men er
+      // like fullt undervisning og skal telle som én
+      n += skoletimerForHendelse(ev).length || 1;
+    });
+  }
+  return n;
 }
 
 // ────────────────────────────────────────────

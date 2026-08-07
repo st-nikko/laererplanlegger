@@ -670,7 +670,16 @@ async function publiserFeed(feed, { stille = false } = {}) {
   }
 
   localStorage.setItem(ICS_FEEDS[feed].flaggKey, '1');
-  saveToStorage();
+
+  // Ikke kall saveToStorage() når vi står inne i en push. Denne funksjonen
+  // kalles til slutt i syncPush() via oppdaterPubliserteKalendere(), og
+  // saveToStorage() armer syncPushDebounced(). Resultatet var en evig
+  // runde: push → publiser → lagre → push, hvert annet sekund, som
+  // overskrev serveren kontinuerlig med denne enhetens tilstand.
+  // Flagget er allerede skrevet på linja over, og følger med neste ekte
+  // endring; det er bare selve lagringsrunden som må hoppes over.
+  if (!stille) saveToStorage();
+
   tegnICSStatus();
   return true;
 }

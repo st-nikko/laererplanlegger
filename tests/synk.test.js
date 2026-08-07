@@ -29,7 +29,8 @@ function lagKontekst(store) {
     document: { getElementById: () => null },
     window: {},
     alert: () => {}, confirm: () => true,
-    loadFromStorage: () => {}, render: () => {}
+    loadFromStorage: () => {}, render: () => {},
+    Blob: globalThis.Blob, URL
   };
   ctx.globalThis = ctx;
   vm.createContext(ctx);
@@ -372,6 +373,41 @@ test('sist_endret sammenlignes riktig', async () => {
 
   const ctx4 = lagKontekst(lagStore({}));
   sant(!ctx4.hent('harUlagredeEndringer()'), 'tom enhet har ingenting å miste');
+});
+
+// ── Publisering skal ikke starte en ny synk ────────────────────
+// Loop meldt fra en av Nikolais PC-er: statusen syklet ok → venter →
+// synker → ok i det uendelige. publiserFeed() kalles til slutt i
+// syncPush(), og kalte saveToStorage(), som armer syncPushDebounced().
+// Enheten lastet dermed opp sin egen tilstand hvert annet sekund og
+// overskrev serveren kontinuerlig.
+test('publisering inne i en push lagrer ikke på nytt', async () => {
+  const store = lagStore({
+    lp_ics_publiser: '1',
+    lp_ics_token: 'token123',
+    lp_sync_passfrase: 'passfrase123'
+  });
+  const ctx = lagKontekst(store);
+  let lagringer = 0;
+  ctx.saveToStorage = () => { lagringer++; };
+  ctx.hent(`
+    synkBruker = { id: 'u1' };
+    supabase = {
+      storage: { from: () => ({ upload: async () => ({ error: null }) }) }
+    };
+    byggICS = () => ({ ics: 'BEGIN:VCALENDAR\\nEND:VCALENDAR', antall: 1 });
+    byggArbeidstidICS = () => ({ ics: 'BEGIN:VCALENDAR\\nEND:VCALENDAR', antall: 1 });
+  `);
+
+  // stille: true er kallet som kommer fra syncPush()
+  await ctx.hent(`publiserFeed('undervisning', { stille: true })`);
+  like(lagringer, 0, 'en stille publisering skal ikke utløse lagring — det er den som lager loopen');
+
+  // Trykker brukeren selv på «Oppdater nå», skal flagget lagres og synkes
+  await ctx.hent(`publiserFeed('undervisning', { stille: false })`);
+  like(lagringer, 1, 'manuell publisering lagrer som før');
+
+  like(store.getItem('lp_ics_publiser'), '1', 'flagget skrives uansett');
 });
 
 // ── Kjør ───────────────────────────────────────────────────────

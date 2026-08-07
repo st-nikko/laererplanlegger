@@ -221,6 +221,16 @@
     .legend-heading { font-size: 11px; color: var(--text-muted); font-weight: 500; }
     .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
     .legend-swatch { width: 10px; height: 10px; border-radius: 2px; }
+    /* Opptellingen skyves helt til høyre, adskilt fra fargeforklaringen */
+    .legend-total {
+      margin-left: auto;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      cursor: default;
+    }
 
     /* ── OVERLAYS ── */
     .overlay { display: none; position: fixed; inset: 0; background: rgba(28,26,23,0.32); z-index: 300; align-items: center; justify-content: center; }

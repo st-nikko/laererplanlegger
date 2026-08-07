@@ -192,6 +192,17 @@ Tre feil virket sammen, og alle tre er nå rettet:
    overskrivingen mulig i det hele tatt. Nå leses raden tilbake med
    `.select('updated_at')`, og serverens verdi lagres.
 
+**Og den fjerde, som trolig var utløseren:** `publiserFeed()` avsluttet med
+`saveToStorage()`, men kalles selv til slutt i `syncPush()` via
+`oppdaterPubliserteKalendere()`. Siden `saveToStorage()` armer
+`syncPushDebounced()`, ble det en evig runde — push → publiser → lagre →
+push, hvert annet sekund. Enheten lastet dermed opp sin egen tilstand
+kontinuerlig og overskrev serveren uansett hva andre enheter pushet.
+Statusfeltet syklet synlig mellom «synkronisert», «synkroniserer» og
+«endringer venter». Nå hopper den stille publiseringen over lagringen;
+flagget skrives direkte og følger med neste ekte endring. **Kall aldri
+`saveToStorage()` fra noe som kjører inne i en push.**
+
 I tillegg tas `taSynkKopi()` rett før hver pull som faktisk overskriver, og
 «Angre siste synk» i Min side legger den tilbake *og* laster den opp — uten
 det siste ville neste pull hentet ned den dårlige kopien igjen.

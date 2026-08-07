@@ -245,6 +245,85 @@ slette reise mellom enhetene. Samme resonnement som for `lp_studentNames`.
 
 ---
 
+## 6. Sikkerhetsgjennomgang av Supabase-oppsettet ✅
+
+**Status: gjennomført 6. august 2026.** Offentlig registrering er slått av,
+og begge de to gjenstående punktene er verifisert:
+
+- **RLS på `sync_data` virker.** En `select('user_id')` som innlogget bruker
+  gir én rad. Ingen ser andres data.
+- **Skrivepolicyene på `kalender`-bøtta er scopet til `auth.uid()`.** Rollen
+  `authenticated` har lov til insert, update og delete, men bare innenfor
+  brukerens egen mappe. Lesing er åpen, som den må være for at Outlook og
+  Google skal kunne hente uten innlogging.
+
+Beskrivelsen under er beholdt som begrunnelse og som sjekkliste hvis noe av
+dette skal endres senere.
+
+### Utgangspunktet
+
+`SUPABASE_URL` og `SUPABASE_ANON` ligger i `sync.js` og er lesbare for alle
+som åpner sidekilden. **Det er ikke en feil** — anon-nøkkelen er laget for å
+være offentlig. Men det betyr at hele sikkerheten hviler på Row Level
+Security og policyene på lagringsbøtta, ikke på at nøkkelen er hemmelig.
+
+Elevdata er beskyttet i to uavhengige lag: RLS gir hver bruker bare sin egen
+rad, og innholdet er kryptert med en passfrase som aldri forlater enhetene.
+Selv en fullstendig svikt i RLS avslører ikke elevnavn eller notater.
+
+### Angrepsflaten var registrering
+
+Fram til 6. august kunne hvem som helst opprette en konto med anon-nøkkelen.
+Ingen av følgene ville avslørt elevdata, men alle ville gjort at *appen*
+sluttet å virke:
+
+- Opplasting av store filer til `kalender`-bøtta til gratiskvoten på 1 GB er
+  brukt opp
+- Én rad i `sync_data` per konto, uten grense på hvor stor `ciphertext` kan
+  være
+- Uttømming av Supabase' delte e-postkvote, slik at *du* ikke får sendt deg
+  selv en innloggingslenke
+- Pausing av hele prosjektet ved brudd på gratisgrensene
+
+**Løst:** «Allow new users to sign up» er slått av i Supabase. Du er eneste
+bruker og har allerede kontoen din. Skal du noen gang trenge en konto til —
+en ny enhet trenger det *ikke*, samme konto brukes overalt — må den slås på
+midlertidig.
+
+### Slik ble det verifisert — gjenta dette hvis noe endres
+
+**Skriverettigheter på `kalender`-bøtta.** Bøtta er offentlig for lesing, og
+det er med vilje: Outlook og Google må kunne hente uten innlogging.
+Spørsmålet er hvem som får skrive. Policyen bør begrense insert, update og
+delete til brukerens egen mappe — filene ligger allerede under
+`{user_id}/{feed}-{token}.ics`, så formen er riktig. Sjekk under Storage →
+`kalender` → Policies at det ikke står en åpen regel for rollen
+`authenticated`.
+
+**At RLS faktisk er på for `sync_data`.** Kjør dette i konsollen på appsiden
+mens du er innlogget:
+
+```js
+const { data, error } = await supabase.from('sync_data').select('user_id');
+console.log({ rader: data?.length, error });
+```
+
+Ett svar med `rader: 1` er riktig — du ser bare din egen rad. Mer enn én, og
+RLS er ikke i orden.
+
+### Vurdert og akseptert
+
+Undervisningskalenderen er offentlig for alle som har adressen; tokenet er
+hele beskyttelsen. **Nikolai har vurdert dette og er komfortabel med det** —
+feeden inneholder fag, tid og rom, og `icsTittel()` bruker alltid faget,
+aldri elevnavnet, også for enetimer der grensesnittet ellers viser eleven.
+Det er altså ingenting personsensitivt i den.
+
+Skulle adressen likevel måtte byttes, roterer «Slå av» og «Slå på» tokenet —
+men da må alle som abonnerer legge inn den nye adressen.
+
+---
+
 ## Vurdert og lagt bort inntil videre
 
 Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
