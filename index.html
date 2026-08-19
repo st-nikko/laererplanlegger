@@ -102,6 +102,10 @@
   <div class="calendar-scroll">
     <div class="calendar-grid" id="calGrid"></div>
   </div>
+  <!-- Bekreftelse på at fraværet er ført i skolens EGET system.
+       Ikke det samme som nærværslista i timeplanmodalen — se
+       «Fraværsraden» i CONTEXT.md. Fylles av renderFravaerRad(). -->
+  <div class="fravaer-rad" id="fravaerRad"></div>
 </div>
 
 <!-- MONTH VIEW -->
@@ -187,6 +191,15 @@
         </div>
       </div>
     </div>
+  </div>
+  <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Fravær som ikke er ført</div>
+    <p class="minside-hjelpetekst">
+      Skoledager de siste tre ukene, fram til i går, der du ikke har huket av
+      for at fraværet er ført i skolens eget system. Trykk på en dag for å
+      åpne den i kalenderen. Ferier, fridager og planleggingsdager er ikke med.
+    </p>
+    <div id="fravaerOversikt" class="fravaer-mangler"></div>
   </div>
   <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Synk mellom enheter</div>

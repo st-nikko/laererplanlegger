@@ -831,13 +831,31 @@ notatet.
 
 ---
 
-## 16. Hake for «fravær ført i det andre systemet»
+## 16. Hake for «fravær ført i det andre systemet» ✅
 
 **Idéen:** En avkrysningsboks som bekrefter at fraværet er ført der det
 skal føres — i skolens eget system, utenfor denne appen.
 
-**Status:** Avklart 19. august 2026. Plasseringen er bestemt, og den er en
-annen enn posten opprinnelig foreslo.
+**Status: gjennomført 19. august 2026.** Raden ligger nederst i uke- og
+dagsvisningen med én hake per dag, og `renderDayHeaders()` viste seg å
+være riktig mal — `renderFravaerRad()` bruker samme `kalenderKolonner()`,
+og målt i nettleseren står hver hake 0 px fra midten av sin egen
+dagkolonne, på både PC og mobil.
+
+Lagringen er `lp_fravaerFort` med én nøkkel per dato, i `SYNK_NOKLER` og i
+backup. **Bare dager som er ført lagres** — en dag som mangler i objektet
+er «ikke ført», som også er utgangspunktet, så nøkkelen vokser ikke med en
+oppføring per skoledag i året.
+
+Oversikten under «Fortsatt åpent» ble tatt med likevel, i den korteste
+varianten. Se avsnittet nederst for hvorfor vinduet er tre uker og ikke
+lenger.
+
+`tests/fravaer.test.js` vokter blant annet at haken **ikke** rører
+`lessonData`, og at kolonnene står i flukt. Verifisert ved å bryte hver av
+dem med vilje og se testen slå ut.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Hva som ble bestemt
 
@@ -891,14 +909,38 @@ Kolonnene er ~70 px. Avkrysningsboksen får plass; en tekstetikett ved
 siden av gjør det ikke. Sett `title` på boksen og la den stå alene, slik
 `.event-time-nr` er løst i samme situasjon.
 
+### Oversikten ble tatt med — med et kort vindu, og det er poenget
+
+«Skal ubekreftede dager kunne ses samlet?» sto som åpent her. Svaret ble
+ja: Min side har nå en seksjon som lister skoledager uten hake, der hver
+dag er en knapp som åpner den i kalenderen.
+
+**Men den ser bare 21 dager tilbake**, og det er ikke en tilfeldig
+grense. Haken fantes ikke før 19. august 2026. Ser oversikten lenger
+tilbake enn noen uker, dukker hver eneste skoledag siden august 2025 opp
+som «mangler» — formelt sant, praktisk verdiløst: fraværet *er* ført, det
+er bare ikke huket av her. Et rullende vindu løser det uten at appen må
+lagre når funksjonen ble slått på, og gamle dager faller ut av seg selv.
+
+I dag er ikke med i lista. Den er ment som «noe jeg gikk glipp av», og
+dagen i dag ser du uansett i kalenderen.
+
+`FRAVAER_TILBAKE` er konstanten. `tests/fravaer.test.js` har en test som
+holder den mellom 7 og 31 dager, med begrunnelsen skrevet inn i testen —
+skrus den opp til et helt skoleår, er lista ubrukelig igjen.
+
+**Skal vinduet virkelig utvides**, er svaret å lagre datoen funksjonen ble
+slått på og aldri se forbi den, ikke å heve tallet.
+
 ### Fortsatt åpent
 
-**Skal ubekreftede dager kunne ses samlet?** Det er antakelig det som
-gjør funksjonen nyttig over tid — «disse fem dagene mangler» framfor å
-måtte bla tilbake gjennom ukene. Men det er en egen liten øvelse, og
-haken er nyttig uten den.
-
-Anslag: en kveld, det meste på raden som skal stå i flukt med gridet.
+- **Planleggingsdager ble tatt ut.** De er hverdager i skoleåret, men uten
+  elever, så det finnes ikke fravær å føre. `skalFoereFravaer()` luker
+  bort ferie, fridag *og* planlegging. Skulle det vise seg at du vil ha
+  hake der likevel, er det én linje.
+- **Ingenting varsler.** Oversikten må oppsøkes på Min side. Et tall ved
+  siden av menypunktet, eller en stripe når noe har ligget lenge, ville
+  gjort den synlig uten å åpnes — men det er lett å gjøre for mye ut av.
 
 ---
 

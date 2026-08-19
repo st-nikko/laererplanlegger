@@ -39,6 +39,7 @@ Lærerplanlegger/
 | HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `calcSFS()`, `parseStudentId()`, `calcAttendance()` |
 | RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene, `.lunsj-band` i hver kolonne), `renderLegend()` |
 | LUNSJ | `lunsjLuke()` i CONFIG finner den **lengste luka mellom to skoletimer** i `PERIODS` — det er lunsjen, og den er ikke registrert noe annet sted. `renderGrid()` tegner et `.lunsj-band` som fyller luka i hver dagkolonne, og et `.lunsj-merke` («Lunsj») i tidsaksen; merket skjules på mobil, der aksen er 32 px. Båndet er en **varm tone med kant over og under** — bevisst en annen kulør enn den accent-tonede `.period-band` og den nøytralt grå `.offwork-block`, så de tre flatene ikke kan forveksles. Første forsøk var én strek midt i luka; den forsvant i et rutenett som har streker hvert kvarter fra før. Skriv aldri inn `11:05`/`11:35` noe sted: `PERIODS` skal forbli eneste kilde til klokkeslett, slik at skillet flytter seg hvis skolen endrer timeplanen. `tests/lunsj.test.js` regner ut fasiten uavhengig og slår ut på en hardkodet tid. Båndet har `z-index: 2` — over de andre flatene, under `.event`, slik at en time som krysser lunsjen dekker det framfor å bli delt i to |
+| FRAVÆRSRAD | `renderFravaerRad()`, `settFravaerFort()`, `skalFoereFravaer()`, `fravaerSomMangler()`, `renderFravaerOversikt()` — haken for at fraværet er ført i skolens **eget** system. Se «Fraværsraden» nedenfor; den er *ikke* appens nærværsføring |
 | SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
 | PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
@@ -91,6 +92,44 @@ Nå gjelder to regler:
 
 `tests/modallukking.test.js` vokter begge, og i tillegg at hver modal
 fortsatt har en knapp som lukker den — Escape alene er ikke nok.
+
+### Fraværsraden
+
+Lagt til 19. august 2026. En rad nederst i uke- og dagsvisningen, rett over
+legenden, med én avkrysningsboks per dag.
+
+**Den har ingenting med `attendance` å gjøre, og det er hele poenget.**
+`attendance` i `lessonData` er hvem som var til stede i en enkelt time.
+Haken bekrefter bare at du har gjort unna føringen i skolens eget system,
+utenfor appen. De bor derfor to forskjellige steder, og
+`tests/fravaer.test.js` vokter at de ikke får røre hverandre.
+
+- **Lagring:** `lp_fravaerFort`, `{ 'YYYY-MM-DD': true }`. **Bare dager som
+  er ført lagres** — en dag som mangler er «ikke ført», som også er
+  utgangspunktet, så nøkkelen vokser ikke med én oppføring per skoledag.
+  Står i `SYNK_NOKLER` og i `exportData()`/`importData()`.
+- **Kolonnebredder:** `renderFravaerRad()` bruker `kalenderKolonner()`, samme
+  kall som `#calGrid` og `.day-headers`. Første celle er tom og dekker
+  tidsaksen. **Ikke gi raden egne mål** — da glir haken fra dagen sin, og
+  en hake under feil dag er verre enn ingen hake. Målt i nettleseren står
+  hver hake 0 px fra midten av kolonnen sin, på PC og mobil.
+- **Hvilke dager:** `skalFoereFravaer()` — hverdager i skoleåret, minus
+  ferie, fridag **og planleggingsdag**. Planleggingsdager er hverdager,
+  men uten elever, så det finnes ikke fravær å føre. Dager uten hake får en
+  tom celle, ikke ingen celle, slik at kolonnene holder seg i flukt.
+- **`settFravaerFort()` kaller ikke `render()`.** En full rendring ville
+  bygget kalendergridet på nytt og kastet rulleposisjonen; alt som trenger
+  å endre seg er klassen på merket.
+- **Mobil:** teksten «Fravær ført» skjules under 768 px (kolonnen er ~70
+  px), boksen vokser til trykkflate, og `title` på merket forklarer raden.
+
+**Oversikten på Min side** lister skoledager uten hake, med
+`FRAVAER_TILBAKE = 21` dagers vindu og uten dagen i dag. Vinduet er kort
+med vilje: haken fantes ikke før 19. august 2026, så et lengre vindu ville
+vist hver skoledag siden august 2025 som «mangler». En test holder
+konstanten mellom 7 og 31 med begrunnelsen skrevet inn. Skal vinduet
+utvides, er svaret å lagre datoen funksjonen ble slått på — ikke å heve
+tallet.
 
 ---
 
@@ -178,7 +217,7 @@ systemfonten — appen fungerer, men mister litt av uttrykket.
 
 | Seksjon | Innhold |
 |---------|---------|
-| KONFIGURASJON | `SUPABASE_URL`, `SUPABASE_ANON`, `SYNK_NOKLER` (hvilke localStorage-nøkler som synkes — `lp_studentNames` er bevisst utelatt) |
+| KONFIGURASJON | `SUPABASE_URL`, `SUPABASE_ANON`, `SYNK_NOKLER` (hvilke localStorage-nøkler som synkes — `lp_studentNames` og `lp_papirkurv` er bevisst utelatt; `lp_fravaerFort` er med) |
 | OPPSTART | `initSync()`, `settStatus()`, `harPassfrase()`, `enhetsnavn()` |
 | KRYPTERING | `utledNokkel()` (PBKDF2, 250k runder), `krypter()`, `dekrypter()` (AES-GCM) |
 | HVA SOM SYNKES | `samleSynkdata()`, `skrivSynkdata()` — sistnevnte filtrerer mot `SYNK_NOKLER` så innkommende data ikke kan overskrive lokale navn |

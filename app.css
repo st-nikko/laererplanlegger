@@ -221,6 +221,46 @@
     #elevAdminView { flex: 1; overflow-y: auto; min-height: 0; }
 
     /* ── ELEVLOGG VIEW ── */
+    /* ── FRAVÆRSRAD ──
+       Bekreftelse på at fraværet er ført i skolens EGET system, ikke
+       appens nærværsliste. Ligger nederst i uke- og dagsvisningen, rett
+       over legenden.
+       Kolonnebreddene settes fra JS med kalenderKolonner(), samme kall som
+       #calGrid og .day-headers bruker — det er det som holder haken under
+       sin egen dag. Ingen faste mål her. */
+    .fravaer-rad {
+      display: grid; flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .fravaer-celle { display: flex; justify-content: center; padding: 5px 4px; min-width: 0; }
+    .fravaer-merke {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 2px 6px; border-radius: 4px; min-width: 0;
+      font-size: 11px; color: var(--text-secondary);
+      cursor: pointer; user-select: none;
+    }
+    .fravaer-merke:hover { background: var(--surface); color: var(--text-primary); }
+    /* Ført dag: teksten skifter til suksessfargen. Fargen bærer ikke
+       informasjonen alene — avkrysningsboksen sier det samme. */
+    .fravaer-merke.fort { color: var(--suksess); }
+    .fravaer-merke input {
+      width: 14px; height: 14px; margin: 0;
+      accent-color: var(--accent); cursor: pointer; flex-shrink: 0;
+    }
+    .fravaer-tekst { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Oversikten på Min side */
+    .fravaer-mangler { display: flex; flex-wrap: wrap; gap: 6px; }
+    .fravaer-mangler-rad {
+      font-family: inherit; font-size: 12px;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      color: var(--overtid-deep); background: var(--overtid-soft);
+      border: 1px solid var(--overtid-kant);
+    }
+    .fravaer-mangler-rad:hover { filter: brightness(0.96); }
+    .fravaer-tom { font-size: 12px; color: var(--text-secondary); }
+
     #elevloggView { flex: 1; overflow-y: auto; min-height: 0; padding: 1.5rem; }
     .elevlogg-view-tittel { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 1rem; }
 
@@ -901,6 +941,15 @@
   #minSideView { padding: 1rem 0.75rem; }
   .data-toolbar { flex-direction: column; align-items: stretch; }
   .data-toolbar-btn { min-height: 40px; }
+
+  /* ── Fraværsraden ──
+     Kolonnen er ~70 px; «Fravær ført» får ikke plass ved siden av boksen.
+     Boksen står igjen alene og vokser til en trykkflate — title-teksten
+     på merket forklarer hva raden er hvis man lurer. */
+  .fravaer-tekst  { display: none; }
+  .fravaer-celle  { padding: 8px 2px; }
+  .fravaer-merke  { padding: 4px 8px; }
+  .fravaer-merke input { width: 18px; height: 18px; }
 
   /* ── Trykkflater ── */
   .btn-small { min-height: 34px; padding: 6px 10px; }

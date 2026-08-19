@@ -241,6 +241,18 @@ let events = []; // ingen seed-data
 
 let fridager = []; // { id, fra, til, tittel, type }
 let skoleaar = { start: '2025-08-13', slutt: '2026-06-19' };
+
+// ── Fravær ført i det ANDRE systemet ──
+// { 'YYYY-MM-DD': true } — én oppføring per dag, ikke per time.
+//
+// Dette er ikke appens egen fraværsføring. `attendance` i lessonData er
+// hvem som var til stede i en enkelt time; denne haken bekrefter bare at
+// du har gjort unna føringen i skolens eget system. De to skal ikke
+// blandes, og derfor bor de ikke samme sted.
+//
+// Bare dager som er huket av lagres. En dag som mangler er «ikke ført»,
+// og det er også utgangspunktet — så nøkkelen holder seg liten.
+let fravaerFort = {};
 const FRIDAGER_SEED = [
   { id: crypto.randomUUID(), fra: '2025-09-29', til: '2025-10-03', tittel: 'Høstferie',               type: 'ferie' },
   { id: crypto.randomUUID(), fra: '2025-11-05', til: '2025-11-07', tittel: 'Planleggingsdager',        type: 'planlegging' },
@@ -290,6 +302,21 @@ function erFridag(dato) {
 function erUtenforSkoleaar(dato) {
   const key = isoDate(dato);
   return key < skoleaar.start || key > skoleaar.slutt;
+}
+
+// Skal denne dagen ha en fraværshake?
+// Alle hverdager i skoleåret, minus dagene uten elever. Ferier og
+// fridager er opplagte. Planleggingsdager tas også ut: elevene er ikke
+// der, så det finnes ikke noe fravær å føre — det er samme standpunkt
+// eventsForDate() tar når den skjuler undervisning på dem.
+// Poenget med å luke bort disse dagene er at en tom hake da alltid
+// betyr noe. Står det haker på dager du umulig kunne ført noe, slutter
+// man å se på dem.
+function skalFoereFravaer(dato) {
+  if (ukedagIndeks(dato) > 4) return false;
+  if (erUtenforSkoleaar(dato))  return false;
+  if (erFridag(dato))           return false;
+  return true;
 }
 
 function getMonday(d) {
@@ -501,9 +528,128 @@ function render() {
   else if (isElevlogg) { renderElevloggView(); }
   else if (isMinSide)  { renderMinSide(); }
   else if (isMonth)    { renderMonthView(); }
-  else                 { renderDayHeaders(); renderGrid(); }
+  else                 { renderDayHeaders(); renderGrid(); renderFravaerRad(); }
   renderLegend();
   renderTodoList();
+}
+
+// ────────────────────────────────────────────
+// FRAVÆRSRAD
+// ────────────────────────────────────────────
+// Bekreftelse på at fraværet er ført i skolens EGET system — ikke appens
+// nærværsliste. Raden ligger nederst i uke- og dagsvisningen, rett over
+// fargeforklaringen, med én hake per dag.
+//
+// Den står i flukt med kalenderkolonnene fordi den bruker nøyaktig samme
+// kolonnedefinisjon som gridet og dagoverskriftene: kalenderKolonner().
+// Første celle er tom og dekker tidsaksen. Endres bredden der, følger
+// raden med av seg selv — det er hele grunnen til at den ikke har sine
+// egne mål.
+function renderFravaerRad() {
+  const el = document.getElementById('fravaerRad');
+  if (!el) return;
+
+  const dager = currentView === 'day'
+    ? [currentDay]
+    : Array.from({length:5},(_,i)=>{ const d=new Date(currentWeekMonday); d.setDate(d.getDate()+i); return d; });
+  el.style.gridTemplateColumns = kalenderKolonner(currentView === 'day' ? 1 : 5);
+  el.innerHTML = '';
+
+  // Tom celle over tidsaksen
+  const gutter = document.createElement('div');
+  gutter.className = 'fravaer-gutter';
+  el.appendChild(gutter);
+
+  dager.forEach(d => {
+    const celle = document.createElement('div');
+    celle.className = 'fravaer-celle';
+    // Ferie, fridag, planleggingsdag eller utenfor skoleåret: cellen blir
+    // stående tom, så kolonnene fortsatt står i flukt.
+    if (!skalFoereFravaer(d)) { el.appendChild(celle); return; }
+
+    const key = isoDate(d);
+    const merke = document.createElement('label');
+    merke.className = 'fravaer-merke' + (fravaerFort[key] ? ' fort' : '');
+    merke.title = `Fravær ført i det andre systemet — ${DAYS_LONG[ukedagIndeks(d)].toLowerCase()} ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+
+    const boks = document.createElement('input');
+    boks.type = 'checkbox';
+    boks.checked = !!fravaerFort[key];
+    boks.dataset.dato = key;
+    boks.addEventListener('change', () => settFravaerFort(key, boks.checked, merke));
+
+    const tekst = document.createElement('span');
+    tekst.className = 'fravaer-tekst';
+    tekst.textContent = 'Fravær ført';
+
+    merke.appendChild(boks);
+    merke.appendChild(tekst);
+    celle.appendChild(merke);
+    el.appendChild(celle);
+  });
+}
+
+// Bare dager som ER ført lagres. En dag som mangler i objektet er «ikke
+// ført», som også er utgangspunktet — da vokser ikke nøkkelen med en
+// oppføring per skoledag i året.
+//
+// Merk at det ikke kalles render() her. En full rendring ville bygget
+// kalendergridet på nytt og kastet rulleposisjonen, og alt som trenger å
+// endre seg er klassen på merket.
+function settFravaerFort(dato, pa, merke) {
+  if (pa) fravaerFort[dato] = true;
+  else    delete fravaerFort[dato];
+  if (merke) merke.classList.toggle('fort', pa);
+  saveToStorage();
+}
+
+// ── Oversikt: hva mangler? ──
+// Et rullende vindu på tre uker, ikke hele skoleåret.
+//
+// Grunnen er at haken ble innført 19. august 2026. Ser oversikten lenger
+// tilbake enn det, dukker hver eneste skoledag siden august 2025 opp som
+// «mangler» — som er formelt sant og praktisk verdiløst: fraværet *er*
+// ført, det er bare ikke huket av her. Et rullende vindu løser det uten
+// at appen må lagre når funksjonen ble slått på, og gamle dager faller ut
+// av seg selv.
+//
+// I dag er ikke med. Lista er ment som «noe jeg gikk glipp av», og dagen
+// i dag ser du uansett i kalenderen.
+const FRAVAER_TILBAKE = 21;
+
+function fravaerSomMangler() {
+  const ut = [];
+  const start = new Date(TODAY); start.setHours(0,0,0,0);
+  for (let i = 1; i <= FRAVAER_TILBAKE; i++) {
+    const dag = new Date(start);
+    dag.setDate(dag.getDate() - i);
+    if (!skalFoereFravaer(dag)) continue;
+    const key = isoDate(dag);
+    if (!fravaerFort[key]) ut.push(key);
+  }
+  return ut;   // nyeste først
+}
+
+function renderFravaerOversikt() {
+  const el = document.getElementById('fravaerOversikt');
+  if (!el) return;
+  const mangler = fravaerSomMangler();
+
+  if (!mangler.length) {
+    el.innerHTML = '<div class="fravaer-tom">Ingenting mangler de siste tre ukene.</div>';
+    return;
+  }
+
+  el.innerHTML = '';
+  mangler.forEach(key => {
+    const d = new Date(key + 'T00:00:00');
+    const knapp = document.createElement('button');
+    knapp.className = 'fravaer-mangler-rad';
+    knapp.textContent = `${DAYS_SHORT[ukedagIndeks(d)]} ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
+    knapp.title = 'Gå til denne dagen i kalenderen';
+    knapp.onclick = () => goToDayView(key);
+    el.appendChild(knapp);
+  });
 }
 
 // Etiketten skrives i to varianter i hver sin span. CSS velger hvilken som
@@ -2287,7 +2433,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 function exportData(medNavn = true) {
   const data = {
     events, todos, planfestetTid, overtid, lessonData, topicsBySubject,
-    fridager, skoleaar,
+    fridager, skoleaar, fravaerFort,
     allStudents: elevlisteUtenNavn()
   };
   if (medNavn) data.studentNames = navnekart();
@@ -2327,6 +2473,7 @@ function importData() {
         if (data.topicsBySubject) localStorage.setItem('lp_topicsBySubject', JSON.stringify(data.topicsBySubject));
         if (data.fridager)        localStorage.setItem('lp_fridager',        JSON.stringify(data.fridager));
         if (data.skoleaar)        localStorage.setItem('lp_skoleaar',        JSON.stringify(data.skoleaar));
+        if (data.fravaerFort)     localStorage.setItem('lp_fravaerFort',     JSON.stringify(data.fravaerFort));
 
         if (data.allStudents) {
           // Elevliste lagres alltid uten navn
@@ -2386,6 +2533,7 @@ function renderMinSide() {
   document.getElementById('skoleaarStart').value = skoleaar.start;
   document.getElementById('skoleaarSlutt').value = skoleaar.slutt;
   renderSkolerute();
+  renderFravaerOversikt();
   renderPapirkurv();
   renderSynkKopiStatus();
   // Synk- og publiseringsstatus bor i sync.js, som kan mangle
@@ -2690,6 +2838,7 @@ function saveToStorage() {
     localStorage.setItem('lp_studentNames',    JSON.stringify(navnekart()));
     localStorage.setItem('lp_fridager',        JSON.stringify(fridager));
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
+    localStorage.setItem('lp_fravaerFort',     JSON.stringify(fravaerFort));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
     // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
@@ -2818,6 +2967,15 @@ function loadFromStorage() {
     const storedSkoleaar = localStorage.getItem('lp_skoleaar');
     if (storedSkoleaar) {
       skoleaar = JSON.parse(storedSkoleaar);
+    }
+
+    // Fravær ført i det andre systemet. Objektet må være et objekt — en
+    // ødelagt eller gammel verdi skal gi tom tilstand, ikke krasje
+    // renderingen av hele kalenderen.
+    const storedFravaer = localStorage.getItem('lp_fravaerFort');
+    if (storedFravaer) {
+      const lest = JSON.parse(storedFravaer);
+      if (lest && typeof lest === 'object' && !Array.isArray(lest)) fravaerFort = lest;
     }
 
     const storedPapirkurv = localStorage.getItem('lp_papirkurv');
