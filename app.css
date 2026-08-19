@@ -158,6 +158,34 @@
     .offwork-block { position: absolute; left: 0; right: 0; background: rgba(34,32,29,0.04); pointer-events: none; z-index: 1; }
     .work-block    { position: absolute; left: 0; right: 0; border-left: 3px solid rgba(47,96,118,0.32); pointer-events: none; z-index: 1; }
 
+    /* ── Lunsjskillet ──
+       Deler dagen i formiddag og ettermiddag. Fyller hele luka mellom to
+       skoletimer, i en varm tone — bevisst en annen kulør enn den
+       accent-tonede .period-band og den nøytralt grå .offwork-block, så
+       de tre flatene ikke kan forveksles.
+       Kantene over og under er selve skillet; flaten alene ville bare
+       blitt enda en grå stripe i et rutenett som har flere fra før.
+       Ligger over de andre flatene og under hendelsene (.event z-index 5),
+       så en time som krysser lunsjen dekker båndet framfor å deles av det.
+       Plasseringen kommer fra lunsjLuke() i app.js — den lengste luka
+       mellom to skoletimer — ikke fra et klokkeslett skrevet inn her. */
+    .lunsj-band {
+      position: absolute; left: 0; right: 0;
+      background: rgba(154,100,40,0.07);
+      border-top: 1px solid var(--border-strong);
+      border-bottom: 1px solid var(--border-strong);
+      box-sizing: border-box;
+      pointer-events: none; z-index: 2;
+    }
+    .lunsj-merke {
+      position: absolute; left: 0; right: 0;
+      text-align: right; padding-right: 8px;
+      font-size: 9px; font-weight: 500; letter-spacing: 0.3px;
+      color: var(--text-muted);
+      transform: translateY(-5px);
+      pointer-events: none;
+    }
+
     .event {
       position: absolute; left: 5px; right: 5px; border-radius: 5px; padding: 5px 8px;
       font-size: 12px; overflow: hidden; cursor: pointer; transition: filter 0.15s;
@@ -263,6 +291,25 @@
 
     /* ── EVENT FORM MODAL ── */
     .event-modal { background: var(--bg); border-radius: 12px; width: 480px; height: 90vh; box-shadow: var(--skygge-modal); display: flex; flex-direction: column; overflow: hidden; }
+    /* Breddevarianter. Sto tidligere som inline style i index.html, der de
+       overstyrte mobilblokka nedenfor — inline stil slår enhver regel i
+       stilarket. Som klasser lar de seg overstyre der de skal. */
+    .event-modal--smal   { width: 420px; }
+    .event-modal--medium { width: 520px; }
+
+    /* ── GJØREMÅLSSKJEMA ──
+       Beskrivelsen skal ta plassen som blir til overs. Modalen er allerede
+       90vh høy (100dvh på mobil), men textareaen sto på min-height 90px og
+       lot resten stå tom.
+       .modal-body og .form-section er flex-kolonner fra før; her kobles
+       kjeden videre ned til feltet. De andre feltene har flex-grow 0 som
+       standard og beholder sin naturlige høyde.
+       resize er slått av her fordi håndtaket ellers kjemper mot flex:
+       drar man i det, settes en fast høyde som veksten så overstyrer ved
+       neste åpning. */
+    #todoFormOverlay .form-section  { flex: 1; min-height: 0; }
+    #todoFormOverlay .todo-tekst-felt { flex: 1; min-height: 0; }
+    #todoFormOverlay .todo-tekst-felt textarea { flex: 1; min-height: 90px; resize: none; }
 
     /* ── PLAN MODAL ── */
     .plan-modal { background: var(--bg); border-radius: 12px; width: 500px; max-height: 90vh; box-shadow: var(--skygge-modal); display: flex; flex-direction: column; overflow: hidden; }
@@ -760,6 +807,9 @@
   .event-sub     { display: none; }   /* rom og trinn er detaljer for dagsvisning */
   .event-badge   { font-size: 8px; padding: 0 3px; }
   .time-tick     { font-size: 9px; padding-right: 4px; }
+  /* Tidsaksen er 32 px her; «Lunsj» får ikke plass. Streken i kolonnene
+     står igjen alene, og den er hele poenget. */
+  .lunsj-merke   { display: none; }
   /* Kolonnen er ~70 px bred; da må faget få hele tittellinja.
      Sonene bak timene viser rytmen uansett. */
   .event-time-nr { display: none; }
@@ -793,8 +843,13 @@
   /* ── Modaler ── */
   .overlay { padding: 0; }
 
-  /* Store arbeidsmodaler tar hele skjermen */
+  /* Store arbeidsmodaler tar hele skjermen.
+     Breddevariantene må stå her i tillegg til .event-modal: de er like
+     spesifikke, og uten dem hviler overstyringen bare på at denne blokka
+     står sist i fila. Det er for skjørt til å bygge på. */
   .event-modal,
+  .event-modal--smal,
+  .event-modal--medium,
   .plan-modal,
   .elevlogg-modal {
     width: 100%;

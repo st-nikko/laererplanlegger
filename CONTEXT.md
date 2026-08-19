@@ -31,13 +31,14 @@ Lærerplanlegger/
 
 | Seksjon | Innhold |
 |---------|---------|
-| CONFIG  | `PERIODS` (skoletimetabell), gridkonstanter, `DAYS_*`, `MONTHS_*`, `TODAY` (hardkodet), navigasjonstilstand |
+| CONFIG  | `PERIODS` (skoletimetabell), gridkonstanter, `DAYS_*`, `MONTHS_*`, `TODAY` (hardkodet), navigasjonstilstand, `lunsjLuke()` |
 | COLORS  | `COLOR_POOL`, `SPECIAL_COLORS`, `getSubjectColor()`, `eventColor()` |
 | STUDENTS + LESSON DATA | `allStudents[]` (`{id,navn,trinn,startDato}`), `lessonData{}`, `topicsBySubject{}`, seed-data |
 | ELEVNAVN | `elevLapp()`, `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes. `elevLapp()` er eneste kilde til hvilke fire tegn som vises: `fallbackNavn()` bygger på den, og `elevLappHtml()` viser den ved siden av ekte navn i elevtabellen. Siden navnene ikke synkes, er denne lappen gjenopprettingsveien — man leser den av på en enhet som har navnene og skriver dem inn på en som mangler dem. Endres utsnittet ett sted, må det endres begge; `pseudonymisering.test.js` vokter det |
 | EVENTS + WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `getWorkTimeForDate()` |
 | HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `calcSFS()`, `parseStudentId()`, `calcAttendance()` |
-| RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene), `renderLegend()` |
+| RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene, `.lunsj-band` i hver kolonne), `renderLegend()` |
+| LUNSJ | `lunsjLuke()` i CONFIG finner den **lengste luka mellom to skoletimer** i `PERIODS` — det er lunsjen, og den er ikke registrert noe annet sted. `renderGrid()` tegner et `.lunsj-band` som fyller luka i hver dagkolonne, og et `.lunsj-merke` («Lunsj») i tidsaksen; merket skjules på mobil, der aksen er 32 px. Båndet er en **varm tone med kant over og under** — bevisst en annen kulør enn den accent-tonede `.period-band` og den nøytralt grå `.offwork-block`, så de tre flatene ikke kan forveksles. Første forsøk var én strek midt i luka; den forsvant i et rutenett som har streker hvert kvarter fra før. Skriv aldri inn `11:05`/`11:35` noe sted: `PERIODS` skal forbli eneste kilde til klokkeslett, slik at skillet flytter seg hvis skolen endrer timeplanen. `tests/lunsj.test.js` regner ut fasiten uavhengig og slår ut på en hardkodet tid. Båndet har `z-index: 2` — over de andre flatene, under `.event`, slik at en time som krysser lunsjen dekker det framfor å bli delt i to |
 | SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
 | PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
@@ -46,10 +47,10 @@ Lærerplanlegger/
 | ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
-| VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning), `changeNav()`, `goToDayView()` |
+| VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning, **og lukker gjøremålspanelet når `erSmalSkjerm()`** — på mobil er det et overlegg over hele kalenderen, så visningen skiftet bak det; på PC er det en kolonne og skal bli stående), `changeNav()`, `goToDayView()` |
 | MONTH VIEW | `renderMonthView()` |
 | SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()` |
-| MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, click-outside-lukking |
+| MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, modallukking — se «Hvordan modaler lukkes» nedenfor |
 | ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
 | ARBEIDSTIDSKALENDER | `arbeidstidForDato()`, `slaaSammenIntervaller()`, `fraDesimal()`, `byggArbeidstidICS()` — viser bare *når* man er opptatt, aldri hva. Grunnlag: planfestet tid eller registrert overtid, utvidet av hendelser. Blokker slås sammen kun når de overlapper eller møtes, så et kveldsmøte blir en egen blokk framfor å strekke arbeidsdagen. Helger tas med bare når det ligger en hendelse der. Alle blokker heter «På jobb» |
 | MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC |
@@ -69,6 +70,27 @@ Lærerplanlegger/
 - **Rutenettet starter 07:30, ikke på en hel time.** `GRID_START_H = 7.5`. Alt som skal ligge på et klokkeslett må derfor plasseres med `(tid - GRID_START_H) * PX_PER_HOUR`, aldri ved å stable elementer eller telle `h++` fra `GRID_START_H`. Sistnevnte var årsaken til at tidsaksen sto blank fram til økt 19: løkka gikk 7.5, 8.5, 9.5 … og `Number.isInteger(h)` slo aldri til, så alle etikettene ble tom streng. Samme feil gjorde at de heltrukne strekene havnet på halvtimene.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
 - **`weekday` er 0-basert med mandag som 0**, og er *eneste* felt `eventsForDate()` bruker for gjentakende hendelser — `date` ignoreres da. Merk at skjemaet samler ukedagen på to måter: undervisning og vikar velger den i `dagSelect`, mens møter velger en dato og ukedagen utledes med `getDayOfWeekFromDate()`. Fram til økt 19 var den utledningen en hardkodet `0`, så alle gjentakende møter havnet på mandag. `loadFromStorage()` reparerer gamle møter ut fra datoen deres, og `tests/gjentakende-moter.test.js` vokter begge deler.
+
+### Hvordan modaler lukkes
+
+Endret 19. august 2026. Klikk utenfor lukket tidligere **alle** overlegg.
+På arbeidsmodalene — der man skriver — var det for lett å bomme, og et
+bomklikk kostet det man hadde skrevet.
+
+Nå gjelder to regler:
+
+- **Klikk utenfor lukker bare små dialoger.** Regelen leses av markupen,
+  ikke av en liste med id-er: har overlegget en `.simple-modal` eller
+  `.after-save-modal` inni seg, er det en liten dialog der ingenting går
+  tapt. Legger du til en modal senere, **arver den oppførselen fra hvilken
+  klasse du gir den** — `.event-modal`, `.plan-modal`, `.elevlogg-modal`
+  og `.modal` blir stående ved klikk utenfor.
+- **Escape lukker det øverste åpne overlegget.** «Øverste» = sist i DOM-en
+  av dem med klassen `open`. Uten den ville musa vært eneste vei ut av
+  arbeidsmodalene.
+
+`tests/modallukking.test.js` vokter begge, og i tillegg at hver modal
+fortsatt har en knapp som lukker den — Escape alene er ikke nok.
 
 ---
 

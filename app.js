@@ -30,6 +30,24 @@ function periodeFraKlokkeslett(dec) {
   return beste;
 }
 
+// Lunsjen er ikke registrert noe sted — den er ganske enkelt den lengste
+// luka mellom to skoletimer. Regn den ut framfor å skrive inn 11:05–11:35:
+// da flytter skillet seg av seg selv om skolen endrer timeplanen, og
+// PERIODS forblir eneste sted klokkeslettene står.
+// Returnerer { fra, til, midt } i desimaltimer, eller null hvis PERIODS
+// har færre enn to timer.
+function lunsjLuke() {
+  let beste = null;
+  for (let i = 0; i < PERIODS.length - 1; i++) {
+    const fra = toDec(PERIODS[i].end);
+    const til = toDec(PERIODS[i + 1].start);
+    if (fra == null || til == null) continue;
+    if (!beste || til - fra > beste.til - beste.fra) beste = { fra, til };
+  }
+  if (!beste) return null;
+  return { ...beste, midt: (beste.fra + beste.til) / 2 };
+}
+
 // Ukedag 0–6 med mandag først (Date bruker søndag = 0)
 function ukedagIndeks(d) {
   return d.getDay() === 0 ? 6 : d.getDay() - 1;
@@ -627,6 +645,19 @@ function renderGrid() {
     tick.textContent=`${String(h).padStart(2,'0')}:00`;
     axis.appendChild(tick);
   }
+
+  // Lunsjskillet. Streken tegnes i hver dagkolonne under; her settes bare
+  // etiketten i tidsaksen, så streken ikke blir en gåte. Etiketten skjules
+  // på mobil, der aksen er 32 px bred og ikke har plass til et ord.
+  const lunsj = lunsjLuke();
+  if (lunsj) {
+    const merke = document.createElement('div');
+    merke.className = 'lunsj-merke';
+    merke.style.top = ((lunsj.midt - GRID_START_H) * PX_PER_HOUR) + 'px';
+    merke.textContent = 'Lunsj';
+    axis.appendChild(merke);
+  }
+
   grid.appendChild(axis);
 
   days.forEach((d,i)=>{
@@ -662,6 +693,19 @@ function renderGrid() {
       l.className='grid-line'+(Number.isInteger(t)?'':' half');
       l.style.top=((t-GRID_START_H)*PX_PER_HOUR)+'px';
       col.appendChild(l);
+    }
+
+    // Lunsjskillet: et bånd som fyller hele luka, med kant over og under.
+    // Første forsøk var én strek midt i luka. Den var for svak til å gjøre
+    // jobben — i et rutenett som allerede har streker hvert kvarter, ble
+    // enda en bare enda en. Flaten sier «her skjer det noe annet», og
+    // kantene gir skillet mellom formiddag og ettermiddag.
+    if (lunsj) {
+      const lb = document.createElement('div');
+      lb.className = 'lunsj-band';
+      lb.style.top = ((lunsj.fra - GRID_START_H) * PX_PER_HOUR) + 'px';
+      lb.style.height = ((lunsj.til - lunsj.fra) * PX_PER_HOUR) + 'px';
+      col.appendChild(lb);
     }
 
     // Work shading
@@ -1844,6 +1888,14 @@ function toggleVisArkiverte() {
 // ────────────────────────────────────────────
 function setView(v) {
   currentView = v;
+  // På mobil er gjøremål et fast overlegg over hele kalenderen
+  // (#sidebarContent er position: fixed i mobilblokka). Byttet man visning
+  // mens det sto åpent, skiftet visningen *bak* panelet — det så ut som
+  // ingenting skjedde, og panelet måtte skjules manuelt.
+  // På PC er det en kolonne ved siden av kalenderen og er ikke i veien for
+  // noe, så der skal den bli stående. Derfor erSmalSkjerm(), ikke bare
+  // sidebarVisible.
+  if (sidebarVisible && erSmalSkjerm()) toggleSidebar();
   // Markør for CSS: dagsvisning har én kolonne og dermed hele skjermbredden
   // til rådighet, og skal ikke krympes som om den var en av fem.
   const wrapper = document.getElementById('weekDayView');
@@ -2299,7 +2351,34 @@ function importData() {
   };
   input.click();
 }
-document.querySelectorAll('.overlay').forEach(el=>{ el.addEventListener('click',e=>{if(e.target===el)closeOverlay(el.id);}); });
+// ── Hvordan modaler lukkes ──
+// Klikk utenfor lukket tidligere *alle* overlegg. På arbeidsmodalene —
+// hendelse, timeplan, elevlogg, gjøremål — er det for lett å bomme, og et
+// bomklikk kostet det man hadde skrevet. Nå gjelder det bare de små
+// dialogene, der ingenting går tapt: planfestet tid, overtid og
+// «Vil du legge inn plan?».
+//
+// Regelen leses av markupen framfor å være en liste med id-er: har
+// overlegget en .simple-modal eller .after-save-modal inni seg, er det en
+// liten dialog. Legger du til en modal senere, arver den oppførselen fra
+// hvilken klasse du gir den, og denne linja trenger ikke oppdateres.
+const SMAADIALOG = '.simple-modal, .after-save-modal';
+document.querySelectorAll('.overlay').forEach(el=>{
+  if (!el.querySelector(SMAADIALOG)) return;
+  el.addEventListener('click',e=>{if(e.target===el)closeOverlay(el.id);});
+});
+
+// Escape lukker det øverste åpne overlegget. Uten den ville musa vært
+// eneste vei ut av arbeidsmodalene etter endringen over — × og Avbryt
+// finnes i alle ni, men de krever at man sikter.
+// «Øverste» = sist i DOM-en av de åpne. Alle overlegg har samme z-index,
+// og i praksis står sjelden mer enn ett åpent om gangen.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const apne = document.querySelectorAll('.overlay.open');
+  if (!apne.length) return;
+  closeOverlay(apne[apne.length - 1].id);
+});
 // ────────────────────────────────────────────
 // MIN SIDE (innstillinger som fullskjerm-visning)
 // ────────────────────────────────────────────

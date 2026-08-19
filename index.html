@@ -717,7 +717,7 @@
      TODO FORM MODAL
 ══════════════════════════════════════ -->
 <div class="overlay" id="todoFormOverlay">
-  <div class="event-modal" style="width:420px">
+  <div class="event-modal event-modal--smal">
     <div class="modal-hdr">
       <span class="modal-hdr-title" id="todoFormTitle">Nytt gjøremål</span>
       <button class="modal-close" onclick="closeOverlay('todoFormOverlay')">x</button>
@@ -728,7 +728,9 @@
           <label>Tittel</label>
           <input type="text" id="todoTittelInput" placeholder="Kort tittel på gjøremålet">
         </div>
-        <div class="form-field">
+        <!-- Beskrivelsen tar plassen som blir til overs i modalen.
+             Klassen er kroken CSS-en henger den veksten på. -->
+        <div class="form-field todo-tekst-felt">
           <label>Beskrivelse (valgfritt)</label>
           <textarea id="todoTextInput" rows="3" placeholder="Utfyllende beskrivelse…"></textarea>
         </div>
@@ -764,7 +766,7 @@
 
 <!-- SKJULTE GJØREMÅL MODAL -->
 <div class="overlay" id="skjulteGjøremålOverlay">
-  <div class="event-modal" style="width:520px">
+  <div class="event-modal event-modal--medium">
     <div class="modal-hdr">
       <span class="modal-hdr-title">Skjulte gjøremål</span>
       <button class="modal-close" onclick="closeOverlay('skjulteGjøremålOverlay')">x</button>

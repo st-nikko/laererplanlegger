@@ -1,4 +1,5 @@
-// «I dag» og logoen som vei tilbake til kalenderen.
+// Navigasjon mellom visningene: «I dag» og logoen som vei tilbake til
+// kalenderen, og at gjøremålspanelet ikke blir stående i veien på mobil.
 const fs   = require('fs');
 const path = require('node:path').join(__dirname, '..') + '/';
 const { JSDOM } = require('jsdom');
@@ -21,7 +22,9 @@ function lagStore(seed = {}) {
   };
 }
 
-function lagDom() {
+// smal = true later erSmalSkjerm() svare ja. jsdom har en matchMedia som
+// alltid svarer nei, så uten denne stubben tester vi bare PC-oppførselen.
+function lagDom({ smal = false } = {}) {
   const dom = new JSDOM(htmlInline, {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
@@ -30,6 +33,11 @@ function lagDom() {
       if (!w.crypto) w.crypto = {};
       w.crypto.randomUUID = () => 'uuid-test';
       w.alert = () => {}; w.confirm = () => true;
+      w.matchMedia = q => ({
+        matches: smal && /max-width:\s*767px/.test(q),
+        media: q, addListener() {}, removeListener() {},
+        addEventListener() {}, removeEventListener() {}
+      });
     }
   });
   dom.window.hent = u => dom.window.eval(u);
@@ -127,8 +135,42 @@ test('erKalendervisning skiller riktig', () => {
   dom.window.close();
 });
 
+// ── Gjøremålspanelet på mobil ──────────────────────────────────
+// På mobil er #sidebarContent et fast overlegg over hele kalenderen.
+// Byttet man visning mens det sto åpent, skiftet visningen bak panelet og
+// det så ut som ingenting skjedde.
+
+test('gjøremål lukkes når du bytter visning på mobil', () => {
+  const dom = lagDom({ smal: true }); const w = dom.window;
+  const panel = w.document.getElementById('sidebarContent');
+
+  w.toggleSidebar();
+  sant(w.hent('sidebarVisible'), 'panelet skal være åpent til å begynne med');
+  sant(!panel.classList.contains('collapsed'), 'panelet skal være synlig');
+
+  w.setView('elever');
+  sant(!w.hent('sidebarVisible'), 'panelet skal lukkes ved visningsbytte');
+  sant(panel.classList.contains('collapsed'), 'panelet skal være skjult');
+  sant(!w.document.getElementById('menyGjoeremaal').classList.contains('active'),
+       'menymarkeringen skal følge med');
+  dom.window.close();
+});
+
+test('gjøremål blir stående på PC', () => {
+  // Der er panelet en kolonne ved siden av kalenderen, ikke et overlegg —
+  // å lukke det ved hvert visningsbytte ville vært et tap.
+  const dom = lagDom({ smal: false }); const w = dom.window;
+
+  w.toggleSidebar();
+  sant(w.hent('sidebarVisible'), 'panelet skal være åpent til å begynne med');
+
+  w.setView('elever');
+  sant(w.hent('sidebarVisible'), 'panelet skal bli stående på PC');
+  dom.window.close();
+});
+
 // ── Kjør ───────────────────────────────────────────────────────
-console.log('\nNavigasjon — vei tilbake til kalenderen\n');
+console.log('\nNavigasjon — visningsbytte og gjøremålspanelet\n');
 let alle = true;
 for (const [navn, fn] of tester) {
   try { fn(); console.log('  OK   ' + navn); }

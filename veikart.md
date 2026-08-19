@@ -10,60 +10,7 @@ etter.
 
 ---
 
-## 1. Forelesninger som egen hendelsestype
-
-**Idéen:** Nikolai begynner å studere ved siden av jobben og vil se
-forelesningene i samme kalender som undervisningen.
-
-**Status:** Utsatt til timeplanen for studiet er kjent. Uklart om
-forelesningene blir prioritert, og om de finnes i opptak — er de i opptak,
-er det kanskje ikke en kalenderhendelse som trengs.
-
-### Hva som må gjøres
-
-| Sted | Endring |
-|------|---------|
-| `SPECIAL_COLORS` + `eventColor()` i app.js | Ny farge. Paletten er bygget i LCH med kategorier på lyshet 94,5 — se «Visuell identitet» i CONTEXT.md før du velger en, og mål ΔE mot de elleve som finnes |
-| `index.html`, fanene i hendelsesskjemaet | Fjerde `.type-tab` ved siden av Undervisning / Møte / Vikar |
-| `setFormCategory()` i app.js | Gren for den nye kategorien |
-| `eventSubLabel()` i app.js | Egen undertittel — trinn og rom gir ikke mening for en forelesning |
-| `skoletimerForHendelse()` i app.js | Må utelate kategorien, ellers blir en forelesning 13:30 hetende «6. time» |
-| `byggICS()` i app.js, linje med `.filter(ev => ev.category === 'undervisning')` | Må slippe gjennom den nye kategorien hvis forelesningene skal nå Outlook |
-
-Anslag: en kveld.
-
-### Avklart
-
-- **Skoleruta er ikke et problem.** Studiet følger samme skolerute, så at
-  `eventsForDate()` skjuler alt utenfor skoleåret og på ferie-/fridager
-  gjør ingenting. Dette var den største bekymringen, og den falt bort.
-- **Rutenettet holder.** Ingen forelesninger på kveldstid eller i helg, så
-  `GRID_END_H = 16.0` og fem kolonner mandag–fredag er nok. Dette var det
-  klart dyreste punktet, og det falt også bort.
-- **«På jobb» er greit.** `arbeidstidForDato()` folder inn alle hendelser
-  uten kategorifilter, så forelesninger dukker automatisk opp som
-  «På jobb»-blokker i familiekalenderen. Ønsket oppførsel — ikke rør det.
-- **Skoletimenummer er uansett ikke universelt.** Møter med eksterne følger
-  heller ikke skolens timeplan, så at forelesninger mangler timenummer er
-  konsistent med resten.
-
-### Fortsatt åpent
-
-**Hva skal stå i tittelen i undervisningskalenderen?** De to ICS-feedene har
-ulikt publikum: `undervisning` deles med kollegaer og ledelse og bruker
-`icsTittel()`, som er selve `ev.title`. `jobb` deles med familien og sier
-bare «På jobb», aldri hva.
-
-Slipper man forelesninger inn i undervisningsfeeden med emnenavnet, blir det
-synlig for alle som abonnerer at Nikolai studerer ved siden av jobben, og
-hvilket emne. Det kan være helt greit — men det er en avgjørelse, ikke en
-bieffekt. Alternativet er en generisk tittel for kategorien, «Opptatt» eller
-«Studier», altså samme prinsipp som jobbkalenderen allerede bruker, men per
-kategori.
-
----
-
-## 2. «Husk til neste time»
+## 1. «Husk til neste time»
 
 **Idéen:** Et felt i timeplanmodalen, fylt ut mens man fører nærvær, som
 vises igjen i den kommende timen i samme fag.
@@ -77,6 +24,18 @@ den er liten.
 `lessonKey()`, med `{tema, notes, attendance, studentNotes}`. Et felt til er
 én linje i `saveLessonPlan()` og én i `openLessonPlan()`, og det synkes
 automatisk siden hele `lessonData` går med.
+
+**Men det er én linje du ikke kan glemme.** `saveLessonPlan()`
+(app.js:1331) bygger et *helt nytt* objekt:
+
+```js
+setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes });
+```
+
+Alt som ikke står i den literalen forsvinner ved neste lagring. Et nytt
+felt må inn der, ellers slettes det stille første gang timen lagres på
+nytt — også om det ble satt et helt annet sted i koden. Dette gjelder alle
+nye felt i timeplanmodalen, ikke bare dette.
 
 ### Det som gjør det vanskelig
 
@@ -120,7 +79,7 @@ relevant. Skrives det i siste time før sommeren, skjer det bare ingenting.
 
 ---
 
-## 3. Elev-ID synlig ved siden av navnet ✅
+## 2. Elev-ID synlig ved siden av navnet ✅
 
 **Idéen:** Vis «Kari Nordmann 4f2a» i elevlista, ikke bare navnet.
 
@@ -168,42 +127,72 @@ skjermene overens, og hele poenget faller.
 
 ---
 
-## 4. «Avlyst» og «ingen elever møtt»
+## 3. «Utgått», «ingen elever møtt» og timer uten elever
 
-**Idéen:** Kunne markere at en time ikke ble gjennomført, uten å slette den.
+**Idéen:** Kunne markere at en time ikke ble gjennomført uten å slette den
+— og se i kalenderen når en time står uten elever.
 
 **Status:** Ønsket. Tellingen av undervisningstimer, som er den egentlige
-motivasjonen, er utsatt — men statusene er nyttige i seg selv.
+motivasjonen bak statusene, er utsatt — men de er nyttige i seg selv.
 
-### Hvorfor to statuser, ikke én
+*Dette var to poster fram til 19. august 2026. De ble slått sammen fordi
+de handler om samme spørsmål sett fra hver sin kant: hva betyr det at en
+time står tom, og hvordan vises det?*
 
-De betyr forskjellige ting når timer skal telles: **en avlyst time
-underviste du ikke i, mens en time der ingen møtte var du der.** Skal
-timeregnskapet bli riktig, trengs begge. Nikolai foretrekker «utgått»
-framfor «avlyst» som ordvalg.
+### Tre tilstander, ikke én
 
-«Ingen elever møtt» bør antakelig kunne utledes framfor å registreres: er
-alle krysset av som fraværende i `attendance`, vet appen det allerede.
+De ser like ut i kalenderen og betyr helt forskjellige ting:
+
+| Tilstand | Hva det betyr | Hvor det bor |
+|----------|---------------|--------------|
+| **Utgått** | Timen ble ikke gjennomført. Du underviste ikke. | `lessonData`, per `(hendelse-id, dato)` |
+| **Ingen møtte** | Timen gikk, du var der, men ingen elever kom. | Kan **utledes** — er alle krysset av som fraværende i `attendance`, vet appen det allerede |
+| **Ingen elever registrert** | Timen har ingen elever knyttet til seg i det hele tatt. Sier ingenting om hva som skjedde. | `ev.students` er tom — ingen ny data |
+
+Skal timeregnskapet bli riktig, trengs de to første hver for seg: **en
+utgått time underviste du ikke i, mens en time der ingen møtte var du
+der.** Nikolai foretrekker «utgått» framfor «avlyst» som ordvalg.
+
+Den tredje er noe annet: den handler om at *lista* er ufullstendig, ikke
+om at timen var det.
 
 ### Hva som må gjøres
 
-Statusen hører hjemme på timeinstansen, ikke på hendelsen — en fast time i
-`events[]` gjentar seg, og det er den enkelte datoen som utgår. `lessonData`
-er allerede én post per `(hendelse-id, dato)` og er derfor riktig sted.
-Visning i kalenderen må vise det tydelig, for eksempel gjennomstreket eller
+**Statusene** hører hjemme på timeinstansen, ikke på hendelsen — en fast
+time i `events[]` gjentar seg, og det er den enkelte datoen som utgår.
+`lessonData` er allerede én post per `(hendelse-id, dato)` og er derfor
+riktig sted. Visning i kalenderen må være tydelig: gjennomstreket eller
 nedtonet blokk.
+
+**Merket for «ingen elever registrert»** er billigere og uavhengig:
+`ev.category === 'undervisning' && !(ev.students||[]).length` i
+`renderGrid()` (app.js:689–702), tegnet som en `.event-badge`-variant
+eller et hjørneelement à la `.event-plan-dot`.
+
+Ikonet bør være inline SVG i samme Feather-stil som menyikonene i
+`index.html` — 24-rutenett, `stroke="currentColor"`, `stroke-width="2"`.
+Appen har ingen emoji-ikoner, og et unntak ville synes.
+
+I `renderMonthView()` (app.js:1942) er `.month-event-pill` ~11 px høy; der
+får neppe et ikon til plass.
 
 ### Sammenheng
 
-Dette er forutsetningen for å gjøre noe med `calcSFS()`, som i dag er død
-kode: funksjonen kalles ikke fra noe sted og returnerer hardkodede tall
-(`year: 412`, `teach: 186`). Enten bygges den på ekte data — der disse
-statusene inngår — eller så bør den slettes, slik at den ikke lurer den som
-leser koden senere.
+Statusene er forutsetningen for å gjøre noe med `calcSFS()`, som i dag er
+død kode: funksjonen kalles ikke fra noe sted og returnerer hardkodede
+tall (`year: 412`, `teach: 186`). Enten bygges den på ekte data — der
+disse statusene inngår — eller så bør den slettes, slik at den ikke lurer
+den som leser koden senere.
+
+### Fortsatt åpent
+
+**Hvor mange timer mangler faktisk elever?** Er elevlistene ufullstendige,
+lyser hele uka opp og merket blir støy framfor informasjon. Tell før du
+bygger — er det mange, er problemet elevlistene, ikke merket.
 
 ---
 
-## 5. Papirkurv for slettede hendelser ✅
+## 4. Papirkurv for slettede hendelser ✅
 
 **Idéen:** Kunne angre en sletting.
 
@@ -245,7 +234,7 @@ slette reise mellom enhetene. Samme resonnement som for `lp_studentNames`.
 
 ---
 
-## 6. Sikkerhetsgjennomgang av Supabase-oppsettet ✅
+## 5. Sikkerhetsgjennomgang av Supabase-oppsettet ✅
 
 **Status: gjennomført 6. august 2026.** Offentlig registrering er slått av,
 og begge de to gjenstående punktene er verifisert:
@@ -324,7 +313,7 @@ men da må alle som abonnerer legge inn den nye adressen.
 
 ---
 
-## 7. Frist én uke etter møtet på gjøremål fra møtemodulen
+## 6. Frist én uke etter møtet på gjøremål fra møtemodulen
 
 **Idéen:** Et gjøremål opprettet fra møteskjemaet skal få frist én uke etter
 møtedatoen, framfor møtedatoen selv.
@@ -377,7 +366,7 @@ utover dette punktet.
 
 ---
 
-## 8. Nedtelling til neste ferie, og teller for skoledager
+## 7. Nedtelling til neste ferie, og teller for skoledager
 
 **Idéen:** Vise hvor mange dager det er til neste ferie, og hvor mange av
 skoleårets 190 dager som er gjennomført.
@@ -430,7 +419,7 @@ Anslag: en kveld, og det meste av den går til plasseringen.
 
 ---
 
-## 9. Gjentakende gjøremål
+## 8. Gjentakende gjøremål
 
 **Idéen:** Et gjøremål som kommer igjen — ukentlig, månedlig — uten at man
 må opprette det på nytt hver gang.
@@ -459,7 +448,7 @@ status, slettet}`. Ingen gjentakelse.
 ### Fortsatt åpent
 
 - **Hvilke intervaller?** Ukentlig og månedlig dekker antakelig alt. Blir
-  det flere, er det samme valg som venter i post 11 for møter, og de to
+  det flere, er det samme valg som venter i post 10 for møter, og de to
   bør velge samme form.
 - **Historikken forsvinner.** Med rullende frist finnes bare neste
   forekomst; man kan ikke se at gjøremålet ble gjort de fem foregående
@@ -471,7 +460,7 @@ status, slettet}`. Ingen gjentakelse.
 
 ---
 
-## 10. Trinn i den eksporterte undervisningskalenderen
+## 9. Trinn i den eksporterte undervisningskalenderen
 
 **Idéen:** Se hvilket trinn timen gjelder i Outlook, ikke bare fagnavnet.
 
@@ -493,7 +482,7 @@ kan gjenbrukes.
 ### Avklart
 
 - **Personvern er ikke et hinder.** Feeden er offentlig for den som har
-  adressen, og inneholder allerede fag, tid og rom — se post 6. Et trinn
+  adressen, og inneholder allerede fag, tid og rom — se post 5. Et trinn
   er ikke personidentifiserende.
 - **Enetimer er unntaket.** «Enetime · 8. trinn» snevrer inn hvem det
   gjelder på en måte «Enetime» ikke gjør, særlig på et lite trinn.
@@ -505,7 +494,7 @@ kan gjenbrukes.
 **Er det trinnet eller klassen som menes?** Ordet «gruppe» peker mot 8A,
 ikke mot 8. trinn. **Appen har ikke noe klassebegrep** — `events[]` har
 `trinn`/`trinns`, og Norsk med 8A og Norsk med 8C er identiske i
-datamodellen. Det er nøyaktig den mangelen post 2 står og venter på. Er
+datamodellen. Det er nøyaktig den mangelen post 1 står og venter på. Er
 det 8A som skal stå i Outlook, er dette ikke en endring i `icsTittel()`,
 men samme datamodellendring — og da bør de to tas sammen.
 
@@ -513,7 +502,7 @@ Anslag: 20 minutter for trinn. Klasse er en annen sak.
 
 ---
 
-## 11. Månedlige møter
+## 10. Månedlige møter
 
 **Idéen:** Et møte som går den første tirsdagen i måneden, uten at det må
 legges inn tolv ganger.
@@ -558,13 +547,13 @@ tredje måned, og verken uke- eller dagsvisningen har lørdag og søndag —
 - **Hva med «siste tirsdag»?** Måneder har fire eller fem tirsdager.
   Velger man «5.», forsvinner møtet i de fleste måneder. Enten støtt
   `'siste'` eksplisitt, eller sperr valget.
-- **Samme mekanikk som post 9.** Gjentakende gjøremål trenger det samme
+- **Samme mekanikk som post 8.** Gjentakende gjøremål trenger det samme
   intervallbegrepet. Tas de sammen, deler de én form; tas de hver for seg,
   blir det to.
 
 ---
 
-## 12. Flere fagfarger, og egen farge per trinn
+## 11. Flere fagfarger, og egen farge per trinn
 
 **Idéen:** Flere farger å velge mellom, og at samme fag kan ha ulik farge
 på ulike trinn.
@@ -624,7 +613,7 @@ blir raden lang.
 
 ---
 
-## 13. Merke for ny eller endret time
+## 12. Merke for ny eller endret time
 
 **Idéen:** Se i kalenderen at en time er ny eller endret siden forrige
 uke.
@@ -666,46 +655,20 @@ forrige versjon.
 
 ---
 
-## 14. Merke for timer uten elever
-
-**Idéen:** Et lite ikon — en person med strek over — på timer der det ikke
-er elever.
-
-**Status:** Ønsket. Må avklares hvilken av to tilstander det gjelder.
-
-### To ting kan menes, og de har ulikt svar
-
-**(a) Timen har ingen elever registrert.** `ev.students` er tom. Lett å
-oppdage: `ev.category === 'undervisning' && !(ev.students||[]).length`.
-Ett merke i `renderGrid()` ved siden av `badge`-linja (app.js:689).
-
-**(b) Ingen elever møtte opp.** Det er `attendance` i `lessonData`, og det
-står allerede som post 4 i dette dokumentet — sammen med begrunnelsen for
-hvorfor «avlyst» og «ingen møtte» er to forskjellige ting. Er det (b) som
-menes, hører merket hjemme der, ikke som en egen post.
-
-### Hvis det er (a)
-
-| Sted | Endring |
-|------|---------|
-| `renderGrid()` app.js:689–702 | Merke i `badge`-strengen, eller et hjørneelement som `.event-plan-dot` |
-| `app.css` | Ny klasse. Ikonet bør være inline SVG i samme Feather-stil som menyikonene i `index.html` (24-rutenett, `stroke="currentColor"`, `stroke-width="2"`) — appen har ingen emoji-ikoner, og et unntak ville synes |
-| `renderMonthView()` app.js:1942 | Valgfritt. `.month-event-pill` er ~11 px høy; et ikon til får neppe plass |
-
-### Fortsatt åpent
-
-**Hvor mange timer gjelder det?** Er elevlistene ufullstendige, lyser hele
-uka opp og merket blir støy framfor informasjon. Tell hvor mange
-undervisningstimer som faktisk mangler elever før du bygger det — er det
-mange, er problemet elevlistene, ikke merket.
-
----
-
-## 15. Klikk utenfor modalen skal ikke lukke den
+## 13. Klikk utenfor modalen skal ikke lukke den ✅
 
 **Idéen:** Det er for lett å bomme og miste det man har skrevet.
 
-**Status:** Ønsket, og det er én linje.
+**Status: gjennomført 19. august 2026.** Mellomtingen under ble valgt:
+klikk utenfor lukker fortsatt de små dialogene, men ikke arbeidsmodalene.
+Escape kom med, ellers hadde musa vært eneste vei ut på PC. Regelen leses
+av markupen — har overlegget en `.simple-modal` eller `.after-save-modal`
+inni seg, er det en liten dialog — så en modal lagt til senere arver
+oppførselen fra klassen den får. `tests/modallukking.test.js` vokter begge
+halvdeler og at ingen modal er blitt umulig å lukke; verifisert ved å
+skru av hver av dem med vilje og se testen slå ut.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Hva som må gjøres
 
@@ -749,63 +712,86 @@ Anslag: 20 minutter, inkludert Escape.
 
 ---
 
-## 16. Føring av vurdering
+## 14. Vurderinger som egen visning
 
-**Idéen:** Kunne føre vurdering i appen.
+**Idéen:** Et eget menypunkt med en oversikt over gjennomførte
+vurderinger, og hva som kom ut av dem.
 
-**Status:** Trenger avklaring før det kan kodes. Dette er det minst
-spesifiserte punktet i lista, og samtidig det mest sensitive.
+**Status:** Avklart 19. august 2026. Klar til å bygges — omfanget er
+bestemt, og det er vesentlig mindre enn det så ut som først.
 
-### Hva «vurdering» kan bety
+### Hva som ble bestemt
 
-Fire ting, med ulik pris og ulikt personvernsvar:
+Posten sto tidligere åpen fordi «vurdering» kan bety fire ting: karakter,
+underveisvurdering i tekst, registrering av at en vurderingssituasjon
+fant sted, eller halvårsvurdering. Nikolai har valgt:
 
-1. En **karakter** på en prøve eller innlevering.
-2. En **underveisvurdering i tekst** til eleven.
-3. En **registrering av at en vurderingssituasjon fant sted** — prøve,
-   innlevering, framføring — uten resultat.
-4. **Halvårsvurdering.**
+- **En oversikt, ikke et vurderingsverktøy.** Kun gjennomførte
+  vurderinger, listet.
+- **Vurderinger registreres i visningen selv**, ikke ved å merke en time.
+  De er altså egne oppføringer med dato, fag, trinn og tittel — ikke et
+  felt på `lessonData`. Det gjør at en innlevering uten en bestemt time
+  også kan føres.
+- **Resultat er én samlet notis per vurdering.** Fritekst: «snittet lavt
+  på oppgave 3», «må tas opp igjen». **Ikke per elev, og ingen
+  karakterer.**
+- **Kun desktop.** Se avsnittet om bunnmenyen under.
 
-### Hvor det ville ligget
+### Hva det betyr for personvernet
 
-`lessonData` er én post per `(hendelse-id, dato)` med `{tema, notes,
-attendance, studentNotes}`, altså allerede per elev per time. En vurdering
-per elev per time passer der uten modellendring.
+Dette var den tunge innvendingen mot posten slik den sto, og valgene over
+fjerner den. Uten elevkobling er en vurderingsoppføring ikke
+personopplysninger i det hele tatt — den sier at 8. trinn hadde
+norskprøve 12. september, ikke hvem som gjorde det bra.
 
-Men en vurdering hører oftere til **en oppgave** enn til en time, og
-oppgaven finnes ikke i modellen. Er det (1) eller (4) som menes, mangler
-det et objekt.
+Merk likevel at notisen er fritekst, og at fritekst kan inneholde navn
+brukeren selv skriver inn. Samme forbehold som for `notes` og
+`studentNotes`: pseudonymiseringen beskytter strukturen, ikke innholdet.
 
-### Personvern
+### Hva som må gjøres
 
-`lp_lessonData` står i `SYNK_NOKLER` og synkes kryptert, knyttet til
-elev-id og ikke navn — samme vern som `studentNotes` allerede har. Det
-åpner altså ikke noe nytt hull. Men karakterer er en annen kategori enn et
-timenotat, og skolens eget system er uansett fasit; det som lages her er
-en arbeidskopi. Det er verdt å ta stilling til bevisst framfor å la det
-følge med på kjøpet.
+| Sted | Endring |
+|------|---------|
+| `index.html`, `<nav id="sideMeny">` (linje 58–81) | Nytt menyelement med `desktop-kun`, inline SVG i Feather-stil som de andre |
+| `index.html` | Ny fullskjermvisning `#vurderingerView`, samme mønster som `#minSideView` |
+| `setView()` app.js:1845 | Ny gren + `menyVurderinger` i `menyStatus`-objektet |
+| `render()` app.js:470 | Vis/skjul den nye visningen |
+| Ny `renderVurderingerView()` | Liste sortert på dato, med skjema for å legge til |
+| `saveToStorage()` / `loadFromStorage()` app.js:2601 og 2630 | Ny nøkkel `lp_vurderinger` |
+| `SYNK_NOKLER` i sync.js:24 | **Må inn her**, ellers synkes ikke vurderingene til de andre enhetene |
+| `exportData()` app.js:2235 / `importData()` app.js:2257 | Ta med i backup, ellers mistes de ved gjenoppretting |
 
-### En fallgruve som gjelder alle nye felt i timeplanmodalen
+Datamodell, forslag: `{ id, dato, fag, trinn, tittel, notis }`.
 
-`saveLessonPlan()` (app.js:1331) bygger et **helt nytt objekt**:
+### Bunnmenyen er grunnen til desktop-kun
 
-```js
-setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes });
-```
+`#sideMeny` er sidemeny på PC og **bunnmeny på mobil**. Den har allerede
+fem elementer, hvorav Gjøremål (`#menyGjoeremaal`) bare ligger der fordi
+headeren ble for trang — se punkt 5 og 8 under «Kjente begrensninger» i
+CONTEXT.md. Et sjette element gir rundt 65 px per punkt på en 390 px
+skjerm.
 
-Alt som ikke står i den literalen forsvinner ved neste lagring. Nye felt —
-vurdering, lenker, fraværshaken i post 18 — må inn der, ellers slettes de
-stille første gang timen lagres på nytt. Det gjelder også felt satt et
-annet sted i koden.
+`desktop-kun` finnes allerede som klasse og skjules i mobilblokka, så
+løsningen er på plass. Men merk at det da er **to** menypunkter som ikke
+finnes på mobil-motsatt-vei — vurderinger mangler der, gjøremål finnes
+bare der. Blir det et tredje unntak, er bunnmenyen moden for å tenkes om
+framfor å lappes.
 
 ### Fortsatt åpent
 
-Alt over. **Dette punktet bør spesifiseres før det kodes**, ikke
-under.
+- **Skal vurderinger kunne knyttes til en time likevel?** Ikke nå. Men
+  hvis oversikten viser seg å bli ført sjelden, er grunnen antakelig at
+  den må fylles ut et sted man ikke er. Da er en snarvei fra
+  timeplanmodalen svaret — ikke en ny datamodell.
+- **Skal de vises i kalenderen?** En markør på dagen en vurdering ble
+  gjennomført ville gjort oversikten toveis. Billig hvis dataene først
+  finnes.
+
+Anslag: en kveld for visningen med lagring og synk.
 
 ---
 
-## 17. Mulighet for å legge inn lenker
+## 15. Mulighet for å legge inn lenker
 
 **Idéen:** Kunne lagre lenker — til fagplan, læreverk, møtelenke.
 
@@ -845,47 +831,97 @@ notatet.
 
 ---
 
-## 18. Hake for «fravær ført i det andre systemet»
+## 16. Hake for «fravær ført i det andre systemet»
 
 **Idéen:** En avkrysningsboks som bekrefter at fraværet er ført der det
-skal føres — utenfor denne appen.
+skal føres — i skolens eget system, utenfor denne appen.
 
-**Status:** Ønsket. Det klarest avgrensede punktet i lista.
+**Status:** Avklart 19. august 2026. Plasseringen er bestemt, og den er en
+annen enn posten opprinnelig foreslo.
+
+### Hva som ble bestemt
+
+- **Haken ligger nederst på den aktuelle dagen i ukesvisningen**, rett
+  over fargekodeforklaringen — ikke i timeplanmodalen.
+- **Den skal ikke blandes med appens egen fraværsføring.** `attendance` i
+  `lessonData` er hvem som var til stede i en time. Denne haken er noe
+  helt annet: at du har gjort unna papirarbeidet et annet sted.
+
+**Det endrer arkitekturen.** Posten sa tidligere at feltet hørte hjemme i
+`lessonData`, per `(hendelse-id, dato)`. Men **haken gjelder en hel dag**,
+ikke en enkelt time. Den trenger derfor sin egen lagring.
 
 ### Hva som må gjøres
 
-Feltet hører hjemme i `lessonData`, per `(hendelse-id, dato)` — samme sted
-som `attendance`, av samme grunn: det er den enkelte timen som er ført,
-ikke hendelsen.
-
 | Sted | Endring |
 |------|---------|
-| `index.html`, `planOverlay` (linje 649) | Avkrysningsboks i nærværsseksjonen, under `#attendanceList` |
-| `openLessonPlan()` app.js:1232 | Les `ld.fravaerFort` |
-| `saveLessonPlan()` app.js:1331 | **Skriv den inn i objektliteralen** — se fallgruven i post 16 |
-| `renderGrid()` app.js:681 | Valgfritt merke, så man ser hvilke timer som gjenstår |
+| Ny variabel `fravaerFort` | `{ 'YYYY-MM-DD': true }` — én nøkkel per dag, ikke per time |
+| `saveToStorage()` app.js:2601, `loadFromStorage()` app.js:2630 | Ny nøkkel `lp_fravaerFort` |
+| `SYNK_NOKLER` i sync.js:24 | **Må inn her.** Uten det ville PC-en ikke visst hva du huket av på telefonen |
+| `exportData()` app.js:2235 / `importData()` app.js:2257 | Ta med i backup |
+| `index.html`, `#weekDayView` (linje 100–105) | Ny rad etter `.calendar-scroll`, før legenden |
+| Ny `renderFravaerRad()`, kalt fra `render()` | Én avkrysningsboks per dagkolonne |
+
+### `renderDayHeaders()` er malen
+
+Raden må stå i flukt med kalenderkolonnene, og det er allerede løst ett
+sted: `renderDayHeaders()` (app.js:519) bygger en gridrad med
+`kalenderKolonner()` og en tom celle over tidsaksen. Kopier den formen,
+så følger raden både kolonnebreddene og dagsvisningen.
+
+Konkret:
+
+- `el.style.gridTemplateColumns = kalenderKolonner(currentView==='day' ? 1 : 5)`
+- Første celle er tom — den ligger over tidsaksen.
+- Deretter én celle per dag, med `isoDate(d)` som nøkkel.
+
+**Dagsvisningen må virke.** Der er det én kolonne, ikke fem. Bruker du
+`kalenderKolonner()` som over, kommer det gratis.
+
+**Månedsvisningen gjelder ikke.** Raden ligger inne i `#weekDayView`, som
+er skjult i månedsvisning, så den forsvinner av seg selv.
+
+**Ferier og fridager.** `erFridag(d)` og `erUtenforSkoleaar(d)` bør
+antakelig skjule haken — det er ikke noe fravær å føre på en dag uten
+timer. Samme sjekk som `renderGrid()` gjør i dag.
+
+### På mobil
+
+Kolonnene er ~70 px. Avkrysningsboksen får plass; en tekstetikett ved
+siden av gjør det ikke. Sett `title` på boksen og la den stå alene, slik
+`.event-time-nr` er løst i samme situasjon.
 
 ### Fortsatt åpent
 
-- **Skal ubekreftede timer kunne ses samlet?** Det er antakelig det som
-  gjør funksjonen nyttig — «fravær ikke ført» for uka, framfor en hake man
-  må åpne hver time for å finne. Uten den oversikten er haken bare et
-  minne om noe man allerede visste.
-- **Bare desktop?** Ønsket gjelder desktop, og det koster ingenting å ha
-  det begge steder. Men på mobil er timeplanmodalen allerede full, og en
-  hake til må ha en plass.
+**Skal ubekreftede dager kunne ses samlet?** Det er antakelig det som
+gjør funksjonen nyttig over tid — «disse fem dagene mangler» framfor å
+måtte bla tilbake gjennom ukene. Men det er en egen liten øvelse, og
+haken er nyttig uten den.
 
-Anslag: en halvtime for haken. Oversikten er en egen liten øvelse.
+Anslag: en kveld, det meste på raden som skal stå i flukt med gridet.
 
 ---
 
-## 19. Lunsj som visuelt skille
+## 17. Lunsj som visuelt skille ✅
 
 **Idéen:** Markere lunsjen med egen farge, så det blir lettere å lese
 formiddag mot ettermiddag.
 
-**Status:** Ønsket, og billig. Anbefales tidlig — det er ren lesbarhet
-uten ny data.
+**Status: gjennomført 19. august 2026.** `lunsjLuke()` finner den lengste
+luka mellom to skoletimer i `PERIODS`, og `renderGrid()` tegner et
+`.lunsj-band` som fyller den i hver dagkolonne, pluss en «Lunsj»-etikett i
+tidsaksen. Klokkeslettene står fortsatt bare ett sted.
+`tests/lunsj.test.js` regner ut fasiten uavhengig av implementasjonen, så
+en hardkodet tid slår ut — verifisert.
+
+**Anbefalingen under om linje framfor flate holdt ikke.** Den ble prøvd
+først, og sett i en ekte nettleser forsvant den: rutenettet har streker
+hvert kvarter fra før, så enda en ble bare enda en. Løsningen ble et bånd
+i en varm tone — altså «annen farge», som opprinnelig ønsket — med kant
+over og under, så skillet mellom formiddag og ettermiddag også er der.
+Kantene er linja; flaten er det som gjør den synlig.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Lunsjen ligger allerede i dataene
 
@@ -925,12 +961,18 @@ Anslag: en halvtime.
 
 ---
 
-## 20. Mobil: gjøremål skal lukkes når du bytter visning
+## 18. Mobil: gjøremål skal lukkes når du bytter visning ✅
 
 **Idéen:** Trykker du Timeplan mens gjøremål står åpent, skal panelet
 lukke seg. I dag må det skjules manuelt.
 
-**Status:** Ønsket. Ren feilretting, og den er liten.
+**Status: gjennomført 19. august 2026.** `setView()` lukker panelet når
+`erSmalSkjerm()`, og bare da — på PC blir kolonnen stående, som den skal.
+`tests/navigasjon.test.js` dekker begge tilfellene med en stubbet
+`matchMedia`; verifisert ved å fjerne linja og se mobiltesten slå ut mens
+PC-testen holdt.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Hva som skjer i dag
 
@@ -969,7 +1011,7 @@ Anslag: 15 minutter, test inkludert.
 
 ---
 
-## 21. Mobil: tekstfeltene på Min side er for store
+## 19. Mobil: tekstfeltene på Min side er for store
 
 **Idéen:** Feltene tar for mye plass på telefon.
 
@@ -1007,12 +1049,20 @@ Si hvilket av de to du mener, så er det enten fem minutter eller en time.
 
 ---
 
-## 22. Fritekstfeltet i gjøremål skal fylle skjermen
+## 20. Fritekstfeltet i gjøremål skal fylle skjermen ✅
 
 **Idéen:** Beskrivelsesfeltet i gjøremålsskjemaet er for lite, både på
 mobil og desktop.
 
-**Status:** Ønsket. Diagnosen er klar.
+**Status: gjennomført 19. august 2026.** Diagnosen stemte: modalen var
+allerede full høyde, det var textareaen som ikke fikk beskjed om å vokse.
+Flex-kjeden er koblet gjennom `.form-section` og feltet, og de to inline
+breddene er flyttet til `.event-modal--smal` og `.event-modal--medium`.
+`tests/gjoeremaal.test.js` vokter kjeden og at inline bredde ikke kommer
+tilbake. Mobiltesten fanget underveis at de nye breddeklassene manglet
+overstyring i mobilblokka — de står nå eksplisitt i fullskjermregelen.
+
+Beskrivelsen under er beholdt som begrunnelse.
 
 ### Modalen er allerede stor — feltet vokser bare ikke
 
@@ -1075,5 +1125,8 @@ prioritering gjetning.
 
 ---
 
-*Opprettet 3. august 2026 (økt 19). Postene 7–22 lagt inn 19. august 2026
-etter en forslagsrunde — ingen av dem er besluttet.*
+*Opprettet 3. august 2026 (økt 19). Utvidet 19. august 2026 med en
+forslagsrunde, og ryddet samme dag: forelesninger strøket, «utgått» og
+«timer uten elever» slått sammen, vurdering og fraværshaken omskrevet
+etter avklaring, og fire poster gjennomført. Numrene ble satt på nytt da
+— peker du hit fra et annet dokument, sjekk at nummeret stemmer.*
