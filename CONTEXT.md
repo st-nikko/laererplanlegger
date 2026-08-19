@@ -50,9 +50,10 @@ Lærerplanlegger/
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
 | VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning, **og lukker gjøremålspanelet når `erSmalSkjerm()`** — på mobil er det et overlegg over hele kalenderen, så visningen skiftet bak det; på PC er det en kolonne og skal bli stående), `changeNav()`, `goToDayView()` |
 | MONTH VIEW | `renderMonthView()` |
-| SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()` |
+| SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()`, `alleMerker()`, `normaliserMerke()`, `harMerke()`, `todoFilterValg()`, `passererFilter()`, `settTodoFilter()`, `renderTodoFilter()` — merker og filter, se «Gjøremålsmerker og filter» nedenfor |
 | MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, modallukking — se «Hvordan modaler lukkes» nedenfor |
 | ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
+| GJØREMÅLSKALENDER | `byggGjoeremaalICS()`, `gjoeremaalForFeed()`, `gjoeremaalTittel()`, `icsDato()`, `icsDatoNeste()` — frister som heldagshendelser. **Tar aldri med elevnavn eller `tekst`** (fritekst); bare tittel, merke og fag. Se «Gjøremålsfeeden» nedenfor |
 | ARBEIDSTIDSKALENDER | `arbeidstidForDato()`, `slaaSammenIntervaller()`, `fraDesimal()`, `byggArbeidstidICS()` — viser bare *når* man er opptatt, aldri hva. Grunnlag: planfestet tid eller registrert overtid, utvidet av hendelser. Blokker slås sammen kun når de overlapper eller møtes, så et kveldsmøte blir en egen blokk framfor å strekke arbeidsdagen. Helger tas med bare når det ligger en hendelse der. Alle blokker heter «På jobb» |
 | MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC |
 | PAPIRKURV | `leggIPapirkurv()`, `gjenopprettFraPapirkurv()`, `slettFraPapirkurv()`, `tomPapirkurv()`, `ryddPapirkurv()`, `renderPapirkurv()` — mellomlager for slettede timer, elever og gjøremål. Lagres i `lp_papirkurv`, **bevisst utenfor `SYNK_NOKLER`**: den inneholder elevnavn og data brukeren har valgt å slette, og skal ikke reise mellom enheter. Derfor lagres elevobjektet her *med* navnet, i motsetning til `lp_students`. Ryddes for oppføringer eldre enn `PAPIRKURV_DAGER` (30) ved oppstart, og holdes under `PAPIRKURV_MAKS` (20) |
@@ -130,6 +131,74 @@ vist hver skoledag siden august 2025 som «mangler». En test holder
 konstanten mellom 7 og 31 med begrunnelsen skrevet inn. Skal vinduet
 utvides, er svaret å lagre datoen funksjonen ble slått på — ikke å heve
 tallet.
+
+### Gjøremålsmerker og filter
+
+Lagt til 19. august 2026. `todos[].merke` er **fritekst med forslag**, ikke
+en fast liste — da slipper man et sted å vedlikeholde listen, og «IKT»
+finnes fra det øyeblikket man skriver det.
+
+Prisen for fritekst er at «IOP», «iop» og «Iop» blir tre merker.
+`normaliserMerke()` betaler den: skriver du et merke som finnes fra før med
+annen bruk av store bokstaver, **arver du skrivemåten som er der**. Første
+skrivemåte vinner. Merk at `alleMerker()` slår sammen skrivemåter uansett,
+så den avslører *ikke* om normaliseringen er borte — testen som fanger det
+ser på verdien som lagres på hvert gjøremål.
+
+Filterknappene viser merker, fag og elever **som faktisk er i bruk i
+aktive gjøremål**. En knapp uten treff er verre enn ingen knapp, og lista
+rydder seg selv når det siste IOP-gjøremålet er ferdig. Peker filteret på
+noe som forsvant, nullstilles det — ellers står lista tom uten forklaring.
+
+**Filterraden ligger inni `.sidebar-body`, ikke over den**, festet med
+`position: sticky`. Utenfor rulleflaten ville den blitt en egen rulleflate
+når merkene blir mange, og to rulleflater i samme panel er nøyaktig fella
+som ble ryddet bort for elevlistene (se punkt 5 under «Kjente
+begrensninger»). Ikke flytt den ut.
+
+Sortering på frist beholdes uansett filter. Når du først har snevret inn,
+er det rekkefølgen du vil ha — en egen sorteringsvelger ville bare tatt
+plass fra en liste som er 272 px bred.
+
+### Gjøremålsfeeden
+
+Tredje ICS-feed ved siden av `undervisning` og `jobb`, med **sin egen
+token** slik at fristene kan deles uten at timeplanen følger med.
+
+Gjøremål med frist blir heldagshendelser på forfallsdatoen. **Ikke
+`VTODO`:** ICS har en egen oppgavetype, men om en abonnert nettkalender
+faktisk viser den varierer mellom klienter, og en oppgave som ikke dukker
+opp er verre enn ingen. Heldagshendelser er samme form som de to feedene
+som allerede virker. Feeden er enveis — avkryssing skjer i appen.
+
+**Hva som bevisst ikke er med.** Filen ligger lesbar for den som har
+adressen:
+
+- **Elevnavn aldri.** Et gjøremål kan være knyttet til en elev. Samme regel
+  som `icsTittel()` følger for enetimer.
+- **`tekst` heller ikke.** Fritekst inneholder det brukeren skrev, ofte
+  navn. Pseudonymiseringen beskytter strukturen, ikke innholdet.
+
+`tests/gjoeremaal.test.js` har en test som heter «ELEVNAVN KOMMER ALDRI
+MED». Ryker den, skal ingenting publiseres før den er grønn igjen.
+
+DTEND på en heldagshendelse er **eksklusiv** — en hendelse som varer 19.
+august har `DTEND;VALUE=DATE:20260820`. UID-en inneholder bare gjøremålets
+id, ikke fristen, slik at Outlook flytter hendelsen framfor å lage en ny
+når du endrer datoen.
+
+### Samarbeidsmøte
+
+Etiketten «Foreldremøte» ble «Samarbeidsmøte» 19. august 2026. **Bare
+etiketten.** Den lagrede verdien er fortsatt `category: 'foreldre'`, i
+`SPECIAL_COLORS`, i `eventColor()` og på hendelser som alt er lagret.
+
+Grunnen er at verdien ligger i `lp_events` på begge enheter og i den
+krypterte synkblokka. Et bytte ville krevd en migrering i
+`loadFromStorage()` som måtte kjøre på **alle** enheter før synken skrev
+gamle verdier tilbake — for en endring som bare gjelder et ord på skjermen.
+Skal verdien byttes senere, er det den rekkefølgen som er problemet, ikke
+selve navnebyttet.
 
 ---
 

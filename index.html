@@ -86,7 +86,14 @@
     <span class="sidebar-title">Gjøremål</span>
     <button class="ghost-btn" style="padding:3px 8px;font-size:11px" onclick="toggleSidebar()">Skjul</button>
   </div>
-  <div class="sidebar-body" id="todoList"></div>
+  <!-- Filterknappene ligger INNI rulleflaten, festet i toppen med
+       position: sticky. Ute av den ville de vært en egen rulleflate når
+       merkene blir mange, og to rulleflater i samme panel er nettopp det
+       mobiltilpasningen ryddet bort. Se «Gjøremålsfilteret» i CONTEXT.md. -->
+  <div class="sidebar-body">
+    <div class="todo-filter" id="todoFilter"></div>
+    <div id="todoList"></div>
+  </div>
   <div class="sidebar-footer">
     <button class="todo-add-btn" onclick="openTodoForm()">+ Nytt gjøremål</button>
     <button class="todo-skjulte-btn" onclick="openSkjulteGjøremål()">Vis skjulte gjøremål</button>
@@ -341,6 +348,41 @@
         </div>
       </div>
     </div>
+
+    <!-- GJØREMÅL -->
+    <div class="kalender-kort">
+      <div class="kalender-tittel">Gjøremål</div>
+      <p class="minside-hjelpetekst">
+        Gjøremål med frist, som heldagshendelser på forfallsdatoen. Ferdige
+        og slettede er ikke med, så en dag forsvinner av seg selv når arbeidet
+        er gjort. <strong>Enveis</strong> — du krysser av her i appen, ikke i
+        Outlook. Bare tittel, merke og fag følger med:
+        <strong>elevnavn og beskrivelse blir aldri med</strong>, siden filen
+        ligger lesbar for den som har adressen.
+      </p>
+
+      <div id="av-gjoeremaal" class="synk-blokk" style="display:none">
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('gjoeremaal')">Publiser som abonnement</button>
+        </div>
+      </div>
+
+      <div id="paa-gjoeremaal" class="synk-blokk" style="display:none">
+        <label class="synk-label" for="adresse-gjoeremaal">Abonnementsadresse</label>
+        <div class="synk-rad">
+          <input type="text" id="adresse-gjoeremaal" class="synk-input" readonly onclick="this.select()">
+          <button class="data-toolbar-btn" id="kopier-gjoeremaal" onclick="kopierFeedAdresse('gjoeremaal')">Kopier</button>
+        </div>
+        <p class="minside-hjelpetekst">
+          Legg den inn som en egen kalender, så kan du slå fristene av og på
+          uten å miste timeplanen. Outlook henter med noen timers mellomrom.
+        </p>
+        <div class="synk-rad">
+          <button class="data-toolbar-btn" onclick="publiserFeed('gjoeremaal')">↻ Oppdater nå</button>
+          <button class="data-toolbar-btn" onclick="slaAvFeed('gjoeremaal')">Slå av</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Data</div>
@@ -498,14 +540,16 @@
       <div id="moteSection" class="form-section" style="display:none">
         <div class="form-field">
           <label>Tittel</label>
-          <input type="text" id="moteTittelInput" placeholder="Fagmøte, Foreldremøte…">
+          <input type="text" id="moteTittelInput" placeholder="Fagmøte, samarbeidsmøte…">
         </div>
         <div class="form-row">
           <div class="form-field">
             <label>Kategori</label>
             <select id="moteKategori">
               <option value="mote">Fagmøte / Personalmøte</option>
-              <option value="foreldre">Foreldremøte / Konferansetime</option>
+              <!-- Verdien er fortsatt «foreldre»: den ligger lagret på hendelser fra før,
+                   og et bytte ville krevd migrering på hver enhet. Bare etiketten er ny. -->
+              <option value="foreldre">Samarbeidsmøte / Konferansetime</option>
               <option value="annet">Fagdag / Annet</option>
             </select>
           </div>
@@ -746,6 +790,12 @@
         <div class="form-field todo-tekst-felt">
           <label>Beskrivelse (valgfritt)</label>
           <textarea id="todoTextInput" rows="3" placeholder="Utfyllende beskrivelse…"></textarea>
+        </div>
+        <div class="form-field">
+          <label>Merke (valgfritt)</label>
+          <input type="text" id="todoMerkeInput" list="todoMerkeListe"
+                 placeholder="Referat, IKT, IOP…" autocomplete="off">
+          <datalist id="todoMerkeListe"></datalist>
         </div>
         <div class="form-row">
           <div class="form-field">

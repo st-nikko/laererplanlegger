@@ -541,6 +541,38 @@
     .todo-meta { font-size: 10px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
     .todo-tag { padding: 1px 5px; border-radius: 3px; background: var(--meny-aktiv-bg); color: var(--accent-deep); font-size: 10px; white-space: nowrap; }
     .todo-tag.student-tag { background: var(--lyng-soft); color: var(--lyng-deep); }
+    /* Merket er den groveste inndelingen og står først. Egen kulør, så de
+       tre merkelappene — merke, fag, elev — kan skilles på farge alene. */
+    .todo-tag.merke-tag { background: var(--suksess-soft); color: var(--suksess); font-weight: 500; }
+
+    /* ── GJØREMÅLSFILTERET ──
+       Ligger inni .sidebar-body og er festet i toppen med sticky. Utenfor
+       rulleflaten ville raden blitt en egen rulleflate når merkene blir
+       mange, og to rulleflater i samme panel er nøyaktig fella
+       mobiltilpasningen ryddet bort for elevlistene.
+       Negative marger + padding gjør at bakgrunnen dekker helt ut til
+       kantene av panelet når lista ruller under. */
+    .todo-filter {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; flex-wrap: wrap; gap: 4px;
+      margin: -8px -10px 2px; padding: 8px 10px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border-faint);
+    }
+    .todo-filter-knapp {
+      font-family: inherit; font-size: 10px; line-height: 1.4;
+      padding: 2px 7px; border-radius: 10px; cursor: pointer;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      background: var(--surface); color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    .todo-filter-knapp:hover { border-color: var(--border-strong); color: var(--text-primary); }
+    /* Aktiv knapp arver kuløren til merkelappen den filtrerer på, så det
+       er tydelig hvilken av de tre gruppene man har snevret inn til. */
+    .todo-filter-knapp.aktiv { font-weight: 600; }
+    .todo-filter-knapp.merke.aktiv { background: var(--suksess-soft); color: var(--suksess); border-color: var(--suksess-kant); }
+    .todo-filter-knapp.fag.aktiv   { background: var(--meny-aktiv-bg); color: var(--accent-deep); border-color: var(--accent-kant); }
+    .todo-filter-knapp.elev.aktiv  { background: var(--lyng-soft); color: var(--lyng-deep); border-color: var(--lyng-deep); }
     .todo-frist { color: var(--overtid); }
     .todo-frist.overdue { color: var(--fare); font-weight: 600; }
     .todo-del-btn { font-size: 15px; background: none; border: none; cursor: pointer; color: transparent; padding: 0 2px; line-height: 1; flex-shrink: 0; align-self: flex-start; }

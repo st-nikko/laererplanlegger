@@ -1143,6 +1143,62 @@ Anslag: en halvtime.
 
 ---
 
+## 21. Gjøremål utenfor appen
+
+**Idéen:** Få gjøremålene inn et sted man er fra før — Outlook, Microsoft
+To Do, Todoist.
+
+**Status:** Delvis løst 19. august 2026. Fristene publiseres nå som en
+tredje kalenderfeed. Det som står igjen er ekte oppgaver, og det står igjen
+av en grunn som ikke går bort av seg selv.
+
+### Det som er gjort
+
+Gjøremål med frist blir heldagshendelser på forfallsdatoen, i en feed med
+egen adresse. Enveis: avkryssing skjer i appen. Se «Gjøremålsfeeden» i
+CONTEXT.md for hva som bevisst ikke er med — elevnavn og fritekst.
+
+### Toveis-synk krever noe appen ikke har
+
+**Appen er en statisk side.** Alt i `app.js` og `sync.js` kan leses av alle
+som åpner sidekilden — det er derfor `SUPABASE_ANON` kan ligge der, den er
+laget for å være offentlig. En API-nøkkel til Todoist eller Microsoft
+Graph er *ikke* det. Legges den inn, er den gitt bort.
+
+Ekte toveis-synk trenger derfor enten:
+
+- **En OAuth-innlogging per tjeneste**, der tokenet lever i nettleseren og
+  fornyes. Mulig uten server for noen tjenester, men det er en egen
+  påloggingsflyt å vedlikeholde, i tillegg til den som finnes for Supabase.
+- **Eller en liten backend** som holder hemmeligheten. Da er appen ikke
+  lenger en fil på GitHub Pages, og driften blir en annen sak.
+
+Ingen av delene er urimelige. Men de er et annet prosjekt enn resten av
+appen, og bør velges bevisst framfor å gli inn.
+
+### VTODO ble ikke prøvd
+
+ICS har `VTODO`, som ville gitt ekte oppgaver med avkryssing framfor
+hendelser. Om en **abonnert** nettkalender viser dem varierer mellom
+klienter, og jeg fant ikke et klart svar for Outlook. Det er billig å
+finne ut: bygg en liten VTODO-feed, abonner på den, se etter. Virker det,
+er det en bedre form enn heldagshendelser — virker det ikke, har du brukt
+ti minutter.
+
+Merk at det uansett bare løser retningen ut. Avkryssing i Outlook ville
+ikke funnet veien tilbake, siden en abonnert kalender er les-only.
+
+### Fortsatt åpent
+
+- **Er enveis nok?** Fristene i Outlook dekker «hva skal jeg gjøre denne
+  uka». Skal gjøremålene *behandles* et annet sted, holder det ikke.
+  Bruk feeden noen uker før du bestemmer.
+- **Skal beskrivelsen med?** Den er utelatt fordi fritekst ofte inneholder
+  elevnavn. Vil du ha den likevel, er det et bevisst valg som hører hjemme
+  her — ikke en linje man legger til i forbifarten.
+
+---
+
 ## Vurdert og lagt bort inntil videre
 
 Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
@@ -1170,5 +1226,11 @@ prioritering gjetning.
 *Opprettet 3. august 2026 (økt 19). Utvidet 19. august 2026 med en
 forslagsrunde, og ryddet samme dag: forelesninger strøket, «utgått» og
 «timer uten elever» slått sammen, vurdering og fraværshaken omskrevet
-etter avklaring, og fire poster gjennomført. Numrene ble satt på nytt da
-— peker du hit fra et annet dokument, sjekk at nummeret stemmer.*
+etter avklaring. Numrene ble satt på nytt da — peker du hit fra et annet
+dokument, sjekk at nummeret stemmer.*
+
+*Gjennomført 19. august 2026: modallukking (13), lunsjskillet (17),
+gjøremål på mobil (18), fritekstfeltet (20) og fraværshaken (16). Samme dag
+kom også merker og filter på gjøremål, og «Foreldremøte» ble
+«Samarbeidsmøte» — de tre sto aldri i veikartet, og er dokumentert i
+CONTEXT.md i stedet.*

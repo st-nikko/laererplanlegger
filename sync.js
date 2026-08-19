@@ -26,7 +26,8 @@ const SYNK_NOKLER = [
   'lp_lessonData', 'lp_topicsBySubject', 'lp_students',
   'lp_fridager', 'lp_skoleaar', 'lp_fravaerFort',
   'lp_ics_token', 'lp_ics_publiser',
-  'lp_jobb_token', 'lp_jobb_publiser'
+  'lp_jobb_token', 'lp_jobb_publiser',
+  'lp_gjoeremaal_token', 'lp_gjoeremaal_publiser'
 ];
 
 // Lokale nøkler for synktilstand
@@ -615,6 +616,14 @@ const ICS_FEEDS = {
     tokenKey:  'lp_jobb_token',
     flaggKey:  'lp_jobb_publiser',
     bygg:      () => byggArbeidstidICS()
+  },
+  // Frister som heldagshendelser. Enveis, og uten elevnavn og fritekst —
+  // se kommentaren over byggGjoeremaalICS() i app.js.
+  gjoeremaal: {
+    navn:      'Gjøremål',
+    tokenKey:  'lp_gjoeremaal_token',
+    flaggKey:  'lp_gjoeremaal_publiser',
+    bygg:      () => byggGjoeremaalICS()
   }
 };
 

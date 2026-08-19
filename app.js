@@ -216,7 +216,11 @@ function addTopic(title, tema) {
 // ────────────────────────────────────────────
 let nextId = 1;
 let nextTodoId = 1;
-let todos = []; // { id, text, linkedFag, linkedStudentId, frist, status }
+let todos = []; // { id, tittel, tekst, merke, linkedFag, linkedStudentId, frist, status }
+
+// Hvilket merke lista er snevret inn til, eller null for alt.
+// { type: 'merke'|'fag'|'elev', verdi } — se renderTodoFilter().
+let todoFilter = null;
 // Gjøremål er skjult som standard — på mobil dekket sidebaren hele
 // kalenderen, og på desktop er det uansett greit å slå den på ved behov.
 let sidebarVisible = false;
@@ -945,7 +949,10 @@ function renderLegend() {
       el.appendChild(item);
     }
   });
-  [['Møte','mote'],['Foreldremøte','foreldre']].forEach(([label,key])=>{
+  // Nøkkelen er fortsatt 'foreldre'. Bare etiketten er endret (19. aug
+  // 2026) — se «Samarbeidsmøte» i CONTEXT.md for hvorfor verdien i
+  // dataene ikke ble rørt.
+  [['Møte','mote'],['Samarbeidsmøte','foreldre']].forEach(([label,key])=>{
     const c=SPECIAL_COLORS[key];
     const item=document.createElement('div'); item.className='legend-item';
     item.innerHTML=`<div class="legend-swatch" style="background:${c.border}"></div>${label}`;
@@ -2190,6 +2197,40 @@ function toggleSidebar() {
   if (menyknapp) menyknapp.classList.toggle('active', sidebarVisible);
 }
 
+// ── Merker ──
+// Merket er fritekst med forslag, ikke en fast liste. Da slipper man et
+// sted å vedlikeholde listen, og «IKT» finnes fra det øyeblikket man
+// skriver det.
+//
+// Prisen for fritekst er at «IOP», «iop» og «Iop» blir tre merker og
+// dermed tre filterknapper. normaliserMerke() betaler den: skriver du et
+// merke som allerede finnes med annen bruk av store bokstaver, arver du
+// skrivemåten som er der fra før. Første skrivemåte vinner, og lista
+// holder seg ren uten at noen må rydde i den.
+
+// Alle merker i bruk, én gang hver, sortert. Nøkkelen er småbokstaver;
+// verdien er skrivemåten slik den først ble brukt.
+function alleMerker() {
+  const sett = new Map();
+  todos.forEach(t => {
+    if (!t.merke || t.slettet) return;
+    const n = t.merke.toLowerCase();
+    if (!sett.has(n)) sett.set(n, t.merke);
+  });
+  return [...sett.values()].sort((a, b) => a.localeCompare(b, 'nb'));
+}
+
+function normaliserMerke(tekst) {
+  const rent = (tekst || '').trim();
+  if (!rent) return null;
+  const finnes = alleMerker().find(m => m.toLowerCase() === rent.toLowerCase());
+  return finnes || rent;
+}
+
+function harMerke(todo, merke) {
+  return Boolean(todo.merke) && todo.merke.toLowerCase() === merke.toLowerCase();
+}
+
 function openTodoForm(editId) {
   editingTodoId = (editId !== undefined) ? editId : null;
   const todo = (editingTodoId !== null) ? todos.find(t=>t.id===editingTodoId) : null;
@@ -2198,6 +2239,13 @@ function openTodoForm(editId) {
   document.getElementById('todoTextInput').value = todo ? (todo.tekst||'') : '';
   document.getElementById('todoFristInput').value = todo ? (todo.frist||'') : '';
   document.getElementById('todoSaveBtn').textContent = todo ? 'Lagre endringer' : 'Lagre';
+
+  // Merker er fritekst med forslag. Datalisten fylles fra merkene som
+  // allerede er i bruk, så andre gang du skriver «Referat» får du det
+  // tilbudt framfor å måtte huske hvordan du skrev det sist.
+  document.getElementById('todoMerkeInput').value = todo ? (todo.merke||'') : '';
+  document.getElementById('todoMerkeListe').innerHTML =
+    alleMerker().map(m => `<option value="${m}">`).join('');
 
   const fagSel = document.getElementById('todoFagSelect');
   const subjects = [...new Set(events.filter(e=>e.category==='undervisning').map(e=>e.title))];
@@ -2252,12 +2300,14 @@ function saveTodo() {
   const linkedFag=document.getElementById('todoFagSelect').value||null;
   const linkedStudentId=parseStudentId(document.getElementById('todoStudentSelect').value)||null;
   const frist=document.getElementById('todoFristInput').value||null;
+  // Arver skrivemåten hvis merket finnes fra før — se normaliserMerke()
+  const merke=normaliserMerke(document.getElementById('todoMerkeInput').value);
 
   if(editingTodoId!==null){
     const idx=todos.findIndex(t=>t.id===editingTodoId);
-    if(idx!==-1) todos[idx]={...todos[idx],tittel,tekst,linkedFag,linkedStudentId,frist};
+    if(idx!==-1) todos[idx]={...todos[idx],tittel,tekst,merke,linkedFag,linkedStudentId,frist};
   } else {
-    todos.push({id:nextTodoId++,tittel,tekst,linkedFag,linkedStudentId,frist,status:'ikke_startet'});
+    todos.push({id:nextTodoId++,tittel,tekst,merke,linkedFag,linkedStudentId,frist,status:'ikke_startet'});
   }
   saveToStorage();
   closeOverlay('todoFormOverlay');
@@ -2282,13 +2332,98 @@ function deleteTodo(id) {
   if(currentView==='month') renderMonthView();
 }
 
+// ── Filterknapper ──
+// Merker, fag og elever som er i bruk, som klikkbare knapper øverst i
+// panelet. Trykk på én for å vise bare de gjøremålene; trykk på den igjen
+// for å se alt.
+//
+// Sortering på frist beholdes uansett. Når du først har snevret inn til
+// «IOP», er det rekkefølgen du vil ha — en egen sorteringsvelger ville
+// bare tatt plass fra en liste som er 272 px bred.
+//
+// Bare verdier som faktisk finnes i aktive gjøremål vises. En knapp som
+// ikke gir treff er verre enn ingen knapp, og lista rydder seg selv når
+// det siste IOP-gjøremålet er ferdig.
+function todoFilterValg(aktive) {
+  const valg = [];
+  const merker = new Map();
+  const fag    = new Map();
+  const elever = new Map();
+
+  aktive.forEach(t => {
+    if (t.merke) merker.set(t.merke.toLowerCase(), t.merke);
+    if (t.linkedFag) fag.set(t.linkedFag, t.linkedFag);
+    if (t.linkedStudentId != null) {
+      const s = studentById(t.linkedStudentId);
+      if (s) elever.set(String(t.linkedStudentId), s.navn);
+    }
+  });
+
+  [...merker.values()].sort((a,b)=>a.localeCompare(b,'nb'))
+    .forEach(m => valg.push({ type:'merke', verdi:m, tekst:m }));
+  [...fag.values()].sort((a,b)=>a.localeCompare(b,'nb'))
+    .forEach(f => valg.push({ type:'fag', verdi:f, tekst:f }));
+  [...elever.entries()].sort((a,b)=>a[1].localeCompare(b[1],'nb'))
+    .forEach(([id,navn]) => valg.push({ type:'elev', verdi:id, tekst:navn }));
+
+  return valg;
+}
+
+function passererFilter(todo) {
+  if (!todoFilter) return true;
+  if (todoFilter.type === 'merke') return harMerke(todo, todoFilter.verdi);
+  if (todoFilter.type === 'fag')   return todo.linkedFag === todoFilter.verdi;
+  if (todoFilter.type === 'elev')  return String(todo.linkedStudentId) === String(todoFilter.verdi);
+  return true;
+}
+
+function settTodoFilter(type, verdi) {
+  const samme = todoFilter && todoFilter.type === type && String(todoFilter.verdi) === String(verdi);
+  todoFilter = samme ? null : { type, verdi };
+  renderTodoList();
+}
+
+function renderTodoFilter(aktive) {
+  const el = document.getElementById('todoFilter');
+  if (!el) return;
+  const valg = todoFilterValg(aktive);
+
+  // Ingenting å velge mellom: ikke ta plassen. Raden er tom framfor å
+  // vise en «Alle»-knapp som ikke gjør noe.
+  if (valg.length < 2) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = '';
+
+  valg.forEach(v => {
+    const aktiv = todoFilter && todoFilter.type === v.type
+                  && String(todoFilter.verdi) === String(v.verdi);
+    const knapp = document.createElement('button');
+    knapp.className = `todo-filter-knapp ${v.type}` + (aktiv ? ' aktiv' : '');
+    knapp.textContent = v.tekst;
+    knapp.title = aktiv ? 'Vis alle igjen' : `Vis bare ${v.tekst}`;
+    knapp.onclick = () => settTodoFilter(v.type, v.verdi);
+    el.appendChild(knapp);
+  });
+}
+
 function renderTodoList() {
   const container=document.getElementById('todoList'); if(!container)return;
   const aktive=todos.filter(t=>!t.slettet&&t.status!=='ferdig');
+
+  // Filteret kan peke på noe som ikke finnes lenger — siste gjøremål med
+  // det merket ble ferdig, eller eleven ble arkivert. Da skal lista vise
+  // alt igjen framfor å stå tom uten forklaring. Nullstilles før knappene
+  // tegnes, ellers står en knapp markert som aktiv uten å være det.
+  if (todoFilter && !aktive.some(passererFilter)) todoFilter = null;
+
+  renderTodoFilter(aktive);
+
   if(!aktive.length){container.innerHTML='<div class="todo-empty">Ingen gjøremål ennå<br><span style="font-size:11px">Trykk + under for å legge til</span></div>';return;}
+
+  const synlige = aktive.filter(passererFilter);
   container.innerHTML='';
   const todayStr=isoDate(TODAY);
-  const sorted=[...aktive].sort((a,b)=>{
+  const sorted=[...synlige].sort((a,b)=>{
     if(a.frist&&b.frist) return a.frist.localeCompare(b.frist);
     if(a.frist)return -1; if(b.frist)return 1;
     return a.id-b.id;
@@ -2316,6 +2451,9 @@ function renderTodoList() {
     }
 
     const meta=document.createElement('div'); meta.className='todo-meta';
+    // Merket først — det er den groveste inndelingen, og det er det man
+    // leter etter når man skummer lista.
+    if(todo.merke){const t=document.createElement('span');t.className='todo-tag merke-tag';t.textContent=todo.merke;meta.appendChild(t);}
     if(todo.linkedFag){const t=document.createElement('span');t.className='todo-tag';t.textContent=todo.linkedFag;meta.appendChild(t);}
     if(todo.linkedStudentId){
       const s=studentById(todo.linkedStudentId);
@@ -3112,6 +3250,92 @@ function byggICS() {
 
   linjer.push('END:VCALENDAR');
   return { ics: linjer.join('\r\n') + '\r\n', antall };
+}
+
+// ────────────────────────────────────────────
+// GJØREMÅLSKALENDER
+// ────────────────────────────────────────────
+// Gjøremål med frist, som heldagshendelser på forfallsdatoen.
+//
+// **Hvorfor hendelser og ikke VTODO.** ICS har en egen oppgavetype, men om
+// en abonnert nettkalender faktisk viser den varierer mellom klienter, og
+// en oppgave som ikke dukker opp er verre enn ingen. En heldagshendelse er
+// nøyaktig samme form som de to feedene som allerede virker.
+//
+// Feeden er **enveis**. Du krysser av i appen; Outlook viser bare hva som
+// forfaller når. Ferdige og slettede gjøremål tas ikke med, så en dag
+// forsvinner av seg selv når arbeidet er gjort.
+//
+// ── Hva som IKKE er med, og hvorfor ──
+// Bøtta er offentlig for den som har adressen, akkurat som for de to andre
+// feedene. Derfor tar denne bare med tittelen, merket og faget:
+//
+//   * **Elevnavn aldri.** Et gjøremål kan være knyttet til en elev, og
+//     lista i appen viser navnet. Her ville det gjort en offentlig fil om
+//     til noe som identifiserer en elev. Samme regel som icsTittel()
+//     følger for enetimer.
+//   * **Beskrivelsen (`tekst`) heller ikke.** Den er fritekst, og fritekst
+//     inneholder det brukeren skrev — ofte navn. Pseudonymiseringen
+//     beskytter strukturen, ikke innholdet.
+//
+// Skal noe av dette med likevel, er det et bevisst valg som hører hjemme i
+// veikartet, ikke en linje man legger til i forbifarten.
+
+function gjoeremaalForFeed() {
+  return todos.filter(t => t.frist && !t.slettet && t.status !== 'ferdig');
+}
+
+// '2026-08-19' → '20260819'
+function icsDato(iso) {
+  return iso.replace(/-/g, '');
+}
+
+// Dagen etter, som ICS-dato. DTEND på en heldagshendelse er eksklusiv: en
+// hendelse som varer 19. august har DTEND 20. august.
+function icsDatoNeste(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + 1);
+  return icsDato(isoDate(d));
+}
+
+function gjoeremaalTittel(todo) {
+  const t = todo.tittel || todo.text || 'Gjøremål';
+  return todo.merke ? `${todo.merke}: ${t}` : t;
+}
+
+function byggGjoeremaalICS() {
+  const stempel = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+  const linjer = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Laererplanlegger//NO',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'X-WR-CALNAME:Gjøremål',
+    'X-WR-TIMEZONE:Europe/Oslo'
+  ];
+
+  const med = gjoeremaalForFeed();
+  med.forEach(todo => {
+    linjer.push(
+      'BEGIN:VEVENT',
+      // Stabil UID: samme gjøremål får samme id ved ny eksport, så Outlook
+      // oppdaterer framfor å duplisere. Flytter du fristen, flytter
+      // hendelsen seg framfor at det kommer en til.
+      `UID:lp-todo-${todo.id}@laererplanlegger`,
+      `DTSTAMP:${stempel}`,
+      `DTSTART;VALUE=DATE:${icsDato(todo.frist)}`,
+      `DTEND;VALUE=DATE:${icsDatoNeste(todo.frist)}`,
+      ...icsBrytLinje(`SUMMARY:${icsEscape(gjoeremaalTittel(todo))}`)
+    );
+    // Faget er trygt — det står allerede i undervisningsfeeden.
+    if (todo.linkedFag) linjer.push(...icsBrytLinje(`DESCRIPTION:${icsEscape(todo.linkedFag)}`));
+    linjer.push('END:VEVENT');
+  });
+
+  linjer.push('END:VCALENDAR');
+  return { ics: linjer.join('\r\n') + '\r\n', antall: med.length };
 }
 
 // ────────────────────────────────────────────
