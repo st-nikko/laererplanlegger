@@ -422,6 +422,110 @@ function eventSubLabel(ev) {
   return `${trinnStr}${room} · ${ev.start}–${ev.end}`;
 }
 
+// ── Hover: hva timen inneholder ──
+// Settes som `title` på hver blokk i renderGrid(), altså nettleserens egen
+// tooltip. Det er den billige varianten, valgt med vilje 19. august 2026:
+// den koster ingen posisjonering og ingen CSS, og svarer på om hover i det
+// hele tatt blir brukt før et ekte kort bygges. Se posten om hover-kortet
+// i veikart.md for hva et ordentlig ett krever.
+//
+// `title` er ren tekst. Linjeskift virker, styling gjør det ikke, og
+// forsinkelsen bestemmes av nettleseren. Innholdet må derfor kappes selv —
+// en tooltip på tredve linjer er ubrukelig.
+//
+// **Elevnavn og notater ER med.** Det er et bevisst valg fra Nikolai:
+// dette er hans egen maskin, og gevinsten er å slippe å åpne modalen for
+// å se hvem timen gjelder. Merk at det gjør skjermen mer sensitiv enn før
+// — navn dukker opp når musa passerer, ikke bare når man klikker. Teksten
+// forlater aldri enheten; den havner ikke i noen feed og ikke i synken.
+
+const HOVER_NOTAT_MAKS   = 240;  // tegn før notatet kappes
+const HOVER_ELEVER_MAKS  = 12;   // navn før lista kappes
+const HOVER_ELEVNOTAT_MAKS = 40; // tegn av elevnotatet på hver linje
+const HOVER_BREDDE       = 64;   // tegn per linje før teksten brytes
+
+function kapp(tekst, maks) {
+  const t = (tekst || '').trim();
+  return t.length > maks ? t.slice(0, maks - 1).trimEnd() + '…' : t;
+}
+
+// `title` bryter ikke tekst selv — et notat på 240 tegn blir én linje som
+// strekker tooltipen tvers over skjermen. Vi må bryte den selv, på
+// mellomrom, slik at tooltipen blir en boks framfor en stripe.
+function bryt(tekst, bredde = HOVER_BREDDE) {
+  const ut = [];
+  let linje = '';
+  (tekst || '').split(/\s+/).filter(Boolean).forEach(ord => {
+    if (!linje) { linje = ord; return; }
+    if ((linje + ' ' + ord).length <= bredde) { linje += ' ' + ord; }
+    else { ut.push(linje); linje = ord; }
+  });
+  if (linje) ut.push(linje);
+  return ut;
+}
+
+// Hvem var borte? attendance er { elevId: [bool per skoletime] }, og en
+// elev regnes som fraværende når han mangler i minst én av dem.
+function fravaerendeIEvent(ev, ld) {
+  if (!ld || !ld.attendance) return [];
+  return (ev.students || []).filter(id => {
+    const raw = ld.attendance[id] ?? ld.attendance[String(id)];
+    if (raw === undefined) return false;
+    return Array.isArray(raw) ? raw.some(v => v === false) : raw === false;
+  });
+}
+
+function eventHoverTekst(ev, dato) {
+  const L = [];
+  const rom = ev.room ? ` · ${ev.room}` : '';
+
+  if (ev.category === 'vikar') {
+    L.push(`Vikartime${rom} · ${ev.start}–${ev.end}`);
+    if (ev.vikarNotes) L.push('', ...bryt(kapp(ev.vikarNotes, HOVER_NOTAT_MAKS)));
+    return L.join('\n');
+  }
+
+  if (ev.category !== 'undervisning') {
+    L.push(`${ev.title}${rom} · ${ev.start}–${ev.end}`);
+    if (ev.elevId) L.push(`Gjelder ${elevNavn(ev.elevId)}`);
+    return L.join('\n');
+  }
+
+  // ── Undervisning ──
+  const trinn = getEventTrinns(ev);
+  const topp = [ev.title];
+  if (trinn.length) topp.push(trinn.map(t => t + '.').join('+') + ' trinn');
+  if (ev.room)      topp.push(ev.room);
+  L.push(topp.join(' · '));
+
+  const time = skoletimeEtikett(ev);
+  L.push([time, `${ev.start}–${ev.end}`].filter(Boolean).join(' · '));
+  if (ev.sessionType === 'enetime')   L.push('Enetime');
+  if (ev.sessionType === 'parallell') L.push('Parallell time');
+
+  const ld = getLesson(ev.id, isoDate(dato));
+
+  if (ld && ld.tema)  L.push('', 'Tema: ' + kapp(ld.tema, 80));
+  if (ld && ld.notes) L.push('', ...bryt(kapp(ld.notes, HOVER_NOTAT_MAKS)));
+  if (!ld)            L.push('', 'Ingen plan lagt inn.');
+
+  const elever = ev.students || [];
+  if (elever.length) {
+    const borte = fravaerendeIEvent(ev, ld);
+    L.push('', `Elever (${elever.length})${borte.length ? ` · ${borte.length} fraværende` : ''}:`);
+    elever.slice(0, HOVER_ELEVER_MAKS).forEach(id => {
+      const notat = ld && ld.studentNotes ? (ld.studentNotes[id] || ld.studentNotes[String(id)]) : '';
+      const merke = borte.includes(id) ? ' (borte)' : '';
+      L.push(`  ${elevNavn(id)}${merke}${notat ? ' — ' + kapp(notat, HOVER_ELEVNOTAT_MAKS) : ''}`);
+    });
+    if (elever.length > HOVER_ELEVER_MAKS) {
+      L.push(`  … og ${elever.length - HOVER_ELEVER_MAKS} til`);
+    }
+  }
+
+  return L.join('\n');
+}
+
 // SFS2213 (hidden from UI)
 function calcSFS() {
   let weekH=0;
@@ -894,6 +998,11 @@ function renderGrid() {
       const trinnKort = trinnKortEtikett(ev);
       const trinnLinje = trinnKort ? `<div class="event-trinn-kort">${trinnKort}. trinn</div>` : '';
       block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
+
+      // Hva timen inneholder, som nettleserens egen tooltip. Settes som
+      // attributt framfor å bygges inn i markupen: teksten er ren tekst og
+      // skal aldri tolkes som HTML, og elevnotater er brukerens fritekst.
+      block.title = eventHoverTekst(ev, d);
 
       // Plan indicator dot
       if(ld && ld.tema){
@@ -2150,6 +2259,9 @@ function renderMonthView() {
       pill.className=`month-event-pill${ev.category==='vikar'?' vikar':''}`;
       pill.style.cssText=`background:${c.bg};color:${c.text};border-left:2px solid ${c.border}`;
       pill.textContent=ev.title||'Vikar';
+      // Samme tooltip som i ukesvisningen. Pilla er ~11 px høy og viser
+      // bare fagnavnet, så her er den om mulig enda mer verdt.
+      pill.title = eventHoverTekst(ev, cursor);
       pill.onclick = e => {
         e.stopPropagation();
         const d=new Date(key+'T00:00:00');

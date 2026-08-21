@@ -40,6 +40,7 @@ Lærerplanlegger/
 | RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene, `.lunsj-band` i hver kolonne), `renderLegend()` |
 | LUNSJ | `lunsjLuke()` i CONFIG finner den **lengste luka mellom to skoletimer** i `PERIODS` — det er lunsjen, og den er ikke registrert noe annet sted. `renderGrid()` tegner et `.lunsj-band` som fyller luka i hver dagkolonne, og et `.lunsj-merke` («Lunsj») i tidsaksen; merket skjules på mobil, der aksen er 32 px. Båndet er en **varm tone med kant over og under** — bevisst en annen kulør enn den accent-tonede `.period-band` og den nøytralt grå `.offwork-block`, så de tre flatene ikke kan forveksles. Første forsøk var én strek midt i luka; den forsvant i et rutenett som har streker hvert kvarter fra før. Skriv aldri inn `11:05`/`11:35` noe sted: `PERIODS` skal forbli eneste kilde til klokkeslett, slik at skillet flytter seg hvis skolen endrer timeplanen. `tests/lunsj.test.js` regner ut fasiten uavhengig og slår ut på en hardkodet tid. Båndet har `z-index: 2` — over de andre flatene, under `.event`, slik at en time som krysser lunsjen dekker det framfor å bli delt i to |
 | FRAVÆRSRAD | `renderFravaerRad()`, `settFravaerFort()`, `skalFoereFravaer()`, `fravaerSomMangler()`, `renderFravaerOversikt()` — haken for at fraværet er ført i skolens **eget** system. Se «Fraværsraden» nedenfor; den er *ikke* appens nærværsføring |
+| HOVER | `eventHoverTekst()`, `fravaerendeIEvent()`, `kapp()`, `bryt()` — hva timen inneholder, satt som `title` på blokka i `renderGrid()` og på pilla i `renderMonthView()`. Se «Hover på timene» nedenfor |
 | SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
 | PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
@@ -199,6 +200,39 @@ krypterte synkblokka. Et bytte ville krevd en migrering i
 gamle verdier tilbake — for en endring som bare gjelder et ord på skjermen.
 Skal verdien byttes senere, er det den rekkefølgen som er problemet, ikke
 selve navnebyttet.
+
+### Hover på timene
+
+Lagt til 19. august 2026, i **billigste form med vilje**: nettleserens eget
+`title`-attributt, ikke et bygget kort. Formålet er å finne ut om hover
+faktisk blir brukt før noe større lages. Se posten om hover-kortet i
+veikart.md for hva et ekte kort krever — kortversjonen er at
+`.calendar-scroll` har `overflow-x: hidden`, så et kort må tegnes på
+`body`-nivå med `position: fixed`.
+
+`title` er ren tekst uten rulling, og **bryter ikke linjer selv**. Derfor
+gjør `eventHoverTekst()` begge deler manuelt:
+
+- `kapp()` klipper for lange felter — notat (`HOVER_NOTAT_MAKS` 240),
+  elevnotat (40), tema (80).
+- `bryt()` deler fritekst på mellomrom ved `HOVER_BREDDE` (64) tegn, så
+  tooltipen blir en boks og ikke en stripe tvers over skjermen.
+- `HOVER_ELEVER_MAKS` (12) begrenser elevlista, med «… og N til» under.
+
+Uten disse blir tooltipen ubrukelig lang på en full klasse med notater.
+**Kappingen er funksjonen**, ikke pynt — `tests/hover.test.js` vokter alle
+fire grensene.
+
+**Elevnavn og notater er med.** Bevisst valg: dette er en personlig app på
+egen maskin, og poenget er å slippe å åpne modalen. Merk at det er første
+sted i appen der navn dukker opp *uoppfordret* — når musa passerer, ikke
+når man klikker. Teksten forlater aldri enheten; den er ikke i noen feed og
+ikke i synken. Skal det snus, bygges elevdelen i én blokk til slutt i
+`eventHoverTekst()`.
+
+Teksten settes som **attributt**, aldri i `innerHTML`. Elevnotater er
+brukerens fritekst; i markup ville de blitt tolket som HTML. En test
+vokter det med et `<img onerror=…>` som notat.
 
 ---
 

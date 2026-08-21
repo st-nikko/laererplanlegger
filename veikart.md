@@ -1199,6 +1199,77 @@ ikke funnet veien tilbake, siden en abonnert kalender er les-only.
 
 ---
 
+## 22. Hover-kort på timene
+
+**Idéen:** Se hva en time inneholder ved å holde musa over den, framfor å
+åpne timeplanmodalen.
+
+**Status:** Prøvd i billigste form 19. august 2026. `title`-attributtet på
+hver blokk gir tema, notat, elevliste med notat per elev, og hvem som var
+borte — se «Hover på timene» i CONTEXT.md. Om et **ekte kort** skal bygges
+avhenger av om denne varianten faktisk blir brukt.
+
+### Hvorfor `title` først
+
+Et ordentlig kort er ikke vanskelig, men det er en del arbeid å gjøre
+riktig, og verdien var uprøvd. `title` koster ingen posisjonering og ingen
+CSS, og svarer på spørsmålet: griper du etter hover, eller klikker du deg
+inn som før? Bruk det noen uker.
+
+Det `title` ikke kan: styling, egen forsinkelse, klikkbare elementer, og
+tekst som ruller. Alt må kappes og brytes selv — og det er nettopp den
+kappingen som viste seg å være selve funksjonen.
+
+### Hva et ekte kort krever
+
+**Overflow-fella er den viktigste.** `.calendar-scroll` har
+`overflow-x: hidden`, og både `#contentArea` og `#mainWrapper` har
+`overflow: hidden`. Et kort som ligger inne i `.day-col` blir derfor
+klippet — mot høyre i fredagskolonnen, og oppe og nede når rutenettet er
+rullet.
+
+| Sted | Endring |
+|------|---------|
+| Nytt element på `body`-nivå | `position: fixed`, plassert fra `block.getBoundingClientRect()` |
+| Kantvending | Vend mot venstre når kortet ikke får plass til høyre, og opp når det ikke får plass under |
+| `renderGrid()` app.js:983 | `mouseenter`/`mouseleave` på blokka, med en forsinkelse på 200–300 ms |
+| `app.css` | Kortstil, `z-index` over `.event` (5) og under `.overlay` (300) |
+
+**Forsinkelsen er ikke pynt.** Uten den fyrer et sveip over uka av fem
+kort etter hverandre.
+
+**Hover finnes ikke på berøring.** Dette er PC-only uansett, og skal ikke
+prøve å være noe annet på mobil — der er timeplanmodalen veien inn.
+
+### Avklart: elevnavn og notater ER med
+
+Jeg foreslo å holde navn og notater utenfor, siden appen ellers er
+påfallende disiplinert der — navn synkes ikke, ingen av de tre
+ICS-feedene inneholder dem. Et hover-kort ville vært det første stedet
+sensitivt innhold dukket opp *utilsiktet*, når musa passerer framfor når
+man klikker.
+
+**Nikolai valgte å ta dem med.** Dette er hans egen maskin, og gevinsten
+er å slippe å åpne modalen for å se hvem timen gjelder. Merk at valget
+gjør skjermen mer sensitiv enn før — det er verdt å vite når noen står bak
+deg. Teksten forlater aldri enheten: den havner ikke i noen feed og ikke i
+synken.
+
+Skal dette snus senere, er skillet enkelt å lage — `eventHoverTekst()`
+bygger elevdelen i én blokk til slutt.
+
+### Fortsatt åpent
+
+- **Blir hover brukt i det hele tatt?** Det er hele grunnen til at
+  `title`-varianten står der nå. Svarer du nei om tre uker, er posten
+  ferdig og kan strykes.
+- **Er 12 navn riktig tak?** `HOVER_ELEVER_MAKS`. En klasse på 30 gir
+  «… og 18 til», som er ærlig men lite nyttig. Et ekte kort kunne rullet.
+- **Skal fraværshaken med?** Den gjelder en hel dag, ikke en time, så den
+  hører strengt tatt ikke hjemme i et kort om én time.
+
+---
+
 ## Vurdert og lagt bort inntil videre
 
 Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
