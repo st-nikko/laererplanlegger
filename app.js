@@ -199,6 +199,40 @@ let maaSkrivesTilbake = false;
 const lessonData = {};
 const topicsBySubject = {};
 
+// ── Overordnet notat per elev ──
+// { elevId: 'fritekst' } — det som gjelder eleven generelt, ikke en enkelt
+// time. Støttebehov, avtaler med hjemmet, hva som pleier å virke.
+//
+// **Egen nøkkel, ikke et felt på elevobjektet.** `elevlisteUtenNavn()` er
+// `({ navn, navnMangler, ...rest })` — en spread. Alt som legges på
+// elevobjektet blir dermed med i `lp_students` av seg selv, og dermed inn
+// i synken *og* i «Eksporter uten navn». Et overordnet notat er langt mer
+// identifiserende enn et timenotat («mor tok kontakt om situasjonen
+// hjemme» mot «jobbet godt med brøk»), og den anonyme eksporten er nettopp
+// filen man deler. Med egen nøkkel er både synk og eksport et valg noen
+// har tatt, ikke noe som fulgte med.
+//
+// Notatet synkes (kryptert, knyttet til elev-id og ikke navn) — samme vern
+// som `studentNotes` i lessonData har. Det er bevisst: poenget er å ha det
+// på både PC og telefon.
+//
+// Bare elever med tekst lagres. Tømmer man feltet, forsvinner nøkkelen.
+let elevNotater = {};
+
+function getElevNotat(id) {
+  return elevNotater[id] ?? elevNotater[String(id)] ?? '';
+}
+
+function setElevNotat(id, tekst) {
+  const rent = (tekst || '').trim();
+  // Nøkkelen kan finnes i to former: seed-elever hadde heltalls-id, nye
+  // har UUID. Fjern begge, ellers blir en tømt tekst stående igjen.
+  delete elevNotater[id];
+  delete elevNotater[String(id)];
+  if (rent) elevNotater[id] = rent;
+  saveToStorage();
+}
+
 function lessonKey(evId, dateStr) { return `${evId}_${dateStr}`; }
 function getLesson(evId, dateStr) { return lessonData[lessonKey(evId, dateStr)] || null; }
 function setLesson(evId, dateStr, data) { lessonData[lessonKey(evId, dateStr)] = data; }
@@ -1701,9 +1735,72 @@ function renderElevlogg() {
   renderElevloggInnhold(studentId, document.getElementById('elevloggContent'));
 }
 
+// ── Overordnet notat om eleven ──
+// Bygges som noder, ikke via innerHTML: teksten er brukerens fritekst og
+// skal aldri tolkes som markup.
+//
+// Lagres når feltet mister fokus, og med to sekunders forsinkelse mens du
+// skriver — så en lang notis ikke går tapt om vinduet lukkes, uten at
+// hvert tastetrykk armer en synkopplasting.
+//
+// **Rendrer aldri elevloggen på nytt ved lagring.** En re-render ville
+// bygget textareaen om igjen og kastet både markøren og det halvskrevne
+// ordet. Det eneste som trenger å endre seg er kvitteringen.
+function byggElevNotatFelt(studentId) {
+  const blokk = document.createElement('div');
+  blokk.className = 'elevnotat';
+
+  const topp = document.createElement('div');
+  topp.className = 'elevnotat-topp';
+
+  const tittel = document.createElement('span');
+  tittel.className = 'elevnotat-tittel';
+  tittel.textContent = 'Om eleven';
+
+  const kvittering = document.createElement('span');
+  kvittering.className = 'elevnotat-kvittering';
+
+  topp.appendChild(tittel);
+  topp.appendChild(kvittering);
+
+  const felt = document.createElement('textarea');
+  felt.className = 'elevnotat-felt';
+  felt.dataset.elev = studentId;
+  felt.placeholder = 'Støttebehov, avtaler med hjemmet, hva som pleier å virke…';
+  felt.value = getElevNotat(studentId);
+
+  let timer = null;
+  let sisteLagret = felt.value;
+
+  const lagre = () => {
+    clearTimeout(timer);
+    if (felt.value.trim() === sisteLagret.trim()) return;
+    setElevNotat(studentId, felt.value);
+    sisteLagret = felt.value;
+    kvittering.textContent = 'Lagret';
+    kvittering.classList.add('vis');
+    setTimeout(() => kvittering.classList.remove('vis'), 1600);
+  };
+
+  felt.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(lagre, 2000); });
+  felt.addEventListener('blur', lagre);
+
+  blokk.appendChild(topp);
+  blokk.appendChild(felt);
+  return blokk;
+}
+
 // Felles innholdsbygger for elevlogg — brukes av både modal og fullskjerm-visning
 function renderElevloggInnhold(studentId, container) {
   if(!studentId){container.innerHTML='<div class="empty-state">Velg en elev for å se logg.</div>';return;}
+
+  container.innerHTML='';
+
+  // Det overordnede notatet tegnes FØR timelista — og før den tidlige
+  // returen lenger nede når eleven ikke har registrerte timer ennå.
+  // Ellers ville det du skrev om en ny elev vært usynlig helt til første
+  // time var ført, som er nøyaktig når man har mest å skrive.
+  container.appendChild(byggElevNotatFelt(studentId));
 
   // Samle alle timer der eleven er registrert — inkludert fravær
   const entries = [];
@@ -1741,7 +1838,12 @@ function renderElevloggInnhold(studentId, container) {
   });
 
   if(!entries.length){
-    container.innerHTML='<div class="empty-state">Ingen registrerte timer for denne eleven ennå.</div>';
+    // Merk: innerHTML nulles IKKE her. Notatfeltet er allerede lagt inn
+    // over, og skal bli stående — det er ofte det eneste som finnes for en
+    // ny elev.
+    const tom=document.createElement('div'); tom.className='empty-state';
+    tom.textContent='Ingen registrerte timer for denne eleven ennå.';
+    container.appendChild(tom);
     return;
   }
 
@@ -1752,7 +1854,6 @@ function renderElevloggInnhold(studentId, container) {
     bySubject[e.ev.title].push(e);
   });
 
-  container.innerHTML='';
   Object.entries(bySubject).forEach(([subject, items])=>{
     const c=getSubjectColor(subject);
     const block=document.createElement('div'); block.className='logg-subject-block';
@@ -2103,11 +2204,16 @@ function deleteStudent(id) {
   const medlemskap = events
     .filter(ev => ev.students && ev.students.some(sid => String(sid) === String(id)))
     .map(ev => ev.id);
-  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap });
+  // Notatet følger med i papirkurven — ellers ville en angret sletting
+  // gitt eleven tilbake uten det som var skrevet om ham.
+  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id) });
 
   // Fjern fra allStudents
   const idx = allStudents.findIndex(st => String(st.id) === String(id));
   if (idx !== -1) allStudents.splice(idx, 1);
+
+  delete elevNotater[id];
+  delete elevNotater[String(id)];
 
   // Fjern fra events.students
   events.forEach(ev => {
@@ -2684,6 +2790,9 @@ function exportData(medNavn = true) {
   const data = {
     events, todos, planfestetTid, overtid, lessonData, topicsBySubject,
     fridager, skoleaar, fravaerFort,
+    // Fritekst om eleven. Følger med i backup, også den anonyme —
+    // advarselen i exportDataUtenNavn() sier fra om nettopp dette.
+    elevNotater,
     allStudents: elevlisteUtenNavn()
   };
   if (medNavn) data.studentNames = navnekart();
@@ -2724,6 +2833,7 @@ function importData() {
         if (data.fridager)        localStorage.setItem('lp_fridager',        JSON.stringify(data.fridager));
         if (data.skoleaar)        localStorage.setItem('lp_skoleaar',        JSON.stringify(data.skoleaar));
         if (data.fravaerFort)     localStorage.setItem('lp_fravaerFort',     JSON.stringify(data.fravaerFort));
+        if (data.elevNotater)     localStorage.setItem('lp_elevNotater',     JSON.stringify(data.elevNotater));
 
         if (data.allStudents) {
           // Elevliste lagres alltid uten navn
@@ -3040,6 +3150,7 @@ function gjenopprettFraPapirkurv(id) {
 
   } else if (post.type === 'elev' && d.elev) {
     if (!allStudents.some(s => String(s.id) === String(d.elev.id))) allStudents.push(d.elev);
+    if (d.notat) elevNotater[d.elev.id] = d.notat;
     // Meld eleven inn igjen i timene han sto i, men bare i de som fortsatt finnes
     (d.medlemskap || []).forEach(evId => {
       const ev = events.find(e => String(e.id) === String(evId));
@@ -3089,6 +3200,7 @@ function saveToStorage() {
     localStorage.setItem('lp_fridager',        JSON.stringify(fridager));
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
     localStorage.setItem('lp_fravaerFort',     JSON.stringify(fravaerFort));
+    localStorage.setItem('lp_elevNotater',     JSON.stringify(elevNotater));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
     // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
@@ -3226,6 +3338,14 @@ function loadFromStorage() {
     if (storedFravaer) {
       const lest = JSON.parse(storedFravaer);
       if (lest && typeof lest === 'object' && !Array.isArray(lest)) fravaerFort = lest;
+    }
+
+    // Overordnet notat per elev. Samme forsiktighet som over: en ødelagt
+    // verdi skal gi tom tilstand, ikke stoppe hele lastingen.
+    const storedElevNotater = localStorage.getItem('lp_elevNotater');
+    if (storedElevNotater) {
+      const lest = JSON.parse(storedElevNotater);
+      if (lest && typeof lest === 'object' && !Array.isArray(lest)) elevNotater = lest;
     }
 
     const storedPapirkurv = localStorage.getItem('lp_papirkurv');

@@ -372,6 +372,46 @@
     .elevlogg-modal { background: var(--bg); border-radius: 12px; width: 540px; height: 90vh; box-shadow: var(--skygge-modal); display: flex; flex-direction: column; overflow: hidden; }
     .elevlogg-select { padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; width: 100%; margin-bottom: 4px; }
     .elevlogg-select:focus { border-color: var(--accent); }
+    /* ── OVERORDNET NOTAT OM ELEVEN ──
+       Står øverst i elevloggen, over timelista. Tonet flate framfor bare
+       en ramme, så det leses som et eget felt og ikke som første post i
+       loggen — innholdet er av en annen sjanger enn timenotatene under. */
+    .elevnotat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 22px;
+      /* Samme tak som #minSideView. Full bredde på en 1440-skjerm gir
+         linjer på 180 tegn, og dette er brødtekst man skal lese. */
+      max-width: 720px;
+    }
+    .elevnotat-topp {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .elevnotat-tittel {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+      text-transform: uppercase; color: var(--text-secondary);
+    }
+    /* Kvitteringen tar plassen sin hele tiden, også når den er usynlig —
+       ellers hopper tittelen sidelengs hver gang noe lagres. */
+    .elevnotat-kvittering {
+      font-size: 11px; color: var(--suksess);
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .elevnotat-kvittering.vis { opacity: 1; }
+    .elevnotat-felt {
+      width: 100%; box-sizing: border-box;
+      min-height: 84px; resize: vertical;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
+      font-family: inherit; font-size: 13px; line-height: 1.5;
+      color: var(--text-primary); background: var(--bg);
+      outline: none;
+    }
+    .elevnotat-felt:focus { border-color: var(--accent); }
+    .elevnotat-felt::placeholder { color: var(--text-muted); }
+
     .logg-subject-block { margin-bottom: 20px; }
     .logg-subject-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
     .logg-subject-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

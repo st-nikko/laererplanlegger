@@ -1302,6 +1302,6 @@ dokument, sjekk at nummeret stemmer.*
 
 *Gjennomført 19. august 2026: modallukking (13), lunsjskillet (17),
 gjøremål på mobil (18), fritekstfeltet (20) og fraværshaken (16). Samme dag
-kom også merker og filter på gjøremål, og «Foreldremøte» ble
-«Samarbeidsmøte» — de tre sto aldri i veikartet, og er dokumentert i
-CONTEXT.md i stedet.*
+kom også merker og filter på gjøremål, «Foreldremøte» → «Samarbeidsmøte»,
+hover-tooltip på timene (22) og et overordnet notat om eleven i elevloggen
+— de sto aldri i veikartet, og er dokumentert i CONTEXT.md i stedet.*

@@ -46,6 +46,7 @@ Lærerplanlegger/
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
 | EVENT FORM MODAL | `openEventForm()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. |
 | LESSON PLAN MODAL | `openLessonPlan()`, `renderAttendanceList()`, `saveLessonPlan()`, `kopierEvent()` |
+| ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
 | ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
@@ -233,6 +234,45 @@ ikke i synken. Skal det snus, bygges elevdelen i én blokk til slutt i
 Teksten settes som **attributt**, aldri i `innerHTML`. Elevnotater er
 brukerens fritekst; i markup ville de blitt tolket som HTML. En test
 vokter det med et `<img onerror=…>` som notat.
+
+### Overordnet notat om eleven
+
+Lagt til 19. august 2026. Et fritekstfelt øverst i elevloggen for det som
+gjelder eleven generelt — støttebehov, avtaler med hjemmet, hva som pleier
+å virke. Elevloggen var fram til da **helt avledet**: den bygde alt fra
+`lessonData` og eide ingen egen tilstand. Dette er det første som er
+elevens eget.
+
+**Egen nøkkel, ikke et felt på elevobjektet — dette er det viktigste her.**
+`elevlisteUtenNavn()` er `({ navn, navnMangler, ...rest })`, altså en
+spread. Alt som legges på elevobjektet blir med i `lp_students` av seg
+selv, og dermed inn i synken *og* i «Eksporter uten navn», uten at noen tar
+stilling til det. Et overordnet notat er langt mer identifiserende enn et
+timenotat — «mor tok kontakt om situasjonen hjemme» mot «jobbet godt med
+brøk» — og den anonyme eksporten er nettopp filen man deler videre. Med
+`lp_elevNotater` er både synk og eksport et valg. `tests/elevnotat.test.js`
+har en test som slår ut hvis notatet finner veien inn i `lp_students`.
+
+Notatet **synkes** (kryptert, knyttet til elev-id og ikke navn), samme vern
+som `studentNotes` i lessonData. Bevisst: poenget er å ha det på både PC og
+telefon. Bare elever med tekst lagres; tømmer man feltet, forsvinner
+nøkkelen.
+
+To fallgruver som er dekket, og som testene vokter:
+
+- **Feltet tegnes før den tidlige returen** i `renderElevloggInnhold()`.
+  Har eleven ingen registrerte timer, gikk funksjonen ut med «Ingen
+  registrerte timer» og tømte containeren — notatet ville vært usynlig
+  akkurat når man har mest å skrive om en ny elev. Den returen setter nå
+  inn tom-meldingen som node framfor å nulle `innerHTML`.
+- **Lagring rendrer aldri loggen på nytt.** En re-render ville bygget
+  textareaen om igjen og kastet både markøren og det halvskrevne ordet.
+  Det eneste som endrer seg er kvitteringen. Lagres ved `blur` og med to
+  sekunders forsinkelse mens man skriver — nok til at en lang notis ikke
+  går tapt, uten at hvert tastetrykk armer en synkopplasting.
+
+Notatet følger med i papirkurven når en elev slettes, og tilbake ved
+gjenoppretting. Feltet bygges som noder, aldri via `innerHTML`.
 
 ---
 
