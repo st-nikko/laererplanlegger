@@ -1270,6 +1270,89 @@ bygger elevdelen i én blokk til slutt.
 
 ---
 
+## 23. Steg på gjøremål
+
+**Idéen:** Et gjøremål kan deles i deler du huker av hver for seg, så du
+ser hvor langt du er kommet.
+
+**Status:** Ønsket, med et avklart formål. Ikke bygget.
+
+### Hva det er for
+
+Avklart 19. august 2026: **framdrift på de få gjøremålene som virkelig er
+flerdelte** — halvårsvurderinger, en IOP-runde, noe som går over uker.
+Ikke som notatverktøy; til det finnes `tekst`-feltet, som siden post 20
+fyller hele modalen. Skillet er verdt å holde på når funksjonen bygges:
+**avkryssingen og «2/5» er poenget.** Blir stegene bare en punktliste man
+leser, er beskrivelsen der allerede.
+
+### Statuskollisjonen — det som må avgjøres først
+
+`cycleTodoStatus()` går i dag `ikke_startet → startet → ferdig`.
+**«Startet» finnes nettopp fordi en oppgave kan være delvis gjort**, og det
+er samme spørsmål stegene svarer på. Uten et valg her får du to kilder til
+sannhet: tre av fem steg huket av, mens statusen står på «ikke startet»
+fordi ingen trykket på sirkelen. Det krasjer ingenting, men man slutter å
+stole på begge.
+
+**Anbefalt: la stegene styre statusen.**
+
+| Har gjøremålet steg? | Hva som gjelder |
+|---|---|
+| Nei | Alt virker som i dag. Sirkelen er en knapp, `cycleTodoStatus()` urørt |
+| Ja | Statusen **utledes**: ingen steg huket = `ikke_startet`, noen = `startet`, alle = `ferdig`. Sirkelen blir en visning, ikke en knapp |
+
+Alternativet — at begge kan settes uavhengig — er å be om rot. Merk at
+`renderSkjulteGjøremål()` og gjøremålsfeeden begge filtrerer på
+`status !== 'ferdig'`; utledes statusen, arver de det gratis.
+
+### Plassen i panelet
+
+`#sidebarContent` er 272 px. Et gjøremål viser allerede tittel, to linjer
+beskrivelse, opptil tre merkelapper og frist. Fire steg inni hver rad gjør
+lista til en rulletur.
+
+- **I lista:** slå dem sammen til «2/5» ved siden av fristen. Ikke stegene
+  selv.
+- **I skjemaet:** der redigeres de, én linje per steg med en
+  legg-til-knapp.
+- **Merk klikkflaten:** `body.onclick` åpner i dag redigering
+  (`renderTodoList()`, app.js ~2661). Skal steg kunne hukes av fra lista,
+  må det løses uten å få to ting å treffe i samme rad — enkleste utvei er
+  at avkryssing bare skjer i skjemaet.
+
+### Datamodell
+
+`todos[].steg = [{ tekst, ferdig }]`, i samme objekt. Ingen ny
+lagringsnøkkel: `lp_todos` synkes allerede, og steg er ikke en annen
+sjanger enn resten av gjøremålet.
+
+| Sted | Endring |
+|------|---------|
+| `openTodoForm()` / `saveTodo()` | Lese og skrive `steg` |
+| `index.html`, `todoFormOverlay` | Redigerbar liste under beskrivelsen |
+| `renderTodoList()` | «2/5»-merke; statussirkelen utledet når `steg` finnes |
+| `cycleTodoStatus()` | Skal ikke gjøre noe når gjøremålet har steg |
+
+### Billig å ta med samtidig
+
+`gjoeremaalTittel()` i gjøremålsfeeden kunne skrevet «Halvårsvurdering
+(2/5)», så framdriften synes i Outlook uten å åpne appen. Én linje, gitt at
+stegene først finnes.
+
+### Fortsatt åpent
+
+- **Skal steg kunne ha egen frist?** Da nærmer de seg å være gjøremål med
+  en forelder, og det er en helt annen øvelse — sortering, filtrering,
+  papirkurv og feed må alle forholde seg til et tre. Anbefales ikke.
+- **Hva skjer med et steg du fjerner?** Enkleste svar er at det bare er
+  borte; ingen papirkurv for noe så lite.
+- **Rekkefølge.** Skal steg kunne flyttes opp og ned? Dra-og-slipp er
+  uforholdsmessig; piler er stygge men billige. Kanskje ingen av delene
+  trengs — man skriver dem som regel i riktig rekkefølge.
+
+---
+
 ## Vurdert og lagt bort inntil videre
 
 Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
