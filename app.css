@@ -419,6 +419,14 @@
       display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px;
       border-radius: 6px; background: var(--surface); margin-bottom: 6px; font-size: 13px;
     }
+    /* Loggposten åpner timen sin. Hover-flaten er den eneste antydningen
+       om at raden er klikkbar — den har verken knapp eller ikon, og skal
+       ikke få det: lista skal fortsatt leses som en logg. */
+    .logg-entry.klikkbar { cursor: pointer; transition: background 0.1s, box-shadow 0.1s; }
+    .logg-entry.klikkbar:hover {
+      background: var(--meny-aktiv-bg);
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
     .logg-date { color: var(--text-muted); font-size: 11px; white-space: nowrap; margin-top: 2px; }
     .logg-tema { font-weight: 500; flex: 1; }
     .logg-notes { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }

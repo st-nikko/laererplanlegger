@@ -1353,6 +1353,149 @@ stegene først finnes.
 
 ---
 
+## 24. Elev × fag: karakterstatus og fritekst
+
+**Idéen:** Per elev og fag — om eleven vurderes **med eller uten karakter**
+i faget, og et fritekstfelt for det som gjelder eleven i nettopp det faget.
+
+**Status:** Ønsket. Én post og én struktur, av en grunn som er verdt å
+lese før noe bygges.
+
+### Hvorfor de to hører sammen
+
+Dette var to forslag: «vurdering med eller uten karakter i de ulike fagene»
+og «fritekstfelt til hvert fag». **De henger på samme akse — elev × fag —
+og deler derfor oppslag.** Bygges de hver for seg, ender man med to nøstede
+strukturer som må migreres hver sin gang og holdes i takt med hverandre.
+
+```js
+{ elevId: { 'Norsk': { karakter: 'med' | 'uten', notat: '…' } } }
+```
+
+**Merk: ingen karakterer lagres.** Feltet sier om eleven *skal ha* karakter
+i faget — som ved vedtak, fritak i skriftlig sidemål eller fritak i
+kroppsøving. Det er en egenskap ved paret elev + fag, ikke et resultat.
+Dette kolliderer derfor **ikke** med post 14, som slår fast at
+vurderingsvisningen ikke skal ha karakterer per elev. De to kan bygges
+uavhengig.
+
+### Migreringen er det som kan gå galt
+
+`lp_elevNotater` er i dag **flat**: `{ elevId: 'fritekst' }` — det
+overordnede notatet fra «Om eleven». Ny struktur er nøstet per fag.
+`loadFromStorage()` må derfor gjenkjenne den gamle formen og løfte den inn
+som det generelle notatet, ikke som et fagnotat og ikke i glemmeboka.
+
+Presedens finnes: `loadFromStorage()` reparerer allerede gjentakende møter
+med feil ukedag. Samme mønster — kjenn igjen den gamle formen, konverter,
+og la testen vokte at gammel data overlever.
+
+Forslag til form, der `__generelt` er notatet som ikke hører til et fag:
+
+```js
+{ elevId: { __generelt: '…', 'Norsk': { karakter: 'uten', notat: '…' } } }
+```
+
+### Hvor det vises
+
+Elevloggen **grupperer allerede per fag** (`bySubject` i
+`renderElevloggInnhold()`), så begge deler har en opplagt plass øverst i
+hver fagblokk: en liten velger for med/uten karakter, og et fritekstfelt
+under. Feltet kan gjenbruke `byggElevNotatFelt()` nesten som det er.
+
+| Sted | Endring |
+|------|---------|
+| `elevNotater` + `getElevNotat()`/`setElevNotat()` | Nøstet form, og migrering ved lasting |
+| `renderElevloggInnhold()` | Felt og velger per fagblokk |
+| `byggElevNotatFelt()` | Ta imot fag som parameter |
+| `exportData()`/`importData()`, papirkurv | Følger med som i dag, men strukturen er nøstet |
+
+`lp_elevNotater` står allerede i `SYNK_NOKLER` — ingen ny nøkkel trengs.
+
+### Fortsatt åpent
+
+- **Blir det for mange bokser?** Med fem fag får du seks tekstfelt på én
+  skjerm, pluss det generelle. Kanskje bør fagfeltene være sammenslåtte til
+  man klikker, eller bare vises for fag der det faktisk står noe.
+- **Hvor kommer faglista fra?** Fagblokkene i elevloggen finnes bare for
+  fag eleven har *registrerte timer* i. Skal du kunne sette karakterstatus
+  før første time er ført, må lista komme fra `events[]` i stedet.
+- **Antyder «uten karakter» et vedtak?** I praksis ja. Det er samme sjanger
+  som «Om eleven»-feltet allerede bærer, og synkes kryptert på samme vis —
+  ingen ny kategori, men verdt å ha sagt høyt.
+
+---
+
+## 25. Varsel om karakter, orden og oppførsel
+
+**Idéen:** Oversikt over hvilke varsler som er sendt, til hvem og når.
+
+**Status:** Ønsket. Den mest nyttige av elevlogg-idéene, og den som må
+formes mest bevisst.
+
+### Dette er ikke et notat
+
+Et varsel er en **datert, formell handling** med frister knyttet til
+terminen — ikke en observasjon. Det skiller det fra alt annet i elevloggen,
+og betyr at det ligner mer på fraværshaken (post 16) enn på notatfeltet:
+noe som er gjort eller ikke gjort, med en dato.
+
+**Skolens eget system er fasit.** Det som bygges her er en oversikt over
+hva *du* har gjort — samme forhold som fraværshaken har til føringen i det
+andre systemet. Det bør stå i hjelpeteksten, så det aldri forveksles med
+det formelle arkivet.
+
+### Datamodell, forslag
+
+```js
+{ elevId: [ { type: 'fag' | 'orden' | 'atferd',
+              fag: 'Norsk',        // bare når type === 'fag'
+              dato: 'YYYY-MM-DD',
+              notat: '…' } ] }
+```
+
+En liste per elev, ikke ett felt: en elev kan få varsel i flere fag, og i
+både orden og atferd, i samme termin.
+
+### Terminvinduet er det som må avgjøres
+
+Et varsel gjelder for en termin. «Sendt 12. november» betyr noe helt annet
+i februar enn i november. Uten et begrep om termin blir oversikten en liste
+som bare vokser.
+
+Appen har `skoleaar { start, slutt }`, men **ikke noe terminskille**. Tre
+utveier:
+
+1. **Legg til terminskillet** i skoleårsinnstillingene på Min side. Ett
+   datofelt. Da kan oversikten si «denne terminen» og mene det.
+2. **Vis alt, sortert på dato.** Billigst, og duger sikkert et helt år.
+3. **Rullende vindu**, som `FRAVAER_TILBAKE`. Passer dårlig her — et varsel
+   fra oktober er fortsatt relevant i desember.
+
+Alternativ 1 er antakelig riktig, og terminskillet ville uansett vært
+nyttig andre steder.
+
+### Oversikt på tvers, ikke bare per elev
+
+Spørsmålet som melder seg når terminen nærmer seg er «hvem har jeg varslet,
+og hvem burde jeg ha varslet» — ikke «hva står på Kari». Så dette trenger
+antakelig **to visninger**: varslene for én elev i elevloggen, og en samlet
+liste et sted. Fraværsoversikten på Min side er mønsteret.
+
+### Fortsatt åpent
+
+- **Skal appen minne om noe?** Fristen for varsel er knyttet til terminen,
+  og et varsel som kommer for sent er verdiløst. Et lite «det er N uker til
+  terminslutt» ville vært nyttig — men det forutsetter terminskillet over.
+- **Hvor mye begrunnelse skal med?** Et fritekstfelt her vil inneholde
+  sensitive opplysninger om enkeltelever. Samme vern som resten, men verdt
+  å velge bevisst framfor å ta med av vane.
+- **Elevnavn i en eventuell eksport.** Varsler er den dataen man minst av
+  alt vil ha i «Eksporter uten navn» ved et uhell. Vurder om denne nøkkelen
+  skal utelates derfra, i motsetning til resten.
+
+---
+
 ## Vurdert og lagt bort inntil videre
 
 Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
@@ -1386,5 +1529,6 @@ dokument, sjekk at nummeret stemmer.*
 *Gjennomført 19. august 2026: modallukking (13), lunsjskillet (17),
 gjøremål på mobil (18), fritekstfeltet (20) og fraværshaken (16). Samme dag
 kom også merker og filter på gjøremål, «Foreldremøte» → «Samarbeidsmøte»,
-hover-tooltip på timene (22) og et overordnet notat om eleven i elevloggen
-— de sto aldri i veikartet, og er dokumentert i CONTEXT.md i stedet.*
+hover-tooltip på timene (22), et overordnet notat om eleven i elevloggen og
+klikk fra loggpost til time — de sto aldri i veikartet, og er dokumentert i
+CONTEXT.md i stedet.*

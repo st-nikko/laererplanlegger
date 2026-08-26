@@ -47,6 +47,7 @@ Lærerplanlegger/
 | EVENT FORM MODAL | `openEventForm()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. |
 | LESSON PLAN MODAL | `openLessonPlan()`, `renderAttendanceList()`, `saveLessonPlan()`, `kopierEvent()` |
 | ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
+| ELEVLOGG → TIME | `aapneTimeFraLogg(evId, dato)` — en loggpost er sammendraget av én time, og klikk åpner den timen på **postens egen dato**. Lukker `#elevloggOverlay` først: fra modalen ville to overlegg ellers stått oppå hverandre og Escape lukket feil ett. Samme mønster som `openEditFromPlan()`. Sier fra hvis timen er slettet siden posten ble skrevet |
 | ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
@@ -273,6 +274,11 @@ To fallgruver som er dekket, og som testene vokter:
 
 Notatet følger med i papirkurven når en elev slettes, og tilbake ved
 gjenoppretting. Feltet bygges som noder, aldri via `innerHTML`.
+
+**Loggpostene under er klikkbare** (`.logg-entry.klikkbar`) og åpner timen
+sin via `aapneTimeFraLogg()`. Hover-flaten er eneste antydning om at raden
+kan trykkes — den har verken knapp eller ikon, og skal ikke få det: lista
+skal fortsatt leses som en logg.
 
 ---
 

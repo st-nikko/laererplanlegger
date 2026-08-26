@@ -219,6 +219,67 @@ test('lagring rendrer ikke loggen på nytt', () => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// KLIKK PÅ LOGGPOST → ÅPNE TIMEN
+// ══════════════════════════════════════════════════════════════
+
+const MED_TIME = {
+  events: [TIME],
+  lessonData: { '1_2026-08-17': { tema: 'Brøk', notes: '', attendance: {}, studentNotes: {} } }
+};
+
+test('loggposten åpner timen sin', () => {
+  const dom = lagDom(MED_TIME); const w = dom.window;
+  const post = tegn(w).querySelector('.logg-entry');
+  sant(post, 'fant ingen loggpost');
+  sant(post.classList.contains('klikkbar'), 'posten er ikke merket klikkbar');
+
+  post.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  sant(w.document.getElementById('planOverlay').classList.contains('open'), 'timeplanmodalen åpnet ikke');
+  like(w.eval('planEventId'), 1, 'feil time');
+  like(w.eval('planDateStr'), '2026-08-17', 'feil dato — posten må åpne SIN dato, ikke dagens');
+  dom.window.close();
+});
+
+test('elevloggmodalen lukkes først', () => {
+  // Ellers står to overlegg oppå hverandre og Escape lukker feil ett.
+  const dom = lagDom(MED_TIME); const w = dom.window;
+  w.openElevlogg('s1');
+  sant(w.document.getElementById('elevloggOverlay').classList.contains('open'), 'elevloggmodalen skulle vært åpen');
+
+  const post = w.document.querySelector('#elevloggContent .logg-entry');
+  sant(post, 'fant ingen loggpost i modalen');
+  post.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+
+  sant(!w.document.getElementById('elevloggOverlay').classList.contains('open'), 'elevloggmodalen ble stående åpen');
+  sant(w.document.getElementById('planOverlay').classList.contains('open'), 'timeplanmodalen åpnet ikke');
+  like(w.document.querySelectorAll('.overlay.open').length, 1, 'nøyaktig ett overlegg skal være åpent');
+  dom.window.close();
+});
+
+test('en slettet time sier fra framfor å gjøre ingenting', () => {
+  const dom = lagDom(MED_TIME); const w = dom.window;
+  let sagt = null;
+  w.alert = m => { sagt = m; };
+
+  w.eval('events.length = 0');   // timen er borte, loggposten peker i tomme lufta
+  w.aapneTimeFraLogg(1, '2026-08-17');
+
+  sant(sagt && /finnes ikke/.test(sagt), 'ingen beskjed ble gitt: ' + sagt);
+  sant(!w.document.getElementById('planOverlay').classList.contains('open'), 'skulle ikke åpnet noe');
+  dom.window.close();
+});
+
+test('notatfeltet er ikke klikkbart som en loggpost', () => {
+  // Klikk i textareaen skal sette markøren, ikke åpne en time.
+  const dom = lagDom(MED_TIME); const w = dom.window;
+  const f = tegn(w).querySelector('.elevnotat-felt');
+  f.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+  sant(!w.document.getElementById('planOverlay').classList.contains('open'),
+       'klikk i notatfeltet åpnet en time');
+  dom.window.close();
+});
+
+// ══════════════════════════════════════════════════════════════
 // SYNK, BACKUP OG PAPIRKURV
 // ══════════════════════════════════════════════════════════════
 
@@ -245,7 +306,7 @@ test('sletting tar notatet med i papirkurven, og gjenoppretting gir det tilbake'
 });
 
 // ── Kjør ───────────────────────────────────────────────────────
-console.log('\nOverordnet notat om eleven\n');
+console.log('\nElevloggen — notat om eleven og klikk til timen\n');
 let alle = true;
 for (const [navn, fn] of tester) {
   try { fn(); console.log('  OK   ' + navn); }

@@ -1790,6 +1790,22 @@ function byggElevNotatFelt(studentId) {
   return blokk;
 }
 
+// ── Fra loggpost til time ──
+// Elevloggen finnes to steder: som modal (#elevloggOverlay) og som
+// fullskjermvisning. Fra modalen må den lukkes FØR timeplanmodalen åpnes,
+// ellers står to overlegg oppå hverandre og Escape lukker feil ett.
+// Samme mønster som openEditFromPlan() bruker.
+//
+// Timen kan ha blitt slettet siden loggposten ble skrevet — lessonData
+// overlever ikke slettingen i dag, men en gjenopprettet time kan ha fått
+// endret dato. Finner vi den ikke, sier vi fra framfor å gjøre ingenting.
+function aapneTimeFraLogg(evId, dato) {
+  const ev = events.find(e => String(e.id) === String(evId));
+  if (!ev) { alert('Timen finnes ikke lenger.'); return; }
+  closeOverlay('elevloggOverlay');
+  openLessonPlan(ev, new Date(dato + 'T00:00:00'));
+}
+
 // Felles innholdsbygger for elevlogg — brukes av både modal og fullskjerm-visning
 function renderElevloggInnhold(studentId, container) {
   if(!studentId){container.innerHTML='<div class="empty-state">Velg en elev for å se logg.</div>';return;}
@@ -1866,7 +1882,12 @@ function renderElevloggInnhold(studentId, container) {
       const badgeHtml=item.attendanceBadge
         ?`<span class="logg-attendance-badge" style="${item.attendanceBadge.style};padding:1px 6px;border-radius:4px;font-size:0.75rem;white-space:nowrap">${item.attendanceBadge.label}</span>`
         :'';
-      const entry=document.createElement('div'); entry.className='logg-entry';
+      const entry=document.createElement('div'); entry.className='logg-entry klikkbar';
+      // Loggposten er et sammendrag av én time. Klikk åpner den timen, så
+      // man slipper å bla seg tilbake i kalenderen for å se hva som
+      // faktisk sto der.
+      entry.title=`Åpne ${item.ev.title} ${dateLabel}`;
+      entry.onclick=()=>aapneTimeFraLogg(item.ev.id, item.date);
       entry.innerHTML=`
         <div style="flex:1">
           <div style="display:flex;align-items:baseline;gap:8px">
