@@ -109,6 +109,26 @@ test('flex-kjeden går hele veien ned til textareaen', () => {
   });
 });
 
+test('feltet legger seg aldri oppå det under', () => {
+  // Regresjon, 19. august 2026: `min-height: 0` lot seksjonen og feltet
+  // krympe UNDER sitt eget innhold på lave vinduer. Textareaen holdt fast
+  // på sine 90 px og la seg oppå merkefeltet — og fordi boksen var
+  // krympet, så ikke .modal-body noe å rulle og ga ikke rullefelt engang.
+  //
+  // Standardverdien min-height: auto gjør det motsatte: elementet blir
+  // aldri lavere enn innholdet, og kroppen ruller. `flex: 1` virker like
+  // fullt.
+  ['#todoFormOverlay .form-section', '#todoFormOverlay .todo-tekst-felt'].forEach(sel => {
+    const kropp = regel(sel) || '';
+    sant(/flex:\s*1/.test(kropp), sel + ' mangler flex: 1');
+    sant(!/min-height:\s*0/.test(kropp),
+         sel + ' har min-height: 0 — da krymper den under innholdet og legger seg oppå feltet under');
+  });
+  // Kroppen må kunne rulle når innholdet ikke får plass
+  sant(/overflow-y:\s*auto/.test(regel('.modal-body') || ''),
+       '.modal-body må rulle, ellers blir innhold som ikke får plass utilgjengelig');
+});
+
 test('textareaen har fortsatt en bunn å stå på', () => {
   // Uten min-height kollapser den til ingenting i en kort modal
   sant(/min-height:\s*\d+px/.test(regel('#todoFormOverlay .todo-tekst-felt textarea') || ''),

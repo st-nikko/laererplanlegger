@@ -346,9 +346,23 @@
        standard og beholder sin naturlige høyde.
        resize er slått av her fordi håndtaket ellers kjemper mot flex:
        drar man i det, settes en fast høyde som veksten så overstyrer ved
-       neste åpning. */
-    #todoFormOverlay .form-section  { flex: 1; min-height: 0; }
-    #todoFormOverlay .todo-tekst-felt { flex: 1; min-height: 0; }
+       neste åpning.
+
+       **INGEN min-height: 0 her — det var en feil, rettet 19. august 2026.**
+       Med `min-height: 0` kan et flex-element krympe under sitt eget
+       innhold. Det gjorde at seksjonen og feltet krympet på lave vinduer,
+       mens textareaen holdt fast på sine 90 px og la seg OPPÅ merkefeltet
+       under. Og fordi seksjonens boks var krympet, så ikke `.modal-body`
+       noe å rulle — den ga ikke engang rullefelt.
+
+       Standardverdien `min-height: auto` gjør det motsatte: elementet blir
+       aldri lavere enn innholdet, seksjonen vokser forbi kroppen, og
+       `.modal-body { overflow-y: auto }` gir rullefelt slik den skal.
+       `flex: 1` virker like fullt — feltet vokser fortsatt når det er
+       plass. Se testen «feltet legger seg aldri oppå det under» i
+       tests/gjoeremaal.test.js. */
+    #todoFormOverlay .form-section  { flex: 1; }
+    #todoFormOverlay .todo-tekst-felt { flex: 1; }
     #todoFormOverlay .todo-tekst-felt textarea { flex: 1; min-height: 90px; resize: none; }
 
     /* ── PLAN MODAL ── */
