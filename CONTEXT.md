@@ -48,7 +48,7 @@ Lærerplanlegger/
 | LESSON PLAN MODAL | `openLessonPlan()`, `renderAttendanceList()`, `saveLessonPlan()`, `kopierEvent()` |
 | ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
 | ELEVLOGG → TIME | `aapneTimeFraLogg(evId, dato)` — en loggpost er sammendraget av én time, og klikk åpner den timen på **postens egen dato**. Lukker `#elevloggOverlay` først: fra modalen ville to overlegg ellers stått oppå hverandre og Escape lukket feil ett. Samme mønster som `openEditFromPlan()`. Sier fra hvis timen er slettet siden posten ble skrevet |
-| ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning |
+| ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning. Filtrerer bort timer holdt **før elevens `startDato`**: elevlista ligger på hendelsen, ikke på datoen, så en elev lagt inn midt i året står ellers på alle tidligere datoer av samme time. Timer fram i tid blir stående, merket «Planlagt». Se «Hvilke datoer elevloggen viser» nedenfor |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
 | VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning, **og lukker gjøremålspanelet når `erSmalSkjerm()`** — på mobil er det et overlegg over hele kalenderen, så visningen skiftet bak det; på PC er det en kolonne og skal bli stående), `changeNav()`, `goToDayView()` |
@@ -279,6 +279,50 @@ gjenoppretting. Feltet bygges som noder, aldri via `innerHTML`.
 sin via `aapneTimeFraLogg()`. Hover-flaten er eneste antydning om at raden
 kan trykkes — den har verken knapp eller ikon, og skal ikke få det: lista
 skal fortsatt leses som en logg.
+
+### Hvilke datoer elevloggen viser
+
+Rettet 2. september 2026, etter en melding om at loggen viste timer eleven
+ikke hadde deltatt i.
+
+**Elevlista ligger på hendelsen, ikke på datoen.** Nøkkelen i `lessonData`
+er `hendelsesId_dato`, og én hendelse dekker alle datoene den gjentas på.
+Legger man en elev inn i en time i november, står han med ett slag på alle
+datoene den timen har hatt siden august — timer han aldri var i. Dette
+gjelder enhver funksjon som leser `lessonData` per elev, ikke bare loggen.
+
+`calcAttendance()` og `calcAttendancePerFag()` har alltid hatt vernet
+(`if (dateStr < startDato) return`). `renderElevloggInnhold()` hadde det
+ikke. Utslaget var at *tellingen* i Elever så riktig ut mens *loggen* viste
+for mye — to visninger av samme elev som sa ulike ting. Reservedatoen ved
+manglende `startDato` er `'2000-01-01'` i alle tre, så elever lagt inn før
+feltet fantes beholder historikken sin.
+
+**Grensa framover er bevisst ulik de to stedene:**
+
+| | Bakover | Framover |
+|---|---|---|
+| `calcAttendance()` | `< startDato` | `> i dag` — en time som ikke er holdt kan ikke telles som nærvær |
+| `renderElevloggInnhold()` | `< startDato` | ingen — planlagte timer blir stående |
+
+Loggen tar med timer fram i tid fordi tema ofte skrives på forhånd; lista
+er da også en oversikt over hva som kommer. De **merkes** i stedet for å
+skjules: klassen `.logg-entry--planlagt` (stiplet kant, gjennomsiktig
+flate) og brikka `.logg-planlagt-merke` («Planlagt»).
+
+Stiplet strek og ikke en ny farge, av to grunner: de fylte brikkene
+(`--fare`, `--overtid`) betyr fravær og ville fått konkurranse om samme
+plass i raden, og `--border-strong` markerer «ikke ferdig» andre steder i
+appen fra før (`.work-dot.planned`). `.logg-entry` har derfor
+`border: 1px solid transparent` — uten den ville planlagte rader vokst
+2 px og stått og hoppet mot radene rundt.
+
+En planlagt time viser **aldri** fraværsbrikke, selv om det ligger en
+verdi i `attendance`. Den er i så fall ført ved et uhell, og «Fraværende»
+på en time fram i tid ville lest som et faktum om noe som ikke har skjedd.
+
+`tests/elevlogg-datoer.test.js` vokter alt dette, inkludert at loggen og
+oppmøtetellingen holder samme grense bakover.
 
 ---
 

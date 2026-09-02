@@ -1818,6 +1818,16 @@ function renderElevloggInnhold(studentId, container) {
   // time var ført, som er nøyaktig når man har mest å skrive.
   container.appendChild(byggElevNotatFelt(studentId));
 
+  // Elevlista ligger på HENDELSEN, ikke på hver enkelt dato. Legger man en
+  // elev inn i en time midt i året, står han med ett slag på alle datoene
+  // den timen har hatt siden august — timer han aldri var i. Derfor samme
+  // grense som calcAttendance() og calcAttendancePerFag() bruker: ingenting
+  // før elevens startdato. Uten den viste loggen mer enn tellingen i
+  // «Elever», og de to sa ulike ting om samme elev.
+  const eleven = allStudents.find(s=>String(s.id)===String(studentId));
+  const startDato = eleven ? (eleven.startDato || '2000-01-01') : '2000-01-01';
+  const iDag = isoDate(TODAY);
+
   // Samle alle timer der eleven er registrert — inkludert fravær
   const entries = [];
   Object.keys(lessonData).forEach(key=>{
@@ -1826,12 +1836,23 @@ function renderElevloggInnhold(studentId, container) {
     const ev=events.find(e=>e.id===parseInt(evIdStr));
     if(!ev||ev.category!=='undervisning') return;
     if(!ev.students.includes(studentId)) return;
+    if(dateStr<startDato) return;   // Timer holdt før eleven begynte
+
+    // Timer fram i tid blir stående — tema skrives ofte på forhånd, og da
+    // er lista også en oversikt over hva som kommer. De merkes i stedet
+    // for å skjules, se `planlagt` nedenfor.
+    const planlagt = dateStr > iDag;
 
     // Nærvær: håndter boolean[], boolean og undefined
     const att=ld.attendance||{};
     const raw=att[studentId]??att[String(studentId)];
     let attendanceBadge=null; // null = fullt til stede / ikke registrert
-    if(Array.isArray(raw)){
+    if(planlagt){
+      // Ingen fraværsbrikke på en time som ikke er holdt. Står det likevel
+      // en verdi der, er den ført ved et uhell — å vise «Fraværende» på en
+      // time fram i tid ville lest som et faktum om noe som ikke har skjedd.
+      attendanceBadge=null;
+    } else if(Array.isArray(raw)){
       const total=raw.length;
       const present=raw.filter(Boolean).length;
       if(total>0&&present<total){
@@ -1850,7 +1871,7 @@ function renderElevloggInnhold(studentId, container) {
     const sn=ld.studentNotes||{};
     const studentNote=(sn[studentId]??sn[String(studentId)])||'';
 
-    entries.push({ date:dateStr, ev, tema:ld.tema, notes:ld.notes, attendanceBadge, studentNote });
+    entries.push({ date:dateStr, ev, tema:ld.tema, notes:ld.notes, attendanceBadge, studentNote, planlagt });
   });
 
   if(!entries.length){
@@ -1882,17 +1903,23 @@ function renderElevloggInnhold(studentId, container) {
       const badgeHtml=item.attendanceBadge
         ?`<span class="logg-attendance-badge" style="${item.attendanceBadge.style};padding:1px 6px;border-radius:4px;font-size:0.75rem;white-space:nowrap">${item.attendanceBadge.label}</span>`
         :'';
-      const entry=document.createElement('div'); entry.className='logg-entry klikkbar';
+      const planlagtHtml=item.planlagt
+        ?`<span class="logg-planlagt-merke">Planlagt</span>`
+        :'';
+      const entry=document.createElement('div');
+      entry.className='logg-entry klikkbar'+(item.planlagt?' logg-entry--planlagt':'');
       // Loggposten er et sammendrag av én time. Klikk åpner den timen, så
       // man slipper å bla seg tilbake i kalenderen for å se hva som
       // faktisk sto der.
-      entry.title=`Åpne ${item.ev.title} ${dateLabel}`;
+      entry.title=item.planlagt
+        ?`Åpne ${item.ev.title} ${dateLabel} — ikke holdt ennå`
+        :`Åpne ${item.ev.title} ${dateLabel}`;
       entry.onclick=()=>aapneTimeFraLogg(item.ev.id, item.date);
       entry.innerHTML=`
         <div style="flex:1">
           <div style="display:flex;align-items:baseline;gap:8px">
             <span class="logg-tema">${item.tema||'(uten tema)'}</span>
-            ${badgeHtml}
+            ${planlagtHtml}${badgeHtml}
           </div>
           ${item.notes?`<div class="logg-notes">${item.notes}</div>`:''}
           ${item.studentNote?`<div class="logg-student-note"><strong>Notat:</strong> ${item.studentNote}</div>`:''}
