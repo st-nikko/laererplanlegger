@@ -1045,7 +1045,9 @@ function renderGrid() {
 
       block.addEventListener('click',()=>{
         if(ev.category==='undervisning') openLessonPlan(ev, d);
-        else openEventForm(ev);
+        // Datoen man klikket på sendes med: for et gjentakende møte er det
+        // den eneste kilden til hvilken forekomst skjemaet gjelder.
+        else openEventForm(ev, null, key);
       });
       col.appendChild(block);
     });
@@ -1249,9 +1251,35 @@ let formCategory    = 'undervisning';
 let formSessionType = 'gruppe';
 let selectedStudentIds = new Set();
 
+// Hvilken dato datofeltet i møteskjemaet skal fylles med.
+//
+// **Et gjentakende møte har ingen `date`** — `saveEvent()` lagrer det som
+// `date: recurs ? undefined : date`, fordi møtet bor på `weekday` og
+// gjentar seg. Skjemaet har likevel bare ett datofelt, og fram til
+// 10. september 2026 falt det tilbake til `isoDate(TODAY)` når `ev.date`
+// manglet. Det var ikke bare feil å se på: `saveEvent()` leser ukedagen
+// UT AV det samme feltet (`getDayOfWeekFromDate(moteDato)`), så et
+// tirsdagsmøte man åpnet på en torsdag og lagret uten å røre, flyttet seg
+// til torsdag. Et gjentakende møte kunne altså vandre gjennom uka bare av
+// å bli sett på.
+//
+// Datoen som vises må derfor ALLTID ha møtets egen ukedag. Klikker man i
+// kalenderen, er den klikkede datoen riktig forekomst og brukes direkte —
+// også i månedsvisningen, der `currentWeekMonday` kan ligge langt unna.
+// Ellers regnes forekomsten i uka man ser på ut.
+function moteDatoForSkjema(ev, klikketDato) {
+  if (!ev) return isoDate(TODAY);
+  if (!ev.recurs) return ev.date || isoDate(TODAY);
+  if (klikketDato && getDayOfWeekFromDate(klikketDato) === ev.weekday) return klikketDato;
+  const d = new Date(currentWeekMonday);
+  d.setDate(d.getDate() + (ev.weekday || 0));
+  return isoDate(d);
+}
+
 // forslag = { dato, weekday, periode } fra klikk i kalenderen.
 // Brukes bare for nye hendelser; ved redigering styrer hendelsen selv.
-function openEventForm(ev, forslag) {
+// klikketDato = ISO-datoen for forekomsten som ble klikket, når den finnes.
+function openEventForm(ev, forslag, klikketDato) {
   editingEventId = ev ? ev.id : null;
   document.getElementById('formTitle').textContent = ev ? 'Rediger time' : 'Ny time';
   // Vis/skjul sletteknapper kun ved redigering
@@ -1279,8 +1307,9 @@ function openEventForm(ev, forslag) {
     document.getElementById('stedInput').value       = ev ? ev.room||'' : '';
     document.getElementById('moteStartInput').value  = ev ? ev.start||'08:30' : '08:30';
     document.getElementById('moteSluttInput').value  = ev ? ev.end||'09:15'   : '09:15';
-    // Dato: eksisterende dato ved redigering, dagens dato for nye møter
-    document.getElementById('moteDatoInput').value   = ev ? (ev.date||isoDate(TODAY)) : isoDate(TODAY);
+    // Dato: se moteDatoForSkjema() — et gjentakende møte har ingen egen
+    // dato, og feltet må likevel vise en dato med møtets ukedag.
+    document.getElementById('moteDatoInput').value   = moteDatoForSkjema(ev, klikketDato);
     // Forhåndsvelg elev ved redigering (populering skjer i setFormCategory)
     const elevSel = document.getElementById('moteElevSelect');
     if (ev && ev.elevId) {
@@ -1694,14 +1723,20 @@ function saveLessonPlan() {
 function openEditFromPlan() {
   const ev=events.find(e=>e.id===planEventId);
   closeOverlay('planOverlay');
-  if(ev) openEventForm(ev);
+  // planDateStr er datoen planmodalen ble åpnet på — samme forekomst.
+  // Har ingen virkning i dag: planmodalen åpnes bare for undervisning, og
+  // undervisning velger ukedag i dagSelect, ikke i datofeltet. Argumentet
+  // står her for at veien allerede skal være riktig om planmodalen en
+  // gang åpnes for et møte. Ingen test dekker det, nettopp fordi det er
+  // uvirksomt — det er ikke en glipp.
+  if(ev) openEventForm(ev, null, planDateStr);
 }
 
 function kopierEvent() {
   const ev=events.find(e=>e.id===planEventId);
   if(!ev)return;
   closeOverlay('planOverlay');
-  openEventForm(ev);
+  openEventForm(ev, null, planDateStr);
   editingEventId=null;
   document.getElementById('formTitle').textContent='Kopier time';
   document.getElementById('deleteEventBtn').style.display='none';
@@ -2420,7 +2455,9 @@ function renderMonthView() {
         e.stopPropagation();
         const d=new Date(key+'T00:00:00');
         if(ev.category==='undervisning') openLessonPlan(ev,d);
-        else openEventForm(ev);
+        // Månedsvisningen kan stå langt fra currentWeekMonday, så den
+        // klikkede datoen er her helt nødvendig for gjentakende møter.
+        else openEventForm(ev, null, key);
       };
       cell.appendChild(pill);
       pillCount++;

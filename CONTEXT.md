@@ -44,7 +44,7 @@ Lærerplanlegger/
 | SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
 | PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
 | OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
-| EVENT FORM MODAL | `openEventForm()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. |
+| EVENT FORM MODAL | `openEventForm(ev, forslag, klikketDato)`, `moteDatoForSkjema()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. `moteDatoForSkjema()` sikrer at datofeltet alltid viser en dato med møtets egen ukedag — `saveEvent()` leser ukedagen ut av det feltet, så en feil dato flytter møtet. Se «Datofeltet i møteskjemaet» nedenfor |
 | LESSON PLAN MODAL | `openLessonPlan()`, `renderAttendanceList()`, `saveLessonPlan()`, `kopierEvent()` |
 | ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
 | ELEVLOGG → TIME | `aapneTimeFraLogg(evId, dato)` — en loggpost er sammendraget av én time, og klikk åpner den timen på **postens egen dato**. Lukker `#elevloggOverlay` først: fra modalen ville to overlegg ellers stått oppå hverandre og Escape lukket feil ett. Samme mønster som `openEditFromPlan()`. Sier fra hvis timen er slettet siden posten ble skrevet |
@@ -75,6 +75,48 @@ Lærerplanlegger/
 - **Rutenettet starter 07:30, ikke på en hel time.** `GRID_START_H = 7.5`. Alt som skal ligge på et klokkeslett må derfor plasseres med `(tid - GRID_START_H) * PX_PER_HOUR`, aldri ved å stable elementer eller telle `h++` fra `GRID_START_H`. Sistnevnte var årsaken til at tidsaksen sto blank fram til økt 19: løkka gikk 7.5, 8.5, 9.5 … og `Number.isInteger(h)` slo aldri til, så alle etikettene ble tom streng. Samme feil gjorde at de heltrukne strekene havnet på halvtimene.
 - **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
 - **`weekday` er 0-basert med mandag som 0**, og er *eneste* felt `eventsForDate()` bruker for gjentakende hendelser — `date` ignoreres da. Merk at skjemaet samler ukedagen på to måter: undervisning og vikar velger den i `dagSelect`, mens møter velger en dato og ukedagen utledes med `getDayOfWeekFromDate()`. Fram til økt 19 var den utledningen en hardkodet `0`, så alle gjentakende møter havnet på mandag. `loadFromStorage()` reparerer gamle møter ut fra datoen deres, og `tests/gjentakende-moter.test.js` vokter begge deler.
+- **Et gjentakende møte har ingen `date`** — `saveEvent()` lagrer `date: recurs ? undefined : date`. Datofeltet i skjemaet må derfor fylles av `moteDatoForSkjema()`, aldri av `ev.date` alene. Se «Datofeltet i møteskjemaet» nedenfor.
+
+### Datofeltet i møteskjemaet
+
+Rettet 10. september 2026, meldt som: «Når jeg åpner et møte, endres
+datoen på møtet til dagens dato.»
+
+Møteskjemaet har **ett datofelt**, men et gjentakende møte har ingen dato
+— det bor på `weekday`, og `saveEvent()` lagrer `date` som `undefined`.
+Feltet falt derfor tilbake til `isoDate(TODAY)`.
+
+Det farlige er at **`saveEvent()` leser ukedagen ut av det samme feltet**
+(`weekday = getDayOfWeekFromDate(moteDato)`). Et tirsdagsmøte man åpnet på
+en torsdag og lukket med «Lagre» uten å røre noe, ble et torsdagsmøte. Et
+fast møte kunne vandre gjennom uka bare av å bli sett på — uten varsel,
+uten at noe så feil ut i skjemaet.
+
+`moteDatoForSkjema(ev, klikketDato)` er vernet. Regelen er at datoen som
+vises **alltid må ha møtets egen ukedag**:
+
+| Tilfelle | Dato som vises |
+|---|---|
+| Nytt møte | i dag |
+| Engangsmøte | `ev.date` |
+| Gjentakende, klikket i kalenderen | den klikkede datoen |
+| Gjentakende, ellers | forekomsten i uka `currentWeekMonday` peker på |
+
+Klikk i kalenderen sender datoen med som tredje argument til
+`openEventForm()`. Det er ikke pynt: i månedsvisningen kan
+`currentWeekMonday` ligge måneder unna det man ser på, så uten den ville
+skjemaet åpnet på feil forekomst. En klikket dato som *ikke* har møtets
+ukedag forkastes — da er det tryggere å regne ut riktig dag enn å la møtet
+flytte seg.
+
+`tests/motedato.test.js` vokter det, og kjører gjennom **alle fem
+hverdager** framfor én: en test som bare prøver tirsdag ville stått grønn
+fire dager av fem med feilen i behold. To av testene klikker seg gjennom
+uke- og månedsvisningen i stedet for å kalle `openEventForm()` direkte —
+ellers ville de vært grønne selv om kalenderen sluttet å sende datoen.
+
+**Merk:** møter du allerede har åpnet og lagret kan ha flyttet seg før
+denne rettingen. De må settes tilbake for hånd.
 
 ### Hvordan modaler lukkes
 

@@ -97,15 +97,34 @@ alle &= kjor('alle hverdager gir riktig ukedag', {}, (w) => {
 });
 
 // ── 3. Møtet dukker faktisk opp på riktig dag i kalenderen ─────
+//
+// Datoene regnes ut fra i dag, ikke skrevet inn. saveEvent() setter
+// `gyldigFra: isoDate(TODAY)` på nye hendelser, og eventsForDate() viser
+// ingenting før den datoen. Med faste datoer ble testen derfor rød av seg
+// selv den dagen kalenderen passerte dem — den sto rød 10. september 2026
+// fordi den var skrevet rundt 2026-09-09.
+function nesteUke() {
+  const m = new Date();
+  const wd = m.getDay() === 0 ? 6 : m.getDay() - 1;
+  m.setDate(m.getDate() - wd + 7);           // mandag i uka etter denne
+  const iso = x => {
+    const k = new Date(m); k.setDate(k.getDate() + x);
+    return k.getFullYear() + '-' + String(k.getMonth() + 1).padStart(2, '0')
+                           + '-' + String(k.getDate()).padStart(2, '0');
+  };
+  return { mandag: iso(0), onsdag: iso(2), onsdagUkenEtter: iso(9), aarSlutt: iso(300) };
+}
+
 alle &= kjor('møtet vises på onsdag, ikke mandag', {}, (w) => {
-  w.eval(`skoleaar = { start: '2026-08-01', slutt: '2027-06-19' };`);
-  lagreMote(w, '2026-09-09', true);
-  const paaMandag = w.hent(`eventsForDate(new Date('2026-09-07T00:00:00')).length`);
-  const paaOnsdag = w.hent(`eventsForDate(new Date('2026-09-09T00:00:00')).length`);
+  const u = nesteUke();
+  w.eval(`skoleaar = { start: '2000-01-01', slutt: '${u.aarSlutt}' };`);
+  lagreMote(w, u.onsdag, true);
+  const paaMandag = w.hent(`eventsForDate(new Date('${u.mandag}T00:00:00')).length`);
+  const paaOnsdag = w.hent(`eventsForDate(new Date('${u.onsdag}T00:00:00')).length`);
   like(paaMandag, 0, 'ingenting på mandag');
   like(paaOnsdag, 1, 'møtet på onsdag');
   // Og uken etter, siden det gjentar seg
-  like(w.hent(`eventsForDate(new Date('2026-09-16T00:00:00')).length`), 1, 'gjentar seg uken etter');
+  like(w.hent(`eventsForDate(new Date('${u.onsdagUkenEtter}T00:00:00')).length`), 1, 'gjentar seg uken etter');
 });
 
 // ── 4. Helg blokkeres for gjentakende møter ────────────────────
