@@ -152,11 +152,15 @@
   <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Skoleår</div>
     <div class="form-row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
-      <div class="form-field">
+      <div class="form-field" style="flex:1;min-width:140px">
         <label>Skolestart</label>
         <input type="date" id="skoleaarStart">
       </div>
-      <div class="form-field">
+      <div class="form-field" style="flex:1;min-width:140px">
+        <label>2. termin starter</label>
+        <input type="date" id="skoleaarTerminskille" title="Første skoledag i 2. termin. Brukes til å vise varslene for terminen du er i, og hvor lenge det er igjen av den.">
+      </div>
+      <div class="form-field" style="flex:1;min-width:140px">
         <label>Skoleslutt</label>
         <input type="date" id="skoleaarSlutt">
       </div>
@@ -207,6 +211,17 @@
       åpne den i kalenderen. Ferier, fridager og planleggingsdager er ikke med.
     </p>
     <div id="fravaerOversikt" class="fravaer-mangler"></div>
+  </div>
+  <div class="minside-seksjon">
+    <div class="innst-seksjon-tittel">Varsler</div>
+    <p class="minside-hjelpetekst">
+      Varsler om fare for manglende vurderingsgrunnlag og nedsatt karakter i
+      orden eller atferd, slik du har registrert dem i elevloggen. Dette er
+      din egen oversikt — skolens system er det formelle arkivet. Trykk på en
+      elev for å åpne elevloggen.
+    </p>
+    <div id="varselNedtelling" class="varsel-nedtelling"></div>
+    <div id="varselOversikt"></div>
   </div>
   <div class="minside-seksjon">
     <div class="innst-seksjon-tittel">Synk mellom enheter</div>

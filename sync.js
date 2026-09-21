@@ -25,6 +25,7 @@ const SYNK_NOKLER = [
   'lp_events', 'lp_todos', 'lp_planfestetTid', 'lp_overtid',
   'lp_lessonData', 'lp_topicsBySubject', 'lp_students',
   'lp_fridager', 'lp_skoleaar', 'lp_fravaerFort', 'lp_elevNotater',
+  'lp_varsler',
   'lp_ics_token', 'lp_ics_publiser',
   'lp_jobb_token', 'lp_jobb_publiser',
   'lp_gjoeremaal_token', 'lp_gjoeremaal_publiser'

@@ -1426,12 +1426,13 @@ under. Feltet kan gjenbruke `byggElevNotatFelt()` nesten som det er.
 
 ---
 
-## 25. Varsel om karakter, orden og oppførsel
+## 25. Varsel om karakter, orden og oppførsel ✅
 
 **Idéen:** Oversikt over hvilke varsler som er sendt, til hvem og når.
 
-**Status:** Ønsket. Den mest nyttige av elevlogg-idéene, og den som må
-formes mest bevisst.
+**Status:** Bygget 21. september 2026. Se «Varsler» i CONTEXT.md.
+Resten av posten er vurderingen som ble gjort før, og står for å vise
+hvorfor det ble som det ble.
 
 ### Dette er ikke et notat
 
@@ -1482,17 +1483,20 @@ og hvem burde jeg ha varslet» — ikke «hva står på Kari». Så dette trenge
 antakelig **to visninger**: varslene for én elev i elevloggen, og en samlet
 liste et sted. Fraværsoversikten på Min side er mønsteret.
 
-### Fortsatt åpent
+### Avklart og bygget 21. september 2026
 
-- **Skal appen minne om noe?** Fristen for varsel er knyttet til terminen,
-  og et varsel som kommer for sent er verdiløst. Et lite «det er N uker til
-  terminslutt» ville vært nyttig — men det forutsetter terminskillet over.
-- **Hvor mye begrunnelse skal med?** Et fritekstfelt her vil inneholde
-  sensitive opplysninger om enkeltelever. Samme vern som resten, men verdt
-  å velge bevisst framfor å ta med av vane.
-- **Elevnavn i en eventuell eksport.** Varsler er den dataen man minst av
-  alt vil ha i «Eksporter uten navn» ved et uhell. Vurder om denne nøkkelen
-  skal utelates derfra, i motsetning til resten.
+- **Typene** er de tre som faktisk sendes i ungdomsskolen: fare for
+  manglende vurderingsgrunnlag (med fag), og fare for nedsatt karakter i
+  orden og i atferd. Ikke «lav karakter i fag».
+- **Terminskillet** ble alternativ 1: feltet «2. termin starter» under
+  Skoleår på Min side, lagret som `skoleaar.terminskille`. Terminen regnes
+  ut av datoen, den lagres ikke på varselet.
+- **Påminnelse:** «N uker til N. termin slutter» øverst i oversikten,
+  uthevet de siste tre ukene. Ingen varsler utenfor appen.
+- **Ingen fritekst.** Begrunnelsen står i selve varselet.
+- **Utenfor «Eksporter uten navn».** Med i full backup og i synken.
+- **Ikke bygget:** «hvem burde jeg ha varslet». Det krever at appen
+  vurderer eleven, og det skal den ikke.
 
 ---
 

@@ -233,6 +233,110 @@ function setElevNotat(id, tekst) {
   saveToStorage();
 }
 
+// ── Varsler: manglende vurderingsgrunnlag, orden og atferd ──
+// { elevId: [ { id, type, fag, dato } ] }. En oversikt over hva DU har
+// sendt, ikke et arkiv — skolens eget system er fasit, og hjelpeteksten
+// sier det begge steder varslene vises.
+//
+// Egen nøkkel av samme grunn som elevNotater: alt som legges på
+// elevobjektet følger med i lp_students av seg selv. Varslene synkes
+// (kryptert), men **holdes utenfor «Eksporter uten navn»**. Den anonyme
+// filen er den man deler, og hvem som har fått varsel er det man minst
+// av alt vil ha med ved et uhell.
+//
+// Ingen fritekst, bevisst: begrunnelsen står i selve varselet, og et
+// felt her ville blitt det mest sensitive stedet i hele appen.
+//
+// Terminen lagres ikke på varselet. Den regnes ut av datoen mot
+// skoleaar.terminskille, så et flyttet terminskille tar varslene med seg.
+const VARSELTYPER = {
+  grunnlag: 'Manglende vurderingsgrunnlag',
+  orden:    'Nedsatt karakter i orden',
+  atferd:   'Nedsatt karakter i atferd'
+};
+const VARSELTYPER_KORT = { grunnlag: 'Vurderingsgrunnlag', orden: 'Orden', atferd: 'Atferd' };
+let varsler = {};
+
+function getVarsler(elevId) { return varsler[String(elevId)] || []; }
+
+function leggTilVarsel(elevId, { type, fag, dato } = {}) {
+  if (!VARSELTYPER[type]) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dato || '')) return false;
+  const medFag = type === 'grunnlag';
+  if (medFag && !fag) return false;
+  const liste = getVarsler(elevId);
+  // Samme varsel to ganger er et dobbeltklikk, ikke to varsler
+  if (liste.some(v => v.type === type && v.dato === dato && (v.fag || null) === (medFag ? fag : null))) return false;
+  const id = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  varsler[String(elevId)] = [...liste, { id, type, fag: medFag ? fag : null, dato }];
+  saveToStorage();
+  return true;
+}
+
+function slettVarsel(elevId, varselId) {
+  const rest = getVarsler(elevId).filter(v => v.id !== varselId);
+  if (rest.length) varsler[String(elevId)] = rest;
+  else delete varsler[String(elevId)];
+  saveToStorage();
+}
+
+// ── Termin ──
+// skoleaar.terminskille er FØRSTE dag i 2. termin, og er valgfritt.
+// terminFor() gir 1 eller 2, 0 når terminskillet ikke er satt (hele året
+// regnes da som én), og null utenfor skoleåret.
+function terminFor(dato) {
+  if (!skoleaar || !dato || dato < skoleaar.start || dato > skoleaar.slutt) return null;
+  if (!skoleaar.terminskille) return 0;
+  return dato < skoleaar.terminskille ? 1 : 2;
+}
+
+function terminGrenser(nr) {
+  if (nr === 1) {
+    const d = new Date(skoleaar.terminskille + 'T00:00:00');
+    d.setDate(d.getDate() - 1);
+    return { start: skoleaar.start, slutt: isoDate(d) };
+  }
+  if (nr === 2) return { start: skoleaar.terminskille, slutt: skoleaar.slutt };
+  return { start: skoleaar.start, slutt: skoleaar.slutt };
+}
+
+// Hele dager fra a til b. Math.round tar sommertid: et døgn kan være 23
+// eller 25 timer, og da ville floor gitt én dag for lite i mars.
+function dagerMellom(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+
+// «N uker til terminslutt». null når det ikke finnes noe å telle ned mot:
+// terminskille mangler, eller i dag ligger utenfor skoleåret.
+function terminNedtelling() {
+  const iDag = isoDate(TODAY);
+  const nr = terminFor(iDag);
+  if (!nr) return null;
+  const slutt = terminGrenser(nr).slutt;
+  const dager = dagerMellom(iDag, slutt);
+  const d = new Date(slutt + 'T00:00:00');
+  const dato = `${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+  let tekst;
+  if (dager === 0)      tekst = `${nr}. termin slutter i dag`;
+  else if (dager < 7)   tekst = `${dager} dag${dager === 1 ? '' : 'er'} til ${nr}. termin slutter (${dato})`;
+  else {
+    const uker = Math.floor(dager / 7);
+    tekst = `${uker} uke${uker === 1 ? '' : 'r'} til ${nr}. termin slutter (${dato})`;
+  }
+  return { nr, dager, tekst };
+}
+
+// Fagene eleven faktisk har i timeplanen — det er dem et varsel om
+// manglende grunnlag kan gjelde.
+function fagForElev(elevId) {
+  const fag = new Set();
+  events.forEach(ev => {
+    if (ev.category !== 'undervisning') return;
+    if ((ev.students || []).some(sid => String(sid) === String(elevId))) fag.add(ev.title);
+  });
+  return [...fag].sort((a, b) => a.localeCompare(b, 'nb'));
+}
+
 function lessonKey(evId, dateStr) { return `${evId}_${dateStr}`; }
 function getLesson(evId, dateStr) { return lessonData[lessonKey(evId, dateStr)] || null; }
 function setLesson(evId, dateStr, data) { lessonData[lessonKey(evId, dateStr)] = data; }
@@ -574,81 +678,84 @@ function parseStudentId(v) {
   return (!isNaN(n) && String(n) === String(v).trim()) ? n : String(v).trim();
 }
 
+// PERIODS-objektene hendelsen overlapper med. **Strengt**: en time som
+// slutter 09:25 har ikke vært i 2. time, som starter 09:25. Fram til
+// september 2026 var sammenligningen <= / >=, og en time lagt inn med
+// sluttid på neste times start fikk en skoletime for mye — både i antall
+// avkrysningsbokser og i oppmøteprosenten. Samme regel som
+// skoletimerForHendelse(), så ukeopptellingen og oppmøtet teller likt.
 function finnSkoletimer(event) {
-  // Returner PERIODS-objektene hendelsen overlapper med
-  const evStart = toDec(event.start), evEnd = toDec(event.end);
-  return PERIODS.filter(p => toDec(p.start) <= evEnd && toDec(p.end) >= evStart);
+  const s = toDec(event.start), e = toDec(event.end);
+  if (s == null || e == null) return [];
+  return PERIODS.filter(p => s < toDec(p.end) && e > toDec(p.start));
+}
+
+// Hvor mange av `antall` skoletimer var eleven til stede i? `raw` er det
+// som er lagret for eleven i attendance: boolean[] per skoletime, en
+// gammel boolean, eller ingenting. Leses slik renderAttendanceList()
+// tegner boksene — indeks for indeks, og alt som ikke er `false` er til
+// stede. Et hull i lista er en boks som aldri ble tatt av.
+//
+// **Nevneren er skoletimene timen dekker, ikke lengden på lista.** En time
+// som var enkel da oppmøtet ble ført og senere ble gjort til dobbelttime,
+// har én verdi lagret. `filter(Boolean)` ga da 1 av 2, og eleven sto som
+// borte fra en time han var i. Andre veien, en liste lengre enn timen,
+// ga over 100 %.
+function tilstedeISkoletimer(raw, antall) {
+  if (raw === false) return 0;
+  if (!Array.isArray(raw)) return antall;
+  let n = 0;
+  for (let i = 0; i < antall; i++) if (raw[i] !== false) n++;
+  return n;
+}
+
+// Deltakelse for én elev, totalt og per fag, i skoletimer. En dobbelttime
+// teller som to, og er eleven borte fra den ene halvdelen, er det én av to.
+// Bare timer der oppmøtet er åpnet og lagret (en post i lessonData), fram
+// til og med i dag, fra elevens startdato, innenfor skoleåret og utenom
+// ferier og fridager.
+//
+// Én løkke for begge tallene. Før dette var total og per fag to kopier, og
+// bare den ene hoppet over ferier og dager utenfor skoleåret — summen av
+// fagene kunne dermed bli større enn totalen.
+function deltakelseForElev(studentId) {
+  const student = allStudents.find(s => String(s.id) === String(studentId));
+  const startDato = student ? (student.startDato || '2000-01-01') : '2000-01-01';
+  const iDag = isoDate(TODAY);
+  const sum = { present: 0, total: 0 };
+  const perFag = {};
+  Object.keys(lessonData).forEach(key => {
+    const parts = key.split('_');
+    const evIdStr = parts[0];
+    const dateStr = parts.slice(1).join('_');
+    if (dateStr < startDato || dateStr > iDag) return;
+    const dato = new Date(dateStr + 'T00:00:00');
+    const fd = erFridag(dato);
+    if (fd && (fd.type === 'ferie' || fd.type === 'fridag')) return;
+    if (erUtenforSkoleaar(dato)) return;
+    const ev = events.find(e => String(e.id) === evIdStr);
+    if (!ev || ev.category !== 'undervisning') return;
+    if (!(ev.students || []).some(sid => String(sid) === String(studentId))) return;
+    const antall = finnSkoletimer(ev).length;
+    if (!antall) return;
+    const att = lessonData[key].attendance || {};
+    const tilstede = tilstedeISkoletimer(att[studentId] ?? att[String(studentId)], antall);
+    const f = perFag[ev.title] || (perFag[ev.title] = { present: 0, total: 0 });
+    f.present += tilstede; f.total += antall;
+    sum.present += tilstede; sum.total += antall;
+  });
+  const pst = x => x.total > 0 ? Math.round((x.present / x.total) * 100) : null;
+  Object.values(perFag).forEach(f => { f.percent = pst(f); });
+  return { present: sum.present, total: sum.total, percent: pst(sum), perFag };
 }
 
 function calcAttendance(studentId) {
-  // Returnerer { present, total, percent } for en gitt elev
-  const student = allStudents.find(s => String(s.id) === String(studentId));
-  const startDato = student ? (student.startDato || '2000-01-01') : '2000-01-01';
-  let present = 0, total = 0;
-  Object.keys(lessonData).forEach(key => {
-    const ld = lessonData[key];
-    const parts = key.split('_');
-    const evIdStr = parts[0];
-    const dateStr = parts.slice(1).join('_'); // ISO-dato er siste del
-    if (dateStr < startDato) return;         // Kun timer etter startdato
-    if (dateStr > isoDate(TODAY)) return;    // Ikke tell fremtidige timer
-    // Ikke tell fridager (ferie/fridag) eller dager utenfor skoleåret
-    const fd = erFridag(new Date(dateStr + 'T00:00:00'));
-    if (fd && (fd.type === 'ferie' || fd.type === 'fridag')) return;
-    if (erUtenforSkoleaar(new Date(dateStr + 'T00:00:00'))) return;
-    const ev = events.find(e => String(e.id) === evIdStr);
-    if (!ev || ev.category !== 'undervisning') return;
-    // Tell bare timer eleven er knyttet til
-    const inEvent = ev.students.some(sid => String(sid) === String(studentId));
-    if (!inEvent) return;
-    // Finn antall skoletimer hendelsen dekker
-    const timer = finnSkoletimer(ev);
-    if (timer.length === 0) return;
-    total += timer.length;
-    // Hent attendance-verdi — støtter nytt (array) og gammelt (boolean) format
-    const att = ld.attendance || {};
-    const a = att[studentId] ?? att[String(studentId)];
-    if (Array.isArray(a))  present += a.filter(Boolean).length; // Nytt format: teller true-verdier
-    else if (a === false)  present += 0;                        // Gammelt format: helt borte
-    else                   present += timer.length;             // true eller undefined → fullt til stede
-  });
-  const percent = total > 0 ? Math.round((present / total) * 100) : null;
+  const { present, total, percent } = deltakelseForElev(studentId);
   return { present, total, percent };
 }
 
 function calcAttendancePerFag(studentId) {
-  // Returnerer { fagNavn: { present, total, percent } } for en gitt elev
-  const student = allStudents.find(s => String(s.id) === String(studentId));
-  const startDato = student ? (student.startDato || '2000-01-01') : '2000-01-01';
-  const perFag = {};
-  Object.keys(lessonData).forEach(key => {
-    const ld = lessonData[key];
-    const parts = key.split('_');
-    const evIdStr = parts[0];
-    const dateStr = parts.slice(1).join('_');
-    if (dateStr < startDato) return;
-    if (dateStr > isoDate(TODAY)) return;
-    const ev = events.find(e => String(e.id) === evIdStr);
-    if (!ev || ev.category !== 'undervisning') return;
-    const inEvent = ev.students.some(sid => String(sid) === String(studentId));
-    if (!inEvent) return;
-    const timer = finnSkoletimer(ev);
-    if (timer.length === 0) return;
-    // Initialiser fag-bucket
-    if (!perFag[ev.title]) perFag[ev.title] = { present: 0, total: 0 };
-    perFag[ev.title].total += timer.length;
-    const att = ld.attendance || {};
-    const a = att[studentId] ?? att[String(studentId)];
-    if (Array.isArray(a))  perFag[ev.title].present += a.filter(Boolean).length;
-    else if (a === false)  perFag[ev.title].present += 0;
-    else                   perFag[ev.title].present += timer.length;
-  });
-  // Beregn prosent per fag
-  Object.keys(perFag).forEach(fag => {
-    const f = perFag[fag];
-    f.percent = f.total > 0 ? Math.round((f.present / f.total) * 100) : null;
-  });
-  return perFag;
+  return deltakelseForElev(studentId).perFag;
 }
 
 // ────────────────────────────────────────────
@@ -1825,6 +1932,119 @@ function byggElevNotatFelt(studentId) {
   return blokk;
 }
 
+// ── Deltakelse øverst i elevloggen ──
+// null når det ikke er noe å regne på ennå — et «0 %» for en elev uten
+// førte timer ville lest som at han aldri har vært der.
+function byggDeltakelse(studentId) {
+  const d = deltakelseForElev(studentId);
+  if (!d.total) return null;
+  const blokk = document.createElement('div');
+  blokk.className = 'elev-deltakelse';
+  blokk.title = 'Skoletimer der oppmøtet er lagret, fram til i dag. En dobbelttime teller '
+              + 'som to — er eleven borte fra den ene halvdelen, er det én av to. Ferier, '
+              + 'fridager og timer før elevens startdato er ikke med.';
+  const tall = document.createElement('span');
+  tall.className = 'elev-deltakelse-prosent';
+  tall.textContent = d.percent + ' %';
+  const tekst = document.createElement('span');
+  tekst.className = 'elev-deltakelse-tekst';
+  tekst.textContent = `deltakelse · til stede i ${d.present} av ${d.total} skoletimer`;
+  blokk.appendChild(tall);
+  blokk.appendChild(tekst);
+  return blokk;
+}
+
+// ── Varsler i elevloggen ──
+// Bygges som noder. Å legge til eller slette bytter ut bare denne blokka,
+// ikke hele loggen — ellers ville et halvskrevet elevnotat over mistet
+// markøren.
+function byggVarselFelt(studentId) {
+  const blokk = document.createElement('div');
+  blokk.className = 'elevvarsler';
+
+  const tittel = document.createElement('div');
+  tittel.className = 'elevnotat-tittel';
+  tittel.textContent = 'Varsler';
+  blokk.appendChild(tittel);
+
+  const nyTegning = () => blokk.replaceWith(byggVarselFelt(studentId));
+  const naa = terminFor(isoDate(TODAY));
+  const liste = [...getVarsler(studentId)].sort((a, b) => b.dato.localeCompare(a.dato));
+
+  if (!liste.length) {
+    const tom = document.createElement('div');
+    tom.className = 'elevvarsel-tom';
+    tom.textContent = 'Ingen varsler registrert.';
+    blokk.appendChild(tom);
+  }
+  liste.forEach(v => {
+    const t = terminFor(v.dato);
+    const rad = document.createElement('div');
+    rad.className = 'elevvarsel-rad' + (t !== naa ? ' elevvarsel-rad--tidligere' : '');
+    const hva = document.createElement('span');
+    hva.className = 'elevvarsel-hva';
+    hva.textContent = VARSELTYPER_KORT[v.type] + (v.fag ? ' · ' + v.fag : '');
+    hva.title = VARSELTYPER[v.type] + (v.fag ? ' i ' + v.fag : '');
+    const d = new Date(v.dato + 'T00:00:00');
+    const dato = document.createElement('span');
+    dato.className = 'elevvarsel-dato';
+    dato.textContent = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}` + (t ? ` · ${t}. termin` : '');
+    const slett = document.createElement('button');
+    slett.className = 'elevvarsel-slett';
+    slett.type = 'button';
+    slett.textContent = '×';
+    slett.title = 'Slett varselet';
+    slett.setAttribute('aria-label', 'Slett varselet');
+    slett.onclick = () => {
+      if (!confirm('Slette dette varselet fra oversikten?')) return;
+      slettVarsel(studentId, v.id);
+      nyTegning();
+    };
+    rad.appendChild(hva); rad.appendChild(dato); rad.appendChild(slett);
+    blokk.appendChild(rad);
+  });
+
+  // Registrering
+  const skjema = document.createElement('div');
+  skjema.className = 'elevvarsel-skjema';
+  const type = document.createElement('select');
+  type.className = 'elevvarsel-type';
+  Object.entries(VARSELTYPER).forEach(([k, navn]) => {
+    const o = document.createElement('option'); o.value = k; o.textContent = navn; type.appendChild(o);
+  });
+  const fag = document.createElement('select');
+  fag.className = 'elevvarsel-fag';
+  const fagListe = fagForElev(studentId);
+  if (!fagListe.length) {
+    const o = document.createElement('option'); o.value = ''; o.textContent = 'Ingen fag i timeplanen'; fag.appendChild(o);
+  }
+  fagListe.forEach(f => { const o = document.createElement('option'); o.value = f; o.textContent = f; fag.appendChild(o); });
+  const dato = document.createElement('input');
+  dato.type = 'date';
+  dato.className = 'elevvarsel-datofelt';
+  dato.value = isoDate(TODAY);
+  const knapp = document.createElement('button');
+  knapp.type = 'button';
+  knapp.className = 'btn btn-primary elevvarsel-knapp';
+  knapp.textContent = 'Registrer';
+  const visFag = () => { fag.style.display = type.value === 'grunnlag' ? '' : 'none'; };
+  type.onchange = visFag;
+  visFag();
+  knapp.onclick = () => {
+    if (type.value === 'grunnlag' && !fag.value) { alert('Velg faget varselet gjelder.'); return; }
+    if (!dato.value) { alert('Velg datoen varselet ble sendt.'); return; }
+    if (leggTilVarsel(studentId, { type: type.value, fag: fag.value, dato: dato.value })) nyTegning();
+  };
+  skjema.appendChild(type); skjema.appendChild(fag); skjema.appendChild(dato); skjema.appendChild(knapp);
+  blokk.appendChild(skjema);
+
+  const hjelp = document.createElement('div');
+  hjelp.className = 'elevvarsel-hjelp';
+  hjelp.textContent = 'Din egen oversikt over hva du har sendt. Skolens system er det formelle arkivet.';
+  blokk.appendChild(hjelp);
+  return blokk;
+}
+
 // ── Fra loggpost til time ──
 // Elevloggen finnes to steder: som modal (#elevloggOverlay) og som
 // fullskjermvisning. Fra modalen må den lukkes FØR timeplanmodalen åpnes,
@@ -1851,7 +2071,10 @@ function renderElevloggInnhold(studentId, container) {
   // returen lenger nede når eleven ikke har registrerte timer ennå.
   // Ellers ville det du skrev om en ny elev vært usynlig helt til første
   // time var ført, som er nøyaktig når man har mest å skrive.
+  const deltakelse = byggDeltakelse(studentId);
+  if (deltakelse) container.appendChild(deltakelse);
   container.appendChild(byggElevNotatFelt(studentId));
+  container.appendChild(byggVarselFelt(studentId));
 
   // Elevlista ligger på HENDELSEN, ikke på hver enkelt dato. Legger man en
   // elev inn i en time midt i året, står han med ett slag på alle datoene
@@ -1888,8 +2111,10 @@ function renderElevloggInnhold(studentId, container) {
       // time fram i tid ville lest som et faktum om noe som ikke har skjedd.
       attendanceBadge=null;
     } else if(Array.isArray(raw)){
-      const total=raw.length;
-      const present=raw.filter(Boolean).length;
+      // Samme lesing som prosenten over: skoletimene timen dekker er
+      // nevneren, ikke hvor lang lista tilfeldigvis er.
+      const total=finnSkoletimer(ev).length||raw.length;
+      const present=tilstedeISkoletimer(raw,total);
       if(total>0&&present<total){
         if(present===0){
           attendanceBadge={label:'Fraværende',style:'background:var(--fare);color:var(--paa-accent)'};
@@ -1920,6 +2145,7 @@ function renderElevloggInnhold(studentId, container) {
   }
 
   // Grupper per fag
+  const perFag = deltakelseForElev(studentId).perFag;
   const bySubject = {};
   entries.forEach(e=>{
     if(!bySubject[e.ev.title]) bySubject[e.ev.title]=[];
@@ -1930,6 +2156,13 @@ function renderElevloggInnhold(studentId, container) {
     const c=getSubjectColor(subject);
     const block=document.createElement('div'); block.className='logg-subject-block';
     block.innerHTML=`<div class="logg-subject-title"><span class="logg-subject-dot" style="background:${c.border}"></span>${subject}</div>`;
+    const fagTall=perFag[subject];
+    if(fagTall&&fagTall.total){
+      const pf=document.createElement('span'); pf.className='logg-fag-prosent';
+      pf.textContent=`${fagTall.percent} % · ${fagTall.present}/${fagTall.total} t`;
+      pf.title=`Til stede i ${fagTall.present} av ${fagTall.total} skoletimer i ${subject}`;
+      block.firstElementChild.appendChild(pf);
+    }
 
     // Sorter etter dato, nyeste først
     items.sort((a,b)=>b.date.localeCompare(a.date)).forEach(item=>{
@@ -2289,7 +2522,7 @@ function deleteStudent(id) {
     .map(ev => ev.id);
   // Notatet følger med i papirkurven — ellers ville en angret sletting
   // gitt eleven tilbake uten det som var skrevet om ham.
-  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id) });
+  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id), varsler: getVarsler(id) });
 
   // Fjern fra allStudents
   const idx = allStudents.findIndex(st => String(st.id) === String(id));
@@ -2297,6 +2530,7 @@ function deleteStudent(id) {
 
   delete elevNotater[id];
   delete elevNotater[String(id)];
+  delete varsler[String(id)];
 
   // Fjern fra events.students
   events.forEach(ev => {
@@ -2881,6 +3115,8 @@ function exportData(medNavn = true) {
     allStudents: elevlisteUtenNavn()
   };
   if (medNavn) data.studentNames = navnekart();
+  // Varsler bare i full backup. Den anonyme filen er den som deles.
+  if (medNavn) data.varsler = varsler;
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -2919,6 +3155,7 @@ function importData() {
         if (data.skoleaar)        localStorage.setItem('lp_skoleaar',        JSON.stringify(data.skoleaar));
         if (data.fravaerFort)     localStorage.setItem('lp_fravaerFort',     JSON.stringify(data.fravaerFort));
         if (data.elevNotater)     localStorage.setItem('lp_elevNotater',     JSON.stringify(data.elevNotater));
+        if (data.varsler)         localStorage.setItem('lp_varsler',         JSON.stringify(data.varsler));
 
         if (data.allStudents) {
           // Elevliste lagres alltid uten navn
@@ -2977,8 +3214,10 @@ document.addEventListener('keydown', e => {
 function renderMinSide() {
   document.getElementById('skoleaarStart').value = skoleaar.start;
   document.getElementById('skoleaarSlutt').value = skoleaar.slutt;
+  document.getElementById('skoleaarTerminskille').value = skoleaar.terminskille || '';
   renderSkolerute();
   renderFravaerOversikt();
+  renderVarselOversikt();
   renderPapirkurv();
   renderSynkKopiStatus();
   // Synk- og publiseringsstatus bor i sync.js, som kan mangle
@@ -3059,12 +3298,78 @@ function renderPapirkurv() {
   });
 }
 
+// ── Varsler på Min side ──
+// Varslene i terminen vi er i, gruppert på type. Uten terminskille vises
+// hele skoleåret, og nedtellingen erstattes av en oppfordring om å sette
+// det. Trykk på en rad åpner elevloggen.
+function renderVarselOversikt() {
+  const ned = document.getElementById('varselNedtelling');
+  const el = document.getElementById('varselOversikt');
+  if (!ned || !el) return;
+
+  const iDag = isoDate(TODAY);
+  const nr = terminFor(iDag);
+  const telling = terminNedtelling();
+  ned.className = 'varsel-nedtelling';
+  if (telling) {
+    ned.textContent = telling.tekst;
+    if (telling.dager <= 21) ned.classList.add('naer');
+  } else if (nr === 0) {
+    ned.textContent = 'Fyll inn «2. termin starter» under Skoleår, så vises det her hvor lenge det er igjen av terminen.';
+  } else {
+    ned.textContent = 'I dag ligger utenfor skoleåret.';
+  }
+
+  const { start, slutt } = terminGrenser(nr || 0);
+  const rader = [];
+  Object.entries(varsler).forEach(([elevId, liste]) => {
+    const elev = allStudents.find(s => String(s.id) === elevId);
+    if (!elev) return;
+    liste.forEach(v => { if (v.dato >= start && v.dato <= slutt) rader.push({ elev, v }); });
+  });
+
+  el.innerHTML = '';
+  if (!rader.length) {
+    const tom = document.createElement('div');
+    tom.className = 'fravaer-tom';
+    tom.textContent = nr ? 'Ingen varsler registrert denne terminen.' : 'Ingen varsler registrert dette skoleåret.';
+    el.appendChild(tom);
+    return;
+  }
+  Object.keys(VARSELTYPER).forEach(type => {
+    const iType = rader.filter(r => r.v.type === type)
+      .sort((a, b) => a.v.dato.localeCompare(b.v.dato) || String(a.elev.navn).localeCompare(String(b.elev.navn), 'nb'));
+    if (!iType.length) return;
+    const gruppe = document.createElement('div');
+    gruppe.className = 'varsel-gruppe';
+    const t = document.createElement('div');
+    t.className = 'varsel-gruppe-tittel';
+    t.textContent = `${VARSELTYPER[type]} (${iType.length})`;
+    gruppe.appendChild(t);
+    iType.forEach(({ elev, v }) => {
+      const d = new Date(v.dato + 'T00:00:00');
+      const knapp = document.createElement('button');
+      knapp.className = 'varsel-rad';
+      knapp.textContent = `${elev.navn}${v.fag ? ' · ' + v.fag : ''} · ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
+      knapp.title = 'Åpne elevloggen';
+      knapp.onclick = () => openElevlogg(elev.id);
+      gruppe.appendChild(knapp);
+    });
+    el.appendChild(gruppe);
+  });
+}
+
 function lagreSkoleaar() {
   const start = document.getElementById('skoleaarStart').value;
   const slutt = document.getElementById('skoleaarSlutt').value;
   if (!start || !slutt) { alert('Fyll inn både start- og sluttdato.'); return; }
   if (start >= slutt) { alert('Startdato må være før sluttdato.'); return; }
+  const terminskille = document.getElementById('skoleaarTerminskille').value;
+  if (terminskille && (terminskille <= start || terminskille > slutt)) {
+    alert('Terminskillet må ligge etter skolestart og senest på skoleslutt.'); return;
+  }
   skoleaar = { start, slutt };
+  if (terminskille) skoleaar.terminskille = terminskille;
   saveToStorage();
   render();
 }
@@ -3236,6 +3541,7 @@ function gjenopprettFraPapirkurv(id) {
   } else if (post.type === 'elev' && d.elev) {
     if (!allStudents.some(s => String(s.id) === String(d.elev.id))) allStudents.push(d.elev);
     if (d.notat) elevNotater[d.elev.id] = d.notat;
+    if (Array.isArray(d.varsler) && d.varsler.length) varsler[String(d.elev.id)] = d.varsler;
     // Meld eleven inn igjen i timene han sto i, men bare i de som fortsatt finnes
     (d.medlemskap || []).forEach(evId => {
       const ev = events.find(e => String(e.id) === String(evId));
@@ -3286,6 +3592,7 @@ function saveToStorage() {
     localStorage.setItem('lp_skoleaar',        JSON.stringify(skoleaar));
     localStorage.setItem('lp_fravaerFort',     JSON.stringify(fravaerFort));
     localStorage.setItem('lp_elevNotater',     JSON.stringify(elevNotater));
+    localStorage.setItem('lp_varsler',         JSON.stringify(varsler));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
     // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
@@ -3431,6 +3738,16 @@ function loadFromStorage() {
     if (storedElevNotater) {
       const lest = JSON.parse(storedElevNotater);
       if (lest && typeof lest === 'object' && !Array.isArray(lest)) elevNotater = lest;
+    }
+
+    // Varsler. Hver verdi skal være en liste — alt annet kastes.
+    const storedVarsler = localStorage.getItem('lp_varsler');
+    if (storedVarsler) {
+      const lest = JSON.parse(storedVarsler);
+      if (lest && typeof lest === 'object' && !Array.isArray(lest)) {
+        varsler = {};
+        Object.entries(lest).forEach(([k, v]) => { if (Array.isArray(v) && v.length) varsler[k] = v; });
+      }
     }
 
     const storedPapirkurv = localStorage.getItem('lp_papirkurv');

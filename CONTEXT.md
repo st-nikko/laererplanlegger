@@ -322,6 +322,63 @@ sin via `aapneTimeFraLogg()`. Hover-flaten er eneste antydning om at raden
 kan trykkes — den har verken knapp eller ikon, og skal ikke få det: lista
 skal fortsatt leses som en logg.
 
+### Deltakelse i prosent
+
+Lagt til 21. september 2026. Øverst i elevloggen står elevens deltakelse
+(«67 % · til stede i 4 av 6 skoletimer»), og hver fagtittel har sin egen
+(«50 % · 1/2 t»). Tallene kommer fra `deltakelseForElev()`, som også ligger
+bak `calcAttendance()` og `calcAttendancePerFag()` i elevtabellen.
+
+**Enheten er skoletimer.** En dobbelttime teller som to, og er eleven borte
+fra den ene halvdelen, er det én av to. Tre ting ble rettet samtidig, og
+`tests/deltakelse.test.js` vokter alle:
+
+- **Nevneren er skoletimene timen dekker, ikke lengden på lista.**
+  `tilstedeISkoletimer(raw, antall)` leser `attendance` indeks for indeks,
+  slik boksene tegnes, og alt som ikke er `false` er til stede. Før talte
+  den `filter(Boolean)`: en time som ble ført som enkel og senere gjort til
+  dobbelttime ga 1 av 2, og en for lang liste ga over 100 %. Brikken i
+  loggen («1/2 t») leser på samme måte.
+- **`finnSkoletimer()` er streng**, som `skoletimerForHendelse()`. Med
+  `<=`/`>=` fikk en time som sluttet 09:25 også 2. time.
+- **Én løkke for totalen og fagene.** Før var det to kopier, og bare den
+  ene hoppet over ferier og dager utenfor skoleåret.
+
+Bare timer med en post i `lessonData` telles, altså timer der oppmøtet er
+åpnet og lagret. Ingen prosent vises før det finnes minst én slik time:
+«0 %» for en ny elev ville lest som at han aldri har vært der.
+
+### Varsler
+
+Lagt til 21. september 2026 (veikart post 25). Varsler om fare for
+**manglende vurderingsgrunnlag** (med fag), og om fare for **nedsatt
+karakter i orden** eller **i atferd**. Registreres i elevloggen, under
+«Om eleven», og samles på Min side. Hjelpeteksten begge steder sier at
+skolens eget system er det formelle arkivet.
+
+- **Lagring:** `lp_varsler`, `{ elevId: [ { id, type, fag, dato } ] }`.
+  `fag` er `null` for orden og atferd. Elever uten varsler står ikke i
+  objektet. **Ingen fritekst**, bevisst.
+- **Egen nøkkel, aldri på elevobjektet**, av samme grunn som elevnotatet.
+- **Synkes**, men **holdes utenfor «Eksporter uten navn»**. Det er den
+  filen som deles. Varslene er med i full backup og leses ved import.
+- **Termin:** `skoleaar.terminskille` er første dag i 2. termin (feltet
+  «2. termin starter» under Skoleår). `terminFor(dato)` gir 1, 2, 0 når
+  skillet ikke er satt, og `null` utenfor skoleåret. Terminen lagres ikke på
+  varselet, så et flyttet skille tar varslene med seg.
+- **Min side** (`renderVarselOversikt()`) viser varslene i terminen vi er
+  i, gruppert på type, med «N uker til N. termin slutter» øverst, uthevet
+  når det er tre uker eller mindre igjen. Uten terminskille vises hele
+  skoleåret, og teksten ber om skillet. Trykk på en rad åpner elevloggen.
+- **I elevloggen** (`byggVarselFelt()`) velges fag bare blant fagene eleven
+  har i timeplanen (`fagForElev()`). Å registrere eller slette **bytter ut
+  bare varselblokka**, slik at et halvskrevet elevnotat over beholder
+  markøren. Varsler fra en annen termin står, men dempet.
+- **Papirkurv:** varslene følger eleven dit og tilbake.
+
+`tests/varsler.test.js` dekker alt over, og hvert vern er verifisert ved å
+fjerne det.
+
 ### Hvilke datoer elevloggen viser
 
 Rettet 2. september 2026, etter en melding om at loggen viste timer eleven

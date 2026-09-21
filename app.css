@@ -426,6 +426,63 @@
     .elevnotat-felt:focus { border-color: var(--accent); }
     .elevnotat-felt::placeholder { color: var(--text-muted); }
 
+    /* ── DELTAKELSE ØVERST I ELEVLOGGEN ── */
+    .elev-deltakelse {
+      display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+      margin-bottom: 14px; max-width: 720px;
+    }
+    .elev-deltakelse-prosent { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .elev-deltakelse-tekst { font-size: 12px; color: var(--text-secondary); }
+    .logg-fag-prosent {
+      margin-left: auto; font-size: 11px; font-weight: 500;
+      color: var(--text-secondary); font-variant-numeric: tabular-nums;
+    }
+
+    /* ── VARSLER I ELEVLOGGEN ──
+       Samme flate som notatet over, så de leses som elevens egne felt og
+       ikke som poster i timelista. */
+    .elevvarsler {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 22px; max-width: 720px;
+    }
+    .elevvarsler > .elevnotat-tittel { display: block; margin-bottom: 8px; }
+    .elevvarsel-tom { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+    .elevvarsel-rad {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      padding: 5px 8px; margin-bottom: 4px; border-radius: 6px;
+      background: var(--overtid-soft); border: 1px solid var(--overtid-kant);
+      font-size: 13px; color: var(--overtid-deep);
+    }
+    /* Varsler fra en annen termin står, men dempet */
+    .elevvarsel-rad--tidligere { background: var(--bg); border-color: var(--border); color: var(--text-secondary); }
+    .elevvarsel-hva { font-weight: 600; }
+    .elevvarsel-dato { font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
+    .elevvarsel-slett {
+      border: none; background: none; cursor: pointer; font-size: 16px; line-height: 1;
+      color: inherit; padding: 0 2px; opacity: 0.6;
+    }
+    .elevvarsel-slett:hover { opacity: 1; }
+    .elevvarsel-skjema { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .elevvarsel-skjema select, .elevvarsel-skjema input {
+      font-family: inherit; font-size: 13px; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+      color: var(--text-primary); min-width: 0; flex: 1 1 140px;
+    }
+    .elevvarsel-skjema .elevvarsel-type { flex: 2 1 230px; }
+    .elevvarsel-skjema .elevvarsel-knapp { flex: 0 0 auto; }
+    .elevvarsel-hjelp { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+
+    /* ── VARSLER PÅ MIN SIDE ── */
+    .varsel-nedtelling { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+    .varsel-nedtelling.naer { color: var(--overtid-deep); font-weight: 600; }
+    .varsel-gruppe { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .varsel-gruppe-tittel { flex: 0 0 100%; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+    .varsel-rad {
+      font-family: inherit; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      color: var(--text-primary); background: var(--surface); border: 1px solid var(--border);
+    }
+    .varsel-rad:hover { border-color: var(--accent); }
+
     .logg-subject-block { margin-bottom: 20px; }
     .logg-subject-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
     .logg-subject-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

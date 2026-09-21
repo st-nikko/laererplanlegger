@@ -164,7 +164,12 @@ test('feltet står øverst, over timelista', () => {
   const w = dom.window;
   const c = tegn(w);
   sant(c.querySelector('.logg-subject-block'), 'timelista mangler — testen tester ikke det den tror');
-  sant(c.firstElementChild.classList.contains('elevnotat'), 'notatet skal være første element');
+  // Deltakelseslinja står over notatet siden september 2026. Det som skal
+  // voktes er at notatet kommer foran timelista, ikke at det er aller først.
+  const notat = c.querySelector('.elevnotat'), liste = c.querySelector('.logg-subject-block');
+  sant(notat, 'notatet mangler');
+  sant(notat.compareDocumentPosition(liste) & w.Node.DOCUMENT_POSITION_FOLLOWING,
+       'notatet skal stå over timelista');
   dom.window.close();
 });
 
