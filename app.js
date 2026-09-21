@@ -535,8 +535,13 @@ function skoletimerForHendelse(ev) {
 // undertittelen skjult, så «8. trinn · 204 · 08:30–09:15» får ikke plass —
 // men trinnet alene gjør det, og det er det man trenger for å se hvem man
 // har time med.
+//
+// Enetimer får faget her i stedet. Tittelen er elevnavnet, og undertittelen
+// med faget er skjult på mobil — uten dette sto faget ingen steder. Trinnet
+// sier lite på en enetime; det følger av eleven.
 function trinnKortEtikett(ev) {
   if (ev.category !== 'undervisning') return '';
+  if (ev.sessionType === 'enetime') return ev.title || '';
   const t = getEventTrinns(ev);
   return t.length ? t.join('+') : '';
 }
@@ -555,7 +560,9 @@ function eventSubLabel(ev) {
   if (ev.category !== 'undervisning') return `${ev.title}${room} · ${ev.start}–${ev.end}`;
   const ev_trinns_ = getEventTrinns(ev);
   const trinnStr = ev_trinns_.map(t=>t+'.').join('+')+( ev_trinns_.length ? ' trinn' : '');
-  if (ev.sessionType === 'enetime')   return `Enetime${room} · ${ev.start}–${ev.end}`;
+  // Enetimen har elevnavnet som tittel, så faget må stå her — ellers
+  // står det ingen steder på blokka.
+  if (ev.sessionType === 'enetime')   return `${ev.title} · enetime${room} · ${ev.start}–${ev.end}`;
   if (ev.sessionType === 'parallell') return `${trinnStr} (parallell)${room} · ${ev.start}–${ev.end}`;
   return `${trinnStr}${room} · ${ev.start}–${ev.end}`;
 }
@@ -1137,7 +1144,10 @@ function renderGrid() {
       // Trinnet står på egen linje under faget, ikke foran det: i en 70 px
       // bred mobilkolonne stjal merket plassen fra selve fagnavnet.
       const trinnKort = trinnKortEtikett(ev);
-      const trinnLinje = trinnKort ? `<div class="event-trinn-kort">${trinnKort}. trinn</div>` : '';
+      const trinnLinje = !trinnKort ? ''
+        : ev.sessionType === 'enetime'
+          ? `<div class="event-trinn-kort">${trinnKort}</div>`
+          : `<div class="event-trinn-kort">${trinnKort}. trinn</div>`;
       block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Hva timen inneholder, som nettleserens egen tooltip. Settes som

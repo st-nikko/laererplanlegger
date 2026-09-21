@@ -245,6 +245,16 @@ gamle verdier tilbake — for en endring som bare gjelder et ord på skjermen.
 Skal verdien byttes senere, er det den rekkefølgen som er problemet, ikke
 selve navnebyttet.
 
+### Enetimer på kalenderblokka
+
+Enetimer har **elevnavnet som tittel** (`eventDisplayLabel()`), så faget må
+stå et annet sted. Fram til 21. september 2026 sto det ingen steder. Nå står
+faget først i undertittelen («Norsk · enetime · 204 · 08:30–09:15»), og på
+mobil, der undertittelen er skjult, i linja under navnet i stedet for
+trinnet (`trinnKortEtikett()`). Trinnet sier lite på en enetime, siden det
+følger av eleven. Den eksporterte kalenderen er uendret: der er tittelen
+faget, aldri eleven (`icsTittel()`). `tests/enetime.test.js` vokter dette.
+
 ### Hover på timene
 
 Lagt til 19. august 2026, i **billigste form med vilje**: nettleserens eget
