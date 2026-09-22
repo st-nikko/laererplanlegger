@@ -135,6 +135,11 @@ skjermene overens, og hele poenget faller.
 **Status:** Ønsket. Tellingen av undervisningstimer, som er den egentlige
 motivasjonen bak statusene, er utsatt — men de er nyttige i seg selv.
 
+**Merket for «ingen elever registrert» er bygget** (22. september 2026),
+med `user-slash` fra Font Awesome framfor Feather-stilen foreslått under.
+Se «Ikon for timer uten elever» i CONTEXT.md. Statusene «utgått» og
+«ingen møtte» står fortsatt åpne.
+
 *Dette var to poster fram til 19. august 2026. De ble slått sammen fordi
 de handler om samme spørsmål sett fra hver sin kant: hva betyr det at en
 time står tom, og hvordan vises det?*

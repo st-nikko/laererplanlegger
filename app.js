@@ -80,7 +80,11 @@ const MONTHS     = ['januar','februar','mars','april','mai','juni','juli',
                     'august','september','oktober','november','desember'];
 const MONTHS_SHORT = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
-const TODAY = new Date(); // Dynamisk — dagens dato
+// Dagens dato. **`let`, ikke `const`**: den settes når siden lastes, og en
+// fane eller app som står åpen over natta trodde ellers at det fortsatt
+// var i går — «I dag» sendte deg dit, og dagsmarkeringen sto på feil dag.
+// oppdaterIdag() nedenfor holder den à jour.
+let TODAY = new Date();
 let currentWeekMonday = getMonday(TODAY);
 let currentDay        = new Date(TODAY);
 let currentMonthStart = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
@@ -515,6 +519,22 @@ function eventsForDate(date) {
     return ev.date === key;
   });
 }
+// ── Timer uten elever ──
+// En undervisningstime uten elever knyttet til seg får et lite ikon foran
+// tittelen i uke- og dagsvisning. Det sier noe om *lista*, ikke om timen:
+// se veikart post 3. Ikke i månedsvisningen — pillene der er for lave.
+//
+// Ikonet er `user-slash` fra Font Awesome Free 7.3.1, lagt inn som SVG
+// framfor å laste hele biblioteket: det virker uten nett og koster ingen
+// nedlasting. Lisens: CC BY 4.0, https://fontawesome.com/license/free
+function erUtenElever(ev) {
+  return ev.category === 'undervisning' && !(ev.students || []).length;
+}
+const IKON_UTEN_ELEVER =
+  '<span class="ikon-uten-elever" title="Ingen elever registrert" aria-label="Ingen elever registrert" role="img">'
+  + '<svg viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M41-24.9c-9.4-9.4-24.6-9.4-33.9 0S-2.3-.3 7 9.1l528 528c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9L311.5 245.7c55-10.9 96.5-59.5 96.5-117.7 0-66.3-53.7-120-120-120-58.2 0-106.8 41.5-117.7 96.5L41-24.9zM235.6 305.4C147.9 316.6 80 391.5 80 482.3 80 498.7 93.3 512 109.7 512l332.5 0-206.6-206.6z"/></svg>'
+  + '</span>';
+
 function eventDisplayLabel(ev) {
   if (ev.category !== 'undervisning') return ev.title;
   if (ev.sessionType === 'enetime' && ev.students.length) {
@@ -1135,6 +1155,7 @@ function renderGrid() {
       let badge='';
       if(ev.sessionType==='enetime')   badge=`<span class="event-badge">1:1</span><br>`;
       if(ev.sessionType==='parallell') badge=`<span class="event-badge">↔ parallell</span><br>`;
+      const ikonUtenElever = erUtenElever(ev) ? IKON_UTEN_ELEVER : '';
 
       // Skoletimen står foran faget, i lettere vekt: faget er saken,
       // timenummeret er sammenhengen. Egen span så mobil kan skjule den —
@@ -1148,7 +1169,7 @@ function renderGrid() {
         : ev.sessionType === 'enetime'
           ? `<div class="event-trinn-kort">${trinnKort}</div>`
           : `<div class="event-trinn-kort">${trinnKort}. trinn</div>`;
-      block.innerHTML=`${badge}<div class="event-title">${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
+      block.innerHTML=`${badge}<div class="event-title">${ikonUtenElever}${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Hva timen inneholder, som nettleserens egen tooltip. Settes som
       // attributt framfor å bygges inn i markupen: teksten er ren tekst og
@@ -3103,7 +3124,31 @@ function erKalendervisning(v) {
 // Min side, tar de deg tilbake til kalenderen. Er du allerede i en
 // kalendervisning, beholdes den — det ville vært rart om «I dag»
 // kastet deg fra måned til uke.
+// Oppdaterer TODAY. Gir true når datoen faktisk har skiftet, slik at
+// den som kaller vet om kalenderen må tegnes på nytt.
+function oppdaterIdag() {
+  const naa = new Date();
+  const skiftet = isoDate(naa) !== isoDate(TODAY);
+  TODAY = naa;
+  return skiftet;
+}
+
+// Når datoen skifter mens appen står åpen: tegn på nytt, men bli stående
+// der du er — det er bare «i dag» som flytter seg, ikke visningen.
+function sjekkDatoskifte() {
+  if (oppdaterIdag()) render();
+}
+// Tre veier inn, fordi ingen av dem alene holder: en telefon eller PC som
+// sover, fyrer ingen timere, men gir visibilitychange når du kommer tilbake.
+// Minutt-sjekken tar midnatt mens appen står framme.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') sjekkDatoskifte();
+});
+window.addEventListener('focus', sjekkDatoskifte);
+setInterval(sjekkDatoskifte, 60 * 1000);
+
 function goToToday(){
+  oppdaterIdag();
   currentWeekMonday=getMonday(TODAY);
   currentDay=new Date(TODAY);
   currentMonthStart=new Date(TODAY.getFullYear(),TODAY.getMonth(),1);

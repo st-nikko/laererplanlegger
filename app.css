@@ -199,6 +199,10 @@
     /* Trinnet på egen linje. Skjult her: på PC står det allerede i
        undertittelen. Slås på i mobilblokka, der undertittelen er borte. */
     .event-trinn-kort { display: none; }
+    /* Timer uten elever. Følger tekstfargen på blokka, så det passer på
+       alle fagfarger, og skaleres med tittelen (mindre på mobil). */
+    .ikon-uten-elever { display: inline-block; margin-right: 4px; opacity: 0.75; }
+    .ikon-uten-elever svg { width: 1.1em; height: 1em; vertical-align: -0.12em; display: inline-block; }
     .event-sub   { font-size: 10px; opacity: 0.72; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .event-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; background: rgba(34,32,29,0.10); color: inherit; opacity: 0.8; }
     .event-plan-dot { position: absolute; bottom: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--suksess); opacity: 0.85; }

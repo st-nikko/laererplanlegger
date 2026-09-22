@@ -245,6 +245,29 @@ gamle verdier tilbake — for en endring som bare gjelder et ord på skjermen.
 Skal verdien byttes senere, er det den rekkefølgen som er problemet, ikke
 selve navnebyttet.
 
+### «I dag» når appen står åpen over natta
+
+`TODAY` er `let`, ikke `const`. Fram til 22. september 2026 ble den satt én
+gang ved lasting, og en fane som sto åpen over natta trodde det fortsatt
+var i går: «I dag» sendte deg dit, og dagsmarkeringen sto på feil dag.
+`oppdaterIdag()` setter den på nytt og sier fra om datoen har skiftet.
+Den kalles av `goToToday()`, og `sjekkDatoskifte()` kalles ved
+`visibilitychange`, `focus` og hvert minutt. Da tegnes kalenderen på nytt,
+men visningen du har bladd til blir stående. Alle tre veiene trengs: en
+maskin som sover, kjører ingen timere. **Les aldri dagens dato inn i en
+variabel ved oppstart.** Bruk `TODAY` der du trenger den.
+
+### Ikon for timer uten elever
+
+En undervisningstime uten elever (`erUtenElever()`) får `IKON_UTEN_ELEVER`
+foran tittelen i uke- og dagsvisning, med «Ingen elever registrert» som
+title og aria-label. Ikke i månedsvisningen, der pillene er for lave.
+Ikonet er `user-slash` fra Font Awesome Free 7.3.1, lagt inn som SVG i
+app.js framfor å laste biblioteket. Det virker uten nett. Lisens CC BY 4.0,
+står i kommentaren. Fylt ikon, i motsetning til de strekede menyikonene,
+etter Nikolais eget valg. `tests/idag-og-ikon.test.js` vokter begge
+delene.
+
 ### Enetimer på kalenderblokka
 
 Enetimer har **elevnavnet som tittel** (`eventDisplayLabel()`), så faget må
