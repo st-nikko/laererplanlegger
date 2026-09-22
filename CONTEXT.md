@@ -100,6 +100,16 @@ appen kan ikke se forskjell på en time som skulle startet tidligere og en
 som med vilje starter senere. `startWeek` lagres fortsatt, så skjemaet kan
 vise feltet. `tests/startdato.test.js` vokter dette.
 
+### Vikartimer som telles
+
+En vikartime kan merkes «Tell som undervisningstime» (`ev.tellSomUndervisning`,
+haken `#vikarTellInput` i vikarskjemaet, av som standard). Merkede vikartimer
+er med i «N undervisningstimer denne uka» (`tellesSomUndervisning()` i
+`ukensUndervisningstimer()`), og en dobbelttime teller som to. Blokka sier
+«Vikar · telles», og hover sier det samme. Flagget settes bare på vikartimer:
+gjøres timen om til undervisning eller møte, blir det `false`.
+`tests/vikar-telling.test.js` vokter dette.
+
 ### Knappene i hendelsesskjemaet
 
 «Avslutt fra dato» skjuler Lagre, Avbryt og sletteknappene og viser en

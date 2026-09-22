@@ -631,7 +631,7 @@ function skoletimeEtikett(ev) {
 
 function eventSubLabel(ev) {
   const room = ev.room ? ` · ${ev.room}` : '';
-  if (ev.category === 'vikar') return `Vikar · ${ev.start}–${ev.end}`;
+  if (ev.category === 'vikar') return `Vikar${ev.tellSomUndervisning ? ' · telles' : ''} · ${ev.start}–${ev.end}`;
   if (ev.category !== 'undervisning') return `${ev.title}${room} · ${ev.start}–${ev.end}`;
   const ev_trinns_ = getEventTrinns(ev);
   const trinnStr = ev_trinns_.map(t=>t+'.').join('+')+( ev_trinns_.length ? ' trinn' : '');
@@ -701,6 +701,7 @@ function eventHoverTekst(ev, dato) {
 
   if (ev.category === 'vikar') {
     L.push(`Vikartime${rom} · ${ev.start}–${ev.end}`);
+    if (ev.tellSomUndervisning) L.push('Telles som undervisningstime');
     if (ev.vikarNotes) L.push('', ...bryt(kapp(ev.vikarNotes, HOVER_NOTAT_MAKS)));
     return L.join('\n');
   }
@@ -1307,7 +1308,8 @@ function renderLegend() {
     sum.className = 'legend-total';
     sum.textContent = `${n} undervisningstime${n !== 1 ? 'r' : ''} denne uka`;
     sum.title = 'Skoletimer mandag–fredag i uka som vises. En dobbelttime teller som to. '
-              + 'Vikartimer og møter er ikke med. Ferier og fridager trekker fra.';
+              + 'Vikartimer er med bare når de er merket «Tell som undervisningstime». '
+              + 'Møter er ikke med. Ferier og fridager trekker fra.';
     el.appendChild(sum);
   }
 }
@@ -1315,13 +1317,18 @@ function renderLegend() {
 // Antall skoletimer med egen undervisning i uka som starter på gitt mandag.
 // Teller skoletimer, ikke klokketimer, og ikke hendelser — det er samme
 // enhet som den offisielle timeplanen bruker, så tallene kan sammenlignes.
+// Undervisning, og vikartimer merket «Tell som undervisningstime».
+function tellesSomUndervisning(ev) {
+  return ev.category === 'undervisning' || (ev.category === 'vikar' && !!ev.tellSomUndervisning);
+}
+
 function ukensUndervisningstimer(mandag) {
   let n = 0;
   for (let i = 0; i < 5; i++) {
     const d = new Date(mandag);
     d.setDate(d.getDate() + i);
     eventsForDate(d).forEach(ev => {
-      if (ev.category !== 'undervisning') return;
+      if (!tellesSomUndervisning(ev)) return;
       // Timer som ligger utenfor timeplanrutenettet gir tom liste, men er
       // like fullt undervisning og skal telle som én
       n += skoletimerForHendelse(ev).length || 1;
@@ -1500,6 +1507,7 @@ function openEventForm(ev, forslag, klikketDato) {
     setSessionType(ev ? (ev.sessionType||'gruppe') : 'gruppe');
   } else if (cat === 'vikar') {
     document.getElementById('vikarNotesInput').value = ev ? ev.vikarNotes||'' : '';
+    document.getElementById('vikarTellInput').checked = !!(ev && ev.tellSomUndervisning);
   } else {
     document.getElementById('moteTittelInput').value = ev ? ev.title||'' : '';
     document.getElementById('moteKategori').value    = ev ? ev.category : 'mote';
@@ -1674,6 +1682,10 @@ function saveEvent() {
   const weekPattern = recurs && wpChecked ? wpChecked.value : 'every';
 
   let title,trinn,trinns_,room,category,sessionType,vikarNotes;
+  // Bare vikartimer kan telles på denne måten. Byttes en vikartime til
+  // undervisning eller møte, forsvinner flagget — ellers ville det ligget
+  // igjen og telt dobbelt om timen senere ble vikar igjen.
+  const tellSomUndervisning = formCategory==='vikar' && document.getElementById('vikarTellInput').checked;
   if(formCategory==='undervisning'){
     title=document.getElementById('fagInput').value.trim();
     trinns_=getSelectedTrinns();
@@ -1716,11 +1728,11 @@ function saveEvent() {
       const m=mandagForUkeNaer(startWeek, ref);
       if(m) events[idx].gyldigFra=isoDate(m);
     }
-    if(idx!==-1){events[idx]={...events[idx],title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,students:studentIds,vikarNotes,elevId};}
+    if(idx!==-1){events[idx]={...events[idx],title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,students:studentIds,vikarNotes,elevId,tellSomUndervisning};}
     savedId=editingEventId;
   } else {
     savedId=nextId++;
-    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,gyldigFra:gyldigFraForNy({recurs,date,startWeek,moteDato},visningensMandag()),gyldigTil:null});
+    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,tellSomUndervisning,gyldigFra:gyldigFraForNy({recurs,date,startWeek,moteDato},visningensMandag()),gyldigTil:null});
   }
 
   if(category==='undervisning') getSubjectColor(title);
