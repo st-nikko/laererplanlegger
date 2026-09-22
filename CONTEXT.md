@@ -77,6 +77,37 @@ Lærerplanlegger/
 - **`weekday` er 0-basert med mandag som 0**, og er *eneste* felt `eventsForDate()` bruker for gjentakende hendelser — `date` ignoreres da. Merk at skjemaet samler ukedagen på to måter: undervisning og vikar velger den i `dagSelect`, mens møter velger en dato og ukedagen utledes med `getDayOfWeekFromDate()`. Fram til økt 19 var den utledningen en hardkodet `0`, så alle gjentakende møter havnet på mandag. `loadFromStorage()` reparerer gamle møter ut fra datoen deres, og `tests/gjentakende-moter.test.js` vokter begge deler.
 - **Et gjentakende møte har ingen `date`** — `saveEvent()` lagrer `date: recurs ? undefined : date`. Datofeltet i skjemaet må derfor fylles av `moteDatoForSkjema()`, aldri av `ev.date` alene. Se «Datofeltet i møteskjemaet» nedenfor.
 
+### Når en hendelse begynner å gjelde
+
+`gyldigFra` er datoen en hendelse vises fra, og `eventsForDate()` skjuler
+alt før den. Fram til 22. september 2026 fikk nye hendelser **dagens dato**,
+og en time opprettet tirsdag for mandag i samme uke dukket først opp uka
+etter. Nå regner `gyldigFraForNy()` den ut:
+
+- **Enkelthendelser:** datoen sin.
+- **Gjentakende med «gjeldende fra uke»:** mandagen i den uka.
+- **Gjentakende møte uten:** datoen valgt i skjemaet.
+- **Gjentakende time uten:** mandagen i uka som vises (`visningensMandag()`,
+  som bruker dagen i dagsvisning).
+
+**`startWeek` sjekkes ikke lenger i `eventsForDate()`.** Et ukenummer har
+ikke år, og `wn < startWeek` skjulte en time «fra uke 34» fra 1. januar til
+august. Uka gjøres om til en dato med `mandagForUkeNaer(uke, ref)`, som
+velger den uka med det nummeret som ligger nærmest `ref`. Endres uka på en
+eksisterende hendelse, flyttes `gyldigFra` med. `loadFromStorage()`
+migrerer eldre data, men flytter bare startdatoen **fram**, aldri bakover:
+appen kan ikke se forskjell på en time som skulle startet tidligere og en
+som med vilje starter senere. `startWeek` lagres fortsatt, så skjemaet kan
+vise feltet. `tests/startdato.test.js` vokter dette.
+
+### Knappene i hendelsesskjemaet
+
+«Avslutt fra dato» skjuler Lagre, Avbryt og sletteknappene og viser en
+datovelger. `openEventForm()` setter **alle** knappene tilbake til
+utgangstilstanden. Før ble bare datovelgeren og sletteknappene nullstilt,
+så lukket man modalen med krysset eller Escape midt i «Avslutt fra dato»,
+manglet Lagre og Avbryt neste gang skjemaet ble åpnet.
+
 ### Datofeltet i møteskjemaet
 
 Rettet 10. september 2026, meldt som: «Når jeg åpner et møte, endres

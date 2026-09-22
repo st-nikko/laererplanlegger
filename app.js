@@ -486,6 +486,58 @@ function weekNumber(d) {
   const ys=new Date(Date.UTC(date.getUTCFullYear(),0,1));
   return Math.ceil((((date-ys)/86400000)+1)/7);
 }
+// Mandagen i ISO-uke `uke` i året `aar`. 4. januar ligger alltid i uke 1.
+function mandagIIsoUke(aar, uke) {
+  const jan4 = new Date(aar, 0, 4);
+  const m = getMonday(jan4);
+  m.setDate(m.getDate() + (uke - 1) * 7);
+  return m;
+}
+
+// Et ukenummer sier ikke hvilket år. Vi velger mandagen i den uka som
+// ligger nærmest `ref`: uke 2 skrevet inn i november er januar etter, uke
+// 34 skrevet inn i januar er august før. Uke 53 finnes ikke hvert år, så
+// kandidater der uka ikke stemmer, faller bort.
+function mandagForUkeNaer(uke, ref) {
+  const r = getMonday(ref);
+  let best = null;
+  [-1, 0, 1].forEach(dy => {
+    const m = mandagIIsoUke(r.getFullYear() + dy, uke);
+    if (weekNumber(m) !== uke) return;
+    if (!best || Math.abs(m - r) < Math.abs(best - r)) best = m;
+  });
+  return best;
+}
+
+// Når en ny hendelse begynner å gjelde.
+//
+// **Aldri dagens dato.** Det var den fram til 22. september 2026: en time
+// opprettet tirsdag for mandag i samme uke, lå før sin egen startdato og
+// dukket først opp uka etter.
+//
+// - Enkelthendelser: datoen sin. Et møte lagt inn for i går skal synes.
+// - Gjentakende med «gjeldende fra uke»: mandagen i den uka, nærmest uka
+//   som vises.
+// - Gjentakende møte uten: datoen som ble valgt i skjemaet. Den bestemmer
+//   ukedagen, og er det naturlige første møtet.
+// - Gjentakende time uten: mandagen i uka som vises. Det holder uker som
+//   allerede er gått fri for timer som ikke fantes da.
+function gyldigFraForNy({ recurs, date, startWeek, moteDato }, visningsMandag) {
+  if (!recurs) return date || isoDate(visningsMandag);
+  if (startWeek) {
+    const m = mandagForUkeNaer(startWeek, visningsMandag);
+    if (m) return isoDate(m);
+  }
+  if (moteDato) return moteDato;
+  return isoDate(getMonday(visningsMandag));
+}
+
+// Uka som vises i kalenderen. I dagsvisning står currentWeekMonday ikke
+// nødvendigvis i samme uke som dagen.
+function visningensMandag() {
+  return currentView === 'day' ? getMonday(currentDay) : new Date(currentWeekMonday);
+}
+
 function getDayOfWeekFromDate(dateStr) {
   const d=new Date(dateStr+'T00:00:00'); return d.getDay()===0?6:d.getDay()-1;
 }
@@ -511,7 +563,10 @@ function eventsForDate(date) {
 
     if (ev.recurs) {
       if (ev.weekday !== wd) return false;
-      if (ev.startWeek && wn < ev.startWeek) return false;
+      // startWeek sjekkes IKKE her. Et ukenummer har ikke år, og `wn <
+      // startWeek` skjulte en time «fra uke 34» fra 1. januar til august.
+      // Uka er gjort om til gyldigFra når hendelsen lagres (og ved lasting
+      // for eldre data), så det er datoen over som styrer.
       if (ev.weekPattern === 'odd'  && wn % 2 === 0) return false;
       if (ev.weekPattern === 'even' && wn % 2 !== 0) return false;
       return true;
@@ -1425,6 +1480,12 @@ function openEventForm(ev, forslag, klikketDato) {
   document.getElementById('avsluttEventBtn').style.display = visSlett;
   document.getElementById('slettPermBtn').style.display    = visSlett;
   document.getElementById('avsluttPanel').style.display    = 'none';
+  // «Avslutt fra dato» skjuler Lagre og Avbryt, og bare Avbryt inne i
+  // datovelgeren viste dem igjen. Lukket man modalen med krysset, Escape
+  // eller ved å åpne en annen time, manglet knappene neste gang.
+  // Utgangstilstanden settes derfor her, hver gang.
+  document.getElementById('saveEventBtn').style.display    = '';
+  document.getElementById('avbrytEventBtn').style.display  = '';
 
   const cat = ev ? (ev.category==='undervisning'?'undervisning':ev.category==='vikar'?'vikar':'mote') : formCategory;
   setFormCategory(cat);
@@ -1648,11 +1709,18 @@ function saveEvent() {
 
   if(editingEventId!==null){
     const idx=events.findIndex(e=>e.id===editingEventId);
+    // Endret «gjeldende fra uke» flytter startdatoen med. Uka tolkes nær
+    // den gamle startdatoen, ikke nær uka som vises.
+    if(idx!==-1 && recurs && startWeek && startWeek!==events[idx].startWeek){
+      const ref=events[idx].gyldigFra?new Date(events[idx].gyldigFra+'T00:00:00'):visningensMandag();
+      const m=mandagForUkeNaer(startWeek, ref);
+      if(m) events[idx].gyldigFra=isoDate(m);
+    }
     if(idx!==-1){events[idx]={...events[idx],title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,students:studentIds,vikarNotes,elevId};}
     savedId=editingEventId;
   } else {
     savedId=nextId++;
-    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,gyldigFra:isoDate(TODAY),gyldigTil:null});
+    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,gyldigFra:gyldigFraForNy({recurs,date,startWeek,moteDato},visningensMandag()),gyldigTil:null});
   }
 
   if(category==='undervisning') getSubjectColor(title);
@@ -3673,6 +3741,24 @@ function loadFromStorage() {
       events.forEach(ev => {
         if (!ev.gyldigFra) ev.gyldigFra = '2025-08-18';
         if (ev.gyldigTil === undefined) ev.gyldigTil = null;
+      });
+
+      // «Gjeldende fra uke» gjøres om til en dato. Før ble uka sammenlignet
+      // med ukenummeret alene, og timen forsvant ved nyttår. Uka tolkes nær
+      // startdatoen hendelsen fikk da den ble laget. Startdatoen flyttes
+      // bare FRAM: en tidligere dato ville vist timen i uker den ikke fantes.
+      events.forEach(ev => {
+        if (!ev.recurs || !ev.startWeek || !ev.gyldigFra) return;
+        const m = mandagForUkeNaer(ev.startWeek, new Date(ev.gyldigFra + 'T00:00:00'));
+        if (m && isoDate(m) > ev.gyldigFra) { ev.gyldigFra = isoDate(m); maaSkrivesTilbake = true; }
+      });
+
+      // Enkelthendelser fikk dagens dato som startdato. Et møte lagt inn
+      // for en dag som alt var passert, lå dermed før sin egen startdato og
+      // ble aldri vist. Datoen deres er den eneste som betyr noe.
+      events.forEach(ev => {
+        if (ev.recurs || !ev.date || !ev.gyldigFra) return;
+        if (ev.date < ev.gyldigFra) { ev.gyldigFra = ev.date; maaSkrivesTilbake = true; }
       });
 
       // Gjentakende møter ble tidligere lagret med weekday 0 uansett hvilken
