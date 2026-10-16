@@ -208,6 +208,25 @@ test('lange linjer brytes etter standarden', () => {
   dom.window.close();
 });
 
+test('nedlastet fil får søkbart merke «LP» bakerst i tittelen', () => {
+  const dom = lagDom({ events: [NORSK, ENETIME] }); const w = dom.window;
+  const s = summaries(w.byggICS({ merke: 'LP' }).ics);
+  sant(s.includes('Norsk · LP'), 'vanlig time: ' + s[0]);
+  sant(s.includes('Matematikk (enetime) · LP'), 'enetime');
+  sant(s.every(t => t.endsWith(' · LP')), 'alle titler skal ha merket');
+  dom.window.close();
+});
+
+test('nedlastingsknappen sender med merket, abonnementet gjør det ikke', () => {
+  sant(/byggICS\(\{ merke: 'LP' \}\)/.test(js), 'eksporterICS skal bruke merke LP');
+  const sync = fs.readFileSync(path + 'sync.js', 'utf8');
+  sant(sync.includes('bygg:      () => byggICS()'), 'abonnementet skal være uten merke');
+  const dom = lagDom({ events: [NORSK] });
+  const s = summaries(dom.window.byggICS().ics);
+  sant(s.every(t => t === 'Norsk'), 'uten merke skal tittelen være uendret: ' + s[0]);
+  dom.window.close();
+});
+
 test('tomt skoleår gir ingen hendelser, ikke krasj', () => {
   const dom = lagDom({ events: [] });
   const { antall, ics } = dom.window.byggICS();

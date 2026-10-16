@@ -3995,7 +3995,10 @@ function icsBrytLinje(linje) {
   return ut;
 }
 
-function byggICS() {
+// merke: valgfri søkbar tagg bakerst i tittelen (f.eks. «LP»), slik at
+// alle timene kan søkes opp og slettes samlet i Outlook før ny import.
+// Bare nedlastet fil bruker den — abonnementet trenger ikke opprydding.
+function byggICS({ merke = '' } = {}) {
   const fra = new Date(skoleaar.start + 'T00:00:00');
   const til = new Date(skoleaar.slutt + 'T00:00:00');
   const stempel = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
@@ -4026,7 +4029,7 @@ function byggICS() {
           `DTSTAMP:${stempel}`,
           `DTSTART;TZID=Europe/Oslo:${icsLokalTid(dato, ev.start)}`,
           `DTEND;TZID=Europe/Oslo:${icsLokalTid(dato, ev.end)}`,
-          ...icsBrytLinje(`SUMMARY:${icsEscape(icsTittel(ev))}`)
+          ...icsBrytLinje(`SUMMARY:${icsEscape(icsTittel(ev) + (merke ? ' · ' + merke : ''))}`)
         );
         if (ev.room) linjer.push(...icsBrytLinje(`LOCATION:${icsEscape(ev.room)}`));
         const besk = icsBeskrivelse(ev);
@@ -4233,7 +4236,7 @@ function eksporterICS() {
     alert('Sett skoleårets start- og sluttdato i Min side først.');
     return;
   }
-  const { ics, antall } = byggICS();
+  const { ics, antall } = byggICS({ merke: 'LP' });
   if (!antall) {
     alert('Fant ingen undervisningstimer i skoleåret ' + skoleaar.start + ' – ' + skoleaar.slutt + '.\n\nSjekk at skoleåret er satt riktig.');
     return;
