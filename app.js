@@ -2985,9 +2985,9 @@ function deleteTodo(id) {
 // panelet. Trykk på én for å vise bare de gjøremålene; trykk på den igjen
 // for å se alt.
 //
-// Sortering på frist beholdes uansett. Når du først har snevret inn til
-// «IOP», er det rekkefølgen du vil ha — en egen sorteringsvelger ville
-// bare tatt plass fra en liste som er 272 px bred.
+// Filteret endrer aldri rekkefølgen (frist, eller den du har dratt fram —
+// se ordneTodos()). En egen sorteringsvelger ville bare tatt plass fra en
+// liste som er 272 px bred.
 //
 // Bare verdier som faktisk finnes i aktive gjøremål vises. En knapp som
 // ikke gir treff er verre enn ingen knapp, og lista rydder seg selv når
@@ -3071,15 +3071,13 @@ function renderTodoList() {
   const synlige = aktive.filter(passererFilter);
   container.innerHTML='';
   const todayStr=isoDate(TODAY);
-  const sorted=[...synlige].sort((a,b)=>{
-    if(a.frist&&b.frist) return a.frist.localeCompare(b.frist);
-    if(a.frist)return -1; if(b.frist)return 1;
-    return a.id-b.id;
-  });
+  const sorted=ordneTodos(synlige);
   sorted.forEach(todo=>{
     const overdue=todo.frist&&todo.frist<todayStr&&todo.status!=='ferdig';
     const item=document.createElement('div');
     item.className='todo-item'+(todo.status==='ferdig'?' ferdig':'')+(overdue?' overdue-item':'');
+    item.dataset.todoId=String(todo.id);
+    item.addEventListener('pointerdown',e=>todoHoldStart(e,item));
 
     const statusBtn=document.createElement('button');
     statusBtn.className='todo-status-circle '+todo.status;
@@ -3127,6 +3125,118 @@ function renderTodoList() {
     item.appendChild(statusBtn); item.appendChild(body); item.appendChild(del);
     container.appendChild(item);
   });
+}
+
+// ── Egen rekkefølge: hold og dra (kun mus) ──
+// Valgt 16. okt 2026 («løsning 1»): når du først har dratt noe, er det
+// du som bestemmer rekkefølgen, ikke fristen. Plassen lagres som
+// `rekkefolge` på gjøremålet og synkes sammen med resten av lista.
+//
+// Gjøremål uten `rekkefolge` — nye, eller fra før funksjonen fantes —
+// sorteres på frist og flettes inn foran det første ordnede gjøremålet
+// med senere frist. Et nytt gjøremål havner altså der fristen tilsier,
+// og kan flyttes derfra. Har ingen fått plass ennå, er lista ren
+// fristsortering som før.
+//
+// Bare mus: på berøringsskjerm går langt trykk og rulling i beina på
+// hverandre, så der er lista som før.
+function fristSammenlign(a,b){
+  if(a.frist&&b.frist) return a.frist.localeCompare(b.frist);
+  if(a.frist)return -1; if(b.frist)return 1;
+  return a.id-b.id;
+}
+
+function ordneTodos(liste){
+  const harPlass=t=>typeof t.rekkefolge==='number';
+  const ordnet=liste.filter(harPlass).sort((a,b)=>a.rekkefolge-b.rekkefolge);
+  const uordnet=liste.filter(t=>!harPlass(t)).sort(fristSammenlign);
+  if(!ordnet.length) return uordnet;
+  const ut=[...ordnet];
+  uordnet.forEach(t=>{
+    const i=ut.findIndex(o=>fristSammenlign(t,o)<0);
+    if(i===-1) ut.push(t); else ut.splice(i,0,t);
+  });
+  return ut;
+}
+
+// Flytt gjøremålet `id` rett foran (eller etter) `maalId`, og gi alle
+// aktive gjøremål fast plass. Hele lista nummereres, ikke bare de
+// synlige — ellers ville et filter («IOP») kunne stokke om på det skjulte.
+function flyttTodo(id, maalId, etter){
+  if(String(id)===String(maalId)) return;
+  const rekke=ordneTodos(todos.filter(t=>!t.slettet&&t.status!=='ferdig'));
+  const fra=rekke.findIndex(t=>String(t.id)===String(id));
+  if(fra===-1) return;
+  const [flyttet]=rekke.splice(fra,1);
+  const til=rekke.findIndex(t=>String(t.id)===String(maalId));
+  if(til===-1) return;
+  rekke.splice(til+(etter?1:0),0,flyttet);
+  rekke.forEach((t,i)=>{ t.rekkefolge=i; });
+  saveToStorage();
+  renderTodoList();
+}
+
+const TODO_HOLD_MS=250;   // så lenge museknappen må holdes før kortet løsner
+const TODO_HOLD_SLINGRING=6;  // px: beveger musa seg mer, er det ikke et hold
+
+function todoHoldStart(e, item){
+  if(e.pointerType!=='mouse'||e.button!==0) return;
+  // Statusrundingen, statusteksten og × skal virke som før
+  if(e.target.closest('button, .todo-status-btn')) return;
+  const sx=e.clientX, sy=e.clientY;
+  const avbryt=()=>{
+    clearTimeout(timer);
+    document.removeEventListener('pointermove',slingrer);
+    document.removeEventListener('pointerup',avbryt);
+  };
+  const slingrer=ev=>{
+    if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>TODO_HOLD_SLINGRING) avbryt();
+  };
+  const timer=setTimeout(()=>{ avbryt(); todoDraStart(item); }, TODO_HOLD_MS);
+  document.addEventListener('pointermove',slingrer);
+  document.addEventListener('pointerup',avbryt);
+}
+
+function todoDraStart(item){
+  const liste=document.getElementById('todoList');
+  const rulle=liste.closest('.sidebar-body')||liste;
+  const startNeste=item.nextElementSibling;
+  item.classList.add('drar');
+  document.body.classList.add('todo-drar');
+
+  const flytt=ev=>{
+    const y=ev.clientY;
+    const andre=[...liste.querySelectorAll('.todo-item')].filter(x=>x!==item);
+    const under=andre.find(x=>{const r=x.getBoundingClientRect(); return y<r.top+r.height/2;});
+    if(under){ if(item.nextElementSibling!==under) liste.insertBefore(item,under); }
+    else if(liste.lastElementChild!==item) liste.appendChild(item);
+    // Rull lista når musa er nær kanten, så man kan dra forbi det synlige
+    const r=rulle.getBoundingClientRect();
+    if(y<r.top+30) rulle.scrollTop-=10; else if(y>r.bottom-30) rulle.scrollTop+=10;
+  };
+  const rydd=()=>{
+    document.removeEventListener('pointermove',flytt);
+    document.removeEventListener('pointerup',slipp);
+    document.removeEventListener('keydown',esc);
+    item.classList.remove('drar');
+    document.body.classList.remove('todo-drar');
+  };
+  const slipp=()=>{
+    rydd();
+    // Slippet utløser et klikk som ellers ville åpnet gjøremålet
+    const stopp=ev=>{ ev.stopPropagation(); ev.preventDefault(); };
+    window.addEventListener('click',stopp,true);
+    setTimeout(()=>window.removeEventListener('click',stopp,true),0);
+    if(item.nextElementSibling===startNeste){ renderTodoList(); return; }  // ikke flyttet
+    const neste=item.nextElementSibling, forrige=item.previousElementSibling;
+    if(neste&&neste.classList.contains('todo-item')) flyttTodo(item.dataset.todoId,neste.dataset.todoId,false);
+    else if(forrige&&forrige.classList.contains('todo-item')) flyttTodo(item.dataset.todoId,forrige.dataset.todoId,true);
+    else renderTodoList();
+  };
+  const esc=ev=>{ if(ev.key==='Escape'){ rydd(); renderTodoList(); } };  // angre underveis
+  document.addEventListener('pointermove',flytt);
+  document.addEventListener('pointerup',slipp);
+  document.addEventListener('keydown',esc);
 }
 
 // ────────────────────────────────────────────

@@ -242,9 +242,25 @@ når merkene blir mange, og to rulleflater i samme panel er nøyaktig fella
 som ble ryddet bort for elevlistene (se punkt 5 under «Kjente
 begrensninger»). Ikke flytt den ut.
 
-Sortering på frist beholdes uansett filter. Når du først har snevret inn,
-er det rekkefølgen du vil ha — en egen sorteringsvelger ville bare tatt
-plass fra en liste som er 272 px bred.
+Filteret endrer aldri rekkefølgen — en egen sorteringsvelger ville bare
+tatt plass fra en liste som er 272 px bred.
+
+### Egen rekkefølge: hold og dra
+
+Fra 16. oktober 2026 kan gjøremål flyttes med mus: hold inne i 250 ms, dra,
+slipp. **Når du først har dratt, bestemmer du — ikke fristen** (valgt
+framfor «frist først, du resten» og en sorteringsbryter). Plassen lagres
+som `rekkefolge` på gjøremålet og synkes med resten.
+
+- `ordneTodos()` sorterer: gjøremål med `rekkefolge` i den rekkefølgen;
+  de uten (nye, eller fra før) flettes inn på frist, foran første ordnede
+  gjøremål med senere frist. Ingen har plass → ren fristsortering som før.
+- `flyttTodo()` nummererer **alle aktive**, ikke bare de synlige, så et
+  aktivt filter ikke stokker om på det skjulte.
+- **Bare `pointerType === 'mouse'`.** På berøring går langt trykk og
+  rulling i beina på hverandre; der er lista uendret.
+- Statusrundingen, statusteksten og × starter aldri et dra. Klikket som
+  følger slippet svelges, ellers åpnes gjøremålet. Escape avbryter.
 
 ### Gjøremålsfeeden
 
