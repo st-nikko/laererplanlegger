@@ -438,6 +438,31 @@ Bare timer med en post i `lessonData` telles, altså timer der oppmøtet er
 åpnet og lagret. Ingen prosent vises før det finnes minst én slik time:
 «0 %» for en ny elev ville lest som at han aldri har vært der.
 
+### Hvem var med på timen
+
+Fra 19. oktober 2026. Elevlista ligger på **hendelsen**, ikke på datoen.
+Før dette fikk en elev som ble lagt til en eksisterende time, alle
+tidligere datoer godskrevet som oppmøte. Han hadde ikke noe kryss der,
+og et manglende kryss leses som «til stede». Fjernet man en elev, mistet
+hun historikken sin.
+
+**For en holdt time er det lagrede oppmøtet fasit** (`eleverPaaTime()`).
+`saveLessonPlan()` lagrer et kryss for hver elev på lista, så nøklene i
+`attendance` er nøyaktig dem som var med den dagen. Brukes av
+oppmøtetellingen, elevloggen, oppmøtelista i planmodalen og hover.
+
+Dagens liste brukes i stedet (eller i tillegg) når:
+- datoen er i dag eller framover: lista gjelder, og timen er ikke ferdig
+  ført;
+- oppmøtet ble lagret **før** timen. `lagret` stemples ved hver lagring.
+  Krysset fra et tema skrevet på forhånd er bare et utgangspunkt;
+- det ikke finnes oppmøte, eller det er tomt (`{}`).
+
+Poster uten `lagret` på en dato som ennå ikke har vært, stemples ved
+lasting (`maaSkrivesTilbake`). Ellers ville de blitt lest som fasit når
+dagen kom. Valgt framfor fra/til-dato per elev på timen: ingen nye felt,
+og det retter elever som allerede var lagt inn feil.
+
 ### Varsler
 
 Lagt til 21. september 2026 (veikart post 25). Varsler om fare for

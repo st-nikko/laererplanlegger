@@ -343,6 +343,44 @@ function fagForElev(elevId) {
 
 function lessonKey(evId, dateStr) { return `${evId}_${dateStr}`; }
 function getLesson(evId, dateStr) { return lessonData[lessonKey(evId, dateStr)] || null; }
+
+// Hvem var med på timen denne datoen? (19. okt 2026)
+//
+// Elevlista ligger på hendelsen, ikke på datoen. Ble en elev lagt til midt
+// i året, sto han med ett slag på alle tidligere datoer — og siden et
+// manglende kryss leses som «til stede», fikk han godskrevet timer han
+// aldri var i. Fjernet man en elev, forsvant historikken hans.
+//
+// Derfor: **for en holdt time er det lagrede oppmøtet fasit.** Når oppmøtet
+// lagres, får hver elev på lista et kryss, så elevene i `attendance` er
+// nøyaktig dem som sto på lista den dagen. Nye elever er ikke med bakover,
+// fjernede beholder sin historikk.
+//
+// Unntak, der dagens liste brukes i tillegg:
+// - i dag og framover — lista gjelder, og timen er ikke ferdig ført;
+// - oppmøte lagret FØR timen (tema skrevet på forhånd, se `lagret`). Da
+//   er krysset bare et utgangspunkt, ikke et faktum om hvem som var der.
+// Uten lagret oppmøte — eller med et tomt, som ikke sier noe om hvem som
+// var der — brukes dagens liste, som før.
+function oppmoteErFasit(ld, dateStr) {
+  if (!ld || !ld.attendance || !Object.keys(ld.attendance).length) return false;
+  return !ld.lagret || ld.lagret >= dateStr;
+}
+
+function eleverPaaTime(ev, dateStr, ld) {
+  if (ld === undefined) ld = getLesson(ev.id, dateStr);
+  const liste = ev.students || [];
+  if (!oppmoteErFasit(ld, dateStr)) return [...liste];
+  const ført = Object.keys(ld.attendance).map(parseStudentId);
+  if (dateStr < isoDate(TODAY)) return ført;
+  const ut = [...liste];
+  ført.forEach(id => { if (!ut.some(x => String(x) === String(id))) ut.push(id); });
+  return ut;
+}
+
+function varPaaTime(ev, dateStr, studentId, ld) {
+  return eleverPaaTime(ev, dateStr, ld).some(id => String(id) === String(studentId));
+}
 function setLesson(evId, dateStr, data) { lessonData[lessonKey(evId, dateStr)] = data; }
 function getTopicsForSubject(title) { return topicsBySubject[title] || []; }
 function addTopic(title, tema) {
@@ -686,9 +724,9 @@ function bryt(tekst, bredde = HOVER_BREDDE) {
 
 // Hvem var borte? attendance er { elevId: [bool per skoletime] }, og en
 // elev regnes som fraværende når han mangler i minst én av dem.
-function fravaerendeIEvent(ev, ld) {
+function fravaerendeIEvent(ev, ld, elever) {
   if (!ld || !ld.attendance) return [];
-  return (ev.students || []).filter(id => {
+  return (elever || ev.students || []).filter(id => {
     const raw = ld.attendance[id] ?? ld.attendance[String(id)];
     if (raw === undefined) return false;
     return Array.isArray(raw) ? raw.some(v => v === false) : raw === false;
@@ -730,9 +768,9 @@ function eventHoverTekst(ev, dato) {
   if (ld && ld.notes) L.push('', ...bryt(kapp(ld.notes, HOVER_NOTAT_MAKS)));
   if (!ld)            L.push('', 'Ingen plan lagt inn.');
 
-  const elever = ev.students || [];
+  const elever = eleverPaaTime(ev, isoDate(dato), ld);
   if (elever.length) {
-    const borte = fravaerendeIEvent(ev, ld);
+    const borte = fravaerendeIEvent(ev, ld, elever);
     L.push('', `Elever (${elever.length})${borte.length ? ` · ${borte.length} fraværende` : ''}:`);
     elever.slice(0, HOVER_ELEVER_MAKS).forEach(id => {
       const notat = ld && ld.studentNotes ? (ld.studentNotes[id] || ld.studentNotes[String(id)]) : '';
@@ -818,7 +856,7 @@ function deltakelseForElev(studentId) {
     if (erUtenforSkoleaar(dato)) return;
     const ev = events.find(e => String(e.id) === evIdStr);
     if (!ev || ev.category !== 'undervisning') return;
-    if (!(ev.students || []).some(sid => String(sid) === String(studentId))) return;
+    if (!varPaaTime(ev, dateStr, studentId, lessonData[key])) return;
     const antall = finnSkoletimer(ev).length;
     if (!antall) return;
     const att = lessonData[key].attendance || {};
@@ -1845,7 +1883,8 @@ function openLessonPlan(ev, date) {
 function renderAttendanceList(ev, attendance, studentNotes) {
   studentNotes = studentNotes || {};
   const list = document.getElementById('attendanceList');
-  const students = (ev.students||[]).map(id=>studentById(id)).filter(Boolean);
+  // Samme utvalg som tellingen: en gammel time viser dem som var med da
+  const students = eleverPaaTime(ev, planDateStr, getLesson(ev.id, planDateStr)).map(id=>studentById(id)).filter(Boolean);
   if(!students.length){list.innerHTML='<div class="student-list-empty">Ingen elever registrert for denne timen</div>';return;}
   list.innerHTML='';
 
@@ -1930,7 +1969,8 @@ function saveLessonPlan() {
   document.getElementById('attendanceList').querySelectorAll('textarea[data-sid]').forEach(inp=>{
     if(inp.value.trim()) studentNotes_[parseStudentId(inp.dataset.sid)]=inp.value.trim();
   });
-  setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes: studentNotes_ });
+  // `lagret`: oppmøte ført før timen er bare et utgangspunkt — se eleverPaaTime()
+  setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes: studentNotes_, lagret: isoDate(TODAY) });
   const ev=events.find(e=>e.id===planEventId);
   if(ev&&tema) addTopic(ev.title, tema);
   saveToStorage();
@@ -2204,7 +2244,7 @@ function renderElevloggInnhold(studentId, container) {
     const [evIdStr, dateStr]=key.split('_');
     const ev=events.find(e=>e.id===parseInt(evIdStr));
     if(!ev||ev.category!=='undervisning') return;
-    if(!ev.students.includes(studentId)) return;
+    if(!varPaaTime(ev, dateStr, studentId, ld)) return;
     if(dateStr<startDato) return;   // Timer holdt før eleven begynte
 
     // Timer fram i tid blir stående — tema skrives ofte på forhånd, og da
@@ -3933,6 +3973,18 @@ function loadFromStorage() {
         const antall = finnSkoletimer(ev).length || 1;
         for (const sid in att) {
           if (typeof att[sid] === 'boolean') att[sid] = Array(antall).fill(att[sid]);
+        }
+      }
+      // Før 19. okt 2026 fikk lagret oppmøte ikke `lagret`-stempel. En post
+      // på en dato som ennå ikke har vært, er garantert ført på forhånd —
+      // stemple den nå, ellers ville den blitt lest som fasit når dagen kom.
+      const iDagMig = isoDate(TODAY);
+      for (const key in lessonData) {
+        const ld = lessonData[key];
+        const dato = key.split('_').slice(1).join('_');
+        if (ld.attendance && !ld.lagret && dato > iDagMig) {
+          ld.lagret = iDagMig;
+          maaSkrivesTilbake = true;
         }
       }
     }
