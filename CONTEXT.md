@@ -49,6 +49,7 @@ Lærerplanlegger/
 | ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
 | ELEVLOGG → TIME | `aapneTimeFraLogg(evId, dato)` — en loggpost er sammendraget av én time, og klikk åpner den timen på **postens egen dato**. Lukker `#elevloggOverlay` først: fra modalen ville to overlegg ellers stått oppå hverandre og Escape lukket feil ett. Samme mønster som `openEditFromPlan()`. Sier fra hvis timen er slettet siden posten ble skrevet |
 | ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning. Filtrerer bort timer holdt **før elevens `startDato`**: elevlista ligger på hendelsen, ikke på datoen, så en elev lagt inn midt i året står ellers på alle tidligere datoer av samme time. Timer fram i tid blir stående, merket «Planlagt». Se «Hvilke datoer elevloggen viser» nedenfor |
+| VURDERINGER | `vurderinger[]`, `lagreVurdering()`, `slettVurdering()`, `rensResultat()`, `vurderingFormLaast()`, `eleverForVurdering()`, `vurderingerForElev()`, `rensTrinn()`, `trinnTekst()`, `trinnForFag()`, `renderVurderingerView()`, `openVurdering()`/`nyVurdering()`, `byggVurderingRad()`, `byggLoggVurderinger()`. Se «Vurderinger» nedenfor |
 | ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
 | ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
 | VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning, **og lukker gjøremålspanelet når `erSmalSkjerm()`** — på mobil er det et overlegg over hele kalenderen, så visningen skiftet bak det; på PC er det en kolonne og skal bli stående), `changeNav()`, `goToDayView()` |
@@ -462,6 +463,55 @@ Poster uten `lagret` på en dato som ennå ikke har vært, stemples ved
 lasting (`maaSkrivesTilbake`). Ellers ville de blitt lest som fasit når
 dagen kom. Valgt framfor fra/til-dato per elev på timen: ingen nye felt,
 og det retter elever som allerede var lagt inn feil.
+
+### Vurderinger
+
+Bygget 19. oktober 2026 (veikart 14). Menypunkt med `desktop-kun`, visning
+`#vurderingerView`, og modalen `#vurderingOverlay`. Den ligger sist i DOM-en,
+slik at den legger seg øverst. Data lagres i `lp_vurderinger`, som er en
+liste:
+
+```js
+{ id, dato, fag, trinns: [8, 9, 10], tittel, form: 'tekst'|'maal'|'karakter', notis,
+  resultater: { elevId: { verdi, status, kommentar } } }
+```
+
+- **Formen gjelder hele vurderingen**, og den **låses når første verdi er
+  ført** (`vurderingFormLaast()`). `lagreVurdering()` holder en låst form
+  fast, uansett hva utkastet sier.
+- **Status fortrenger verdi.** Statusene er «ikke levert», «borte» og
+  «fritatt». Med status lagres verdien som `null`.
+- **En tom rad lagres ikke** (`rensResultat()` gir null). Elever som ikke
+  hører til, trenger derfor ikke å fjernes.
+- **Fritekst:** teksten er selve verdien, og det er ingen egen kommentar.
+- **Flere trinn.** Kroppsøving og valgfag har ofte hele ungdomstrinnet
+  samlet, så trinn velges med avkrysning, og `trinns` er en liste. Når du
+  velger fag, krysses trinnene fagets timer har av på forhånd
+  (`trinnForFag()`). Det skjer bare ved bytte av fag. Trinn du har rettet
+  på selv, blir stående. Den første versjonen hadde `trinn` som ett tall,
+  og `loadFromStorage()` gjør det om til en liste. `trinnTekst()` gir
+  «9. trinn», «8. + 10. trinn» eller «8.–10. trinn».
+- **Elevlista** (`eleverForVurdering()`) består av ikke-arkiverte elever på
+  de valgte trinnene som står på minst én time i faget (`fagForElev()`).
+  Den er sortert per trinn og så alfabetisk, med en overskrift per trinn
+  når det er flere enn ett. I tillegg kommer alle som allerede har et
+  resultat, slik at et resultat aldri forsvinner av syne.
+- **Modalen jobber på et utkast** (`vurderingUtkast`). Avbryt eller Escape
+  endrer ingenting. `.event-modal` gjør at klikk utenfor ikke lukker den.
+- **Elevloggen** viser vurderingene øverst i fagblokka. Et fag med
+  vurderinger får en blokk selv om ingen time er ført. Klikk åpner
+  vurderingen, men bare på PC. Elevloggmodalen lukkes først, slik
+  `aapneTimeFraLogg()` også gjør.
+- **Personopplysninger.** `lp_vurderinger` står i `SYNK_NOKLER` og synkes
+  kryptert. Vurderingene er **bare med i full backup**, som varslene, ikke
+  i «Eksporter uten navn». De skal aldri inn i en kalenderfeed.
+- **Papirkurv.** En slettet vurdering havner i papirkurven. Slettes en
+  elev, flyttes resultatene til elevens papirkurvpost, og de settes tilbake
+  ved gjenoppretting. Vurderinger som er slettet i mellomtiden, hoppes over.
+- **Ikke noe unntak for «uten karakter»** (veikart 24). En elev som er
+  fritatt fra karakter, vurderes likevel.
+
+`tests/vurderinger.test.js` vokter dette.
 
 ### Varsler
 

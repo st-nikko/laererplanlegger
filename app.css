@@ -268,6 +268,62 @@
     #elevloggView { flex: 1; overflow-y: auto; min-height: 0; padding: 1.5rem; }
     .elevlogg-view-tittel { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 1rem; }
 
+    /* ── VURDERINGER ── se VURDERINGER i app.js */
+    #vurderingerView { flex: 1; overflow-y: auto; min-height: 0; padding: 1.5rem; max-width: 860px; }
+    .vu-topp { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 1rem; }
+    .vu-topp .minside-tittel { margin: 0; }
+    .vu-liste-rad {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 8px;
+      border: 1px solid var(--border-faint); border-radius: 8px; background: var(--surface);
+      cursor: pointer; font-size: 13px; transition: border-color 0.1s, box-shadow 0.1s;
+    }
+    .vu-liste-rad:hover { border-color: var(--accent-kant); box-shadow: inset 2px 0 0 var(--accent); }
+    .vu-liste-hoved { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .vu-liste-tittel { font-weight: 500; color: var(--text-primary); }
+    .vu-liste-meta { font-size: 12px; color: var(--text-secondary); }
+    .vu-liste-notis { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vu-liste-sum { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+    .vu-laast-hint { font-size: 11px; color: var(--text-muted); }
+    .vu-elever-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .vu-hjelp { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+    .vu-trinn { min-height: 36px; align-items: center; }
+    .vu-trinn-hdr { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); padding: 12px 0 2px; }
+    .vu-trinn-hdr:first-child { padding-top: 2px; }
+    .vu-tom { font-size: 13px; color: var(--text-muted); padding: 12px 0; }
+    .vu-rad {
+      display: grid; grid-template-columns: 160px auto 112px minmax(0, 1fr);
+      gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-faint);
+    }
+    .vu-rad--tekst { grid-template-columns: 160px minmax(0, 1fr) 112px; }
+    .vu-navn { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vu-rad.med .vu-navn { color: var(--text-primary); font-weight: 500; }
+    .vu-valg-gruppe { display: flex; gap: 3px; }
+    .vu-valg {
+      min-width: 30px; padding: 4px 8px; font-size: 12px; font-family: inherit; border-radius: 4px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text-primary);
+    }
+    .vu-valg:hover:not(:disabled) { border-color: var(--border-strong); }
+    .vu-valg.valgt { background: var(--accent); border-color: var(--accent); color: var(--paa-accent); }
+    .vu-valg:disabled { opacity: 0.35; cursor: default; }
+    .vu-status, .vu-kommentar, .vu-tekst {
+      font-size: 12px; font-family: inherit; padding: 5px 7px; min-width: 0;
+      border: 1px solid var(--border-input); border-radius: 4px; background: var(--bg); color: var(--text-primary);
+    }
+    .vu-tekst:disabled { background: var(--surface); }
+    /* I elevloggen: øverst i fagblokka, før timene */
+    .logg-vurderinger { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .logg-vurdering {
+      display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; font-size: 13px;
+      border-radius: 6px; background: var(--surface); border-left: 3px solid var(--accent-kant);
+    }
+    .logg-vurdering.klikkbar { cursor: pointer; }
+    .logg-vurdering.klikkbar:hover { background: var(--meny-aktiv-bg); }
+    .logg-vurdering-linje { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .logg-vurdering-tittel { font-weight: 500; }
+    .logg-vurdering-resultat { padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; background: var(--meny-aktiv-bg); color: var(--accent-deep); border: 1px solid var(--accent-kant); }
+    .logg-vurdering-resultat.status { background: transparent; color: var(--text-secondary); border-color: var(--border-strong); }
+    .logg-vurdering-kommentar { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
     /* ── MIN SIDE VIEW ── */
     #minSideView { flex: 1; overflow-y: auto; min-height: 0; padding: 1.5rem; max-width: 720px; }
     .minside-tittel { font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin: 0 0 1rem; }
@@ -340,6 +396,7 @@
        stilarket. Som klasser lar de seg overstyre der de skal. */
     .event-modal--smal   { width: 420px; }
     .event-modal--medium { width: 520px; }
+    .event-modal--bred   { width: 800px; max-width: calc(100vw - 32px); }
 
     /* ── GJØREMÅLSSKJEMA ──
        Beskrivelsen skal ta plassen som blir til overs. Modalen er allerede
@@ -562,6 +619,7 @@
     .form-field input[type="text"],
     .form-field input[type="number"],
     .form-field input[type="time"],
+    #vurderingOverlay .form-field input[type="date"],
     .form-field select,
     .form-field textarea {
       padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px;
@@ -1072,6 +1130,7 @@
   .event-modal,
   .event-modal--smal,
   .event-modal--medium,
+  .event-modal--bred,
   .plan-modal,
   .elevlogg-modal {
     width: 100%;

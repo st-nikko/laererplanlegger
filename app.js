@@ -261,6 +261,9 @@ const VARSELTYPER = {
 const VARSELTYPER_KORT = { grunnlag: 'Vurderingsgrunnlag', orden: 'Orden', atferd: 'Atferd' };
 let varsler = {};
 
+// Vurderinger — se VURDERINGER-seksjonen
+let vurderinger = [];
+
 function getVarsler(elevId) { return varsler[String(elevId)] || []; }
 
 function leggTilVarsel(elevId, { type, fag, dato } = {}) {
@@ -887,14 +890,17 @@ function render() {
   const isElever    = currentView === 'elever';
   const isElevlogg  = currentView === 'elevlogg';
   const isMinSide   = currentView === 'minside';
+  const isVurd      = currentView === 'vurderinger';
   const isMonth     = currentView === 'month';
-  const isKalender  = !isMonth && !isElever && !isElevlogg && !isMinSide;
+  const isKalender  = !isMonth && !isElever && !isElevlogg && !isMinSide && !isVurd;
   document.getElementById('weekDayView').style.display   = isKalender  ? '' : 'none';
   document.getElementById('monthView').style.display     = isMonth     ? '' : 'none';
   document.getElementById('elevAdminView').style.display = isElever    ? '' : 'none';
   document.getElementById('elevloggView').style.display  = isElevlogg  ? '' : 'none';
   document.getElementById('minSideView').style.display   = isMinSide   ? '' : 'none';
+  document.getElementById('vurderingerView').style.display = isVurd    ? '' : 'none';
   if (isElever)        { renderElevView(); }
+  else if (isVurd)     { renderVurderingerView(); }
   else if (isElevlogg) { renderElevloggView(); }
   else if (isMinSide)  { renderMinSide(); }
   else if (isMonth)    { renderMonthView(); }
@@ -2285,7 +2291,11 @@ function renderElevloggInnhold(studentId, container) {
     entries.push({ date:dateStr, ev, tema:ld.tema, notes:ld.notes, attendanceBadge, studentNote, planlagt });
   });
 
-  if(!entries.length){
+  // Vurderinger per fag. De gir en fagblokk også der ingen time er ført.
+  const vurdPerFag = {};
+  vurderingerForElev(studentId).forEach(x => { (vurdPerFag[x.v.fag] = vurdPerFag[x.v.fag] || []).push(x); });
+
+  if(!entries.length && !Object.keys(vurdPerFag).length){
     // Merk: innerHTML nulles IKKE her. Notatfeltet er allerede lagt inn
     // over, og skal bli stående — det er ofte det eneste som finnes for en
     // ny elev.
@@ -2302,6 +2312,7 @@ function renderElevloggInnhold(studentId, container) {
     if(!bySubject[e.ev.title]) bySubject[e.ev.title]=[];
     bySubject[e.ev.title].push(e);
   });
+  Object.keys(vurdPerFag).forEach(f => { if (!bySubject[f]) bySubject[f] = []; });
 
   Object.entries(bySubject).forEach(([subject, items])=>{
     const c=getSubjectColor(subject);
@@ -2314,6 +2325,7 @@ function renderElevloggInnhold(studentId, container) {
       pf.title=`Til stede i ${fagTall.present} av ${fagTall.total} skoletimer i ${subject}`;
       block.firstElementChild.appendChild(pf);
     }
+    if (vurdPerFag[subject]) block.appendChild(byggLoggVurderinger(vurdPerFag[subject]));
 
     // Sorter etter dato, nyeste først
     items.sort((a,b)=>b.date.localeCompare(a.date)).forEach(item=>{
@@ -2348,6 +2360,503 @@ function renderElevloggInnhold(studentId, container) {
     });
     container.appendChild(block);
   });
+}
+
+// ────────────────────────────────────────────
+// VURDERINGER
+// ────────────────────────────────────────────
+// Veikart 14, avklart og bygget 19. okt 2026. En vurdering har dato, fag,
+// trinn, tittel, en samlet notis og et resultat per elev. Formen velges
+// én gang per vurdering, og låses når første verdi er ført — en karakter
+// gir ingen mening som måloppnåelse.
+//
+// Per elev: verdi + kommentar, eller en status i stedet for verdi. En tom
+// rad er «ikke med» og lagres ikke. Med fritekst-form er teksten selve
+// verdien, og det er ingen egen kommentar.
+//
+// Elevlista er elevene på de valgte trinnene som står på minst én av dine
+// timer i faget (fagForElev). Elever som allerede har et resultat blir
+// stående, selv om de senere har byttet gruppe eller trinn.
+//
+// Flere trinn (19. okt 2026): kroppsøving og valgfag har ofte hele
+// ungdomstrinnet samlet. `trinns` er derfor en liste, og når du velger fag
+// krysses trinnene fagets timer har av på forhånd (trinnForFag).
+//
+// Personopplysninger: resultatene er knyttet til elev-ID, synkes kryptert
+// som resten, og er bare med i FULL backup — som varslene. De skal aldri
+// inn i noe som publiseres.
+
+const VURDERINGSFORMER  = { tekst: 'Fritekst', maal: 'Måloppnåelse', karakter: 'Karakter 1–6' };
+const MAALNIVAA         = { lav: 'Lav', middels: 'Middels', hoy: 'Høy' };
+const VURDERINGSSTATUS  = { ikke_levert: 'Ikke levert', borte: 'Borte', fritatt: 'Fritatt' };
+
+function vurderingNyId() {
+  return 'vu' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function harVerdi(r) { return !!r && r.verdi !== null && r.verdi !== undefined && r.verdi !== ''; }
+function erMedIVurdering(r) { return !!r && (harVerdi(r) || !!r.status || !!String(r.kommentar || '').trim()); }
+
+// Gjør et utkast om til det som faktisk lagres. Status fortrenger verdi,
+// verdier som ikke passer formen kastes, og en tom rad blir null.
+function rensResultat(r, form) {
+  if (!r) return null;
+  const status = VURDERINGSSTATUS[r.status] ? r.status : null;
+  let verdi = status ? null : r.verdi;
+  if (form === 'karakter') {
+    const n = Number(verdi);
+    verdi = (verdi !== null && verdi !== '' && Number.isInteger(n) && n >= 1 && n <= 6) ? n : null;
+  } else if (form === 'maal') {
+    verdi = MAALNIVAA[verdi] ? verdi : null;
+  } else {
+    verdi = (typeof verdi === 'string' && verdi.trim()) ? verdi.trim() : null;
+  }
+  const kommentar = form === 'tekst' ? '' : String(r.kommentar || '').trim();
+  const ut = { verdi, status, kommentar };
+  return erMedIVurdering(ut) ? ut : null;
+}
+
+function vurderingFormLaast(v) {
+  return !!v && Object.values(v.resultater || {}).some(harVerdi);
+}
+
+function resultatTekst(r, form) {
+  if (!r) return '';
+  if (r.status) return VURDERINGSSTATUS[r.status] || '';
+  if (!harVerdi(r)) return '';
+  if (form === 'karakter') return 'Karakter ' + r.verdi;
+  if (form === 'maal')     return (MAALNIVAA[r.verdi] || r.verdi) + ' måloppnåelse';
+  return String(r.verdi);
+}
+
+// Gyldige trinn som sortert liste av tall. Tåler ett tall, en streng og
+// den gamle formen med `trinn` på vurderingen.
+function rensTrinn(t) {
+  const liste = Array.isArray(t) ? t : (t === '' || t == null ? [] : [t]);
+  return [...new Set(liste.map(Number).filter(n => Number.isInteger(n) && n > 0))].sort((a, b) => a - b);
+}
+
+// «9. trinn», «8. + 10. trinn», «8.–10. trinn»
+function trinnTekst(trinns) {
+  const t = rensTrinn(trinns);
+  if (!t.length) return '';
+  if (t.length >= 3 && t[t.length - 1] - t[0] === t.length - 1) return `${t[0]}.–${t[t.length - 1]}. trinn`;
+  return t.map(n => n + '.').join(' + ') + ' trinn';
+}
+
+// Trinnene fagets timer har — forhåndsvalget når fag velges
+function trinnForFag(fag) {
+  const sett = new Set();
+  events.forEach(ev => {
+    if (ev.category !== 'undervisning' || ev.title !== fag) return;
+    getEventTrinns(ev).forEach(t => sett.add(Number(t)));
+  });
+  return rensTrinn([...sett]);
+}
+
+function eleverForVurdering(fag, trinns, resultater) {
+  const ut = new Map();
+  const valgt = rensTrinn(trinns);
+  if (fag && valgt.length) {
+    allStudents.forEach(s => {
+      if (s.arkivert) return;
+      if (!valgt.includes(Number(s.trinn))) return;
+      if (!fagForElev(s.id).includes(fag)) return;
+      ut.set(String(s.id), s);
+    });
+  }
+  Object.keys(resultater || {}).forEach(id => {
+    if (ut.has(id)) return;
+    const s = allStudents.find(x => String(x.id) === id);
+    ut.set(id, s || { id: parseStudentId(id), navn: fallbackNavn(id) });
+  });
+  // Per trinn, så alfabetisk — modalen setter en overskrift mellom trinnene
+  return [...ut.values()].sort((a, b) =>
+    (Number(a.trinn) || 99) - (Number(b.trinn) || 99) || String(a.navn).localeCompare(String(b.navn), 'nb'));
+}
+
+function vurderingerForElev(elevId) {
+  const ut = [];
+  vurderinger.forEach(v => {
+    const r = (v.resultater || {})[String(elevId)];
+    if (r) ut.push({ v, r });
+  });
+  return ut.sort((a, b) => b.v.dato.localeCompare(a.v.dato));
+}
+
+// Lagrer en ny eller endret vurdering. Gir den lagrede tilbake, eller null
+// hvis hodet mangler noe. Er formen låst, holdes den fast uansett hva
+// utkastet sier.
+function lagreVurdering(utkast) {
+  const u = utkast || {};
+  const tittel = String(u.tittel || '').trim();
+  const dato   = u.dato || '';
+  const fag    = u.fag || '';
+  const trinns = rensTrinn(u.trinns !== undefined ? u.trinns : u.trinn);
+  if (!tittel || !/^\d{4}-\d{2}-\d{2}$/.test(dato) || !fag || !trinns.length) return null;
+  const eksisterende = u.id ? vurderinger.find(v => v.id === u.id) : null;
+  let form = VURDERINGSFORMER[u.form] ? u.form : null;
+  if (eksisterende && vurderingFormLaast(eksisterende)) form = eksisterende.form;
+  if (!form) return null;
+
+  const resultater = {};
+  Object.entries(u.resultater || {}).forEach(([id, r]) => {
+    const ren = rensResultat(r, form);
+    if (ren) resultater[String(id)] = ren;
+  });
+  const ny = {
+    id: eksisterende ? eksisterende.id : vurderingNyId(),
+    dato, fag, trinns, tittel, form,
+    notis: String(u.notis || '').trim(),
+    resultater
+  };
+  if (eksisterende) vurderinger[vurderinger.indexOf(eksisterende)] = ny;
+  else vurderinger.push(ny);
+  saveToStorage();
+  return ny;
+}
+
+function slettVurdering(id) {
+  const idx = vurderinger.findIndex(v => v.id === id);
+  if (idx === -1) return false;
+  const v = vurderinger[idx];
+  leggIPapirkurv('vurdering', v.tittel, { vurdering: JSON.parse(JSON.stringify(v)) });
+  vurderinger.splice(idx, 1);
+  saveToStorage();
+  return true;
+}
+
+// ── Visningen ──
+function renderVurderingerView() {
+  const el = document.getElementById('vurderingerInnhold');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!vurderinger.length) {
+    el.innerHTML = '<div class="empty-state">Ingen vurderinger ennå.<br><span style="font-size:11px">Trykk «+ Ny vurdering» for å føre den første.</span></div>';
+    return;
+  }
+  [...vurderinger].sort((a, b) => b.dato.localeCompare(a.dato) || a.tittel.localeCompare(b.tittel, 'nb')).forEach(v => {
+    const rad = document.createElement('div');
+    rad.className = 'vu-liste-rad';
+    rad.dataset.vurderingId = v.id;
+    rad.onclick = () => openVurdering(v.id);
+
+    const prikk = document.createElement('span');
+    prikk.className = 'logg-subject-dot';
+    prikk.style.background = getSubjectColor(v.fag).border;
+
+    const hoved = document.createElement('div'); hoved.className = 'vu-liste-hoved';
+    const t = document.createElement('span'); t.className = 'vu-liste-tittel'; t.textContent = v.tittel;
+    const m = document.createElement('span'); m.className = 'vu-liste-meta';
+    m.textContent = `${v.fag} · ${trinnTekst(v.trinns)} · ${VURDERINGSFORMER[v.form] || v.form}`;
+    hoved.append(t, m);
+    if (v.notis) {
+      const n = document.createElement('span'); n.className = 'vu-liste-notis'; n.textContent = v.notis;
+      hoved.appendChild(n);
+    }
+
+    const res = Object.values(v.resultater || {});
+    const vurdert = res.filter(harVerdi).length;
+    const deler = [`${vurdert} vurdert`];
+    Object.entries(VURDERINGSSTATUS).forEach(([k, navn]) => {
+      const n = res.filter(r => r.status === k).length;
+      if (n) deler.push(`${n} ${navn.toLowerCase()}`);
+    });
+    const sum = document.createElement('span'); sum.className = 'vu-liste-sum'; sum.textContent = deler.join(' · ');
+
+    const d = new Date(v.dato + 'T00:00:00');
+    const dato = document.createElement('span'); dato.className = 'logg-date';
+    dato.textContent = `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+
+    rad.append(prikk, hoved, sum, dato);
+    el.appendChild(rad);
+  });
+}
+
+// ── Modalen ──
+// Utkastet er en kopi. Ingenting når `vurderinger` før Lagre.
+let vurderingUtkast = null;
+
+function vurderingFagValg() {
+  return [...new Set(events.filter(e => e.category === 'undervisning' && e.title).map(e => e.title))]
+    .sort((a, b) => a.localeCompare(b, 'nb'));
+}
+function vurderingTrinnValg() {
+  const sett = new Set();
+  allStudents.forEach(s => { if (!s.arkivert && s.trinn != null && s.trinn !== '') sett.add(String(s.trinn)); });
+  return [...sett].sort((a, b) => Number(a) - Number(b));
+}
+
+function fyllSelect(sel, valg, tomTekst, verdi) {
+  sel.innerHTML = '';
+  const tom = document.createElement('option'); tom.value = ''; tom.textContent = tomTekst; sel.appendChild(tom);
+  valg.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+  sel.value = verdi == null ? '' : String(verdi);
+}
+
+function nyVurdering() {
+  // Forrige vurderings form er den beste gjetningen på neste
+  const sist = [...vurderinger].sort((a, b) => b.dato.localeCompare(a.dato))[0];
+  openVurdering(null, { form: sist ? sist.form : 'tekst' });
+}
+
+function openVurdering(id, forhaand) {
+  const v = id ? vurderinger.find(x => x.id === id) : null;
+  if (id && !v) { alert('Vurderingen finnes ikke lenger.'); return; }
+  vurderingUtkast = v
+    ? JSON.parse(JSON.stringify(v))
+    : { id: null, dato: isoDate(TODAY), fag: '', trinns: [], tittel: '', form: 'tekst', notis: '', resultater: {}, ...(forhaand || {}) };
+  const u = vurderingUtkast;
+
+  document.getElementById('vurderingHdrTittel').textContent = v ? 'Vurdering' : 'Ny vurdering';
+  document.getElementById('vuTittel').value = u.tittel;
+  document.getElementById('vuDato').value   = u.dato;
+  document.getElementById('vuNotis').value  = u.notis || '';
+
+  const fag = vurderingFagValg();
+  if (u.fag && !fag.includes(u.fag)) fag.push(u.fag);
+  fyllSelect(document.getElementById('vuFag'), fag.map(f => [f, f]), '— Velg fag —', u.fag);
+  tegnVurderingTrinn();
+  const formSel = document.getElementById('vuForm');
+  formSel.innerHTML = '';
+  Object.entries(VURDERINGSFORMER).forEach(([k, t]) => { const o = document.createElement('option'); o.value = k; o.textContent = t; formSel.appendChild(o); });
+  formSel.value = u.form;
+
+  document.getElementById('vuSlettBtn').style.display = v ? '' : 'none';
+  renderVurderingElever();
+  document.getElementById('vurderingOverlay').classList.add('open');
+}
+
+// Fag, trinn eller form er endret i skjemaet
+// Avkrysning for trinnene som finnes blant elevene, pluss de som er valgt
+function tegnVurderingTrinn() {
+  const u = vurderingUtkast;
+  const boks = document.getElementById('vuTrinn');
+  boks.innerHTML = '';
+  rensTrinn([...vurderingTrinnValg(), ...u.trinns]).forEach(t => {
+    const l = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.name = 'vuTrinnCheck'; cb.value = String(t);
+    cb.checked = u.trinns.includes(t);
+    cb.onchange = vurderingTrinnEndret;
+    l.append(cb, ` ${t}. trinn`);
+    boks.appendChild(l);
+  });
+}
+
+function valgteVurderingTrinn() {
+  return rensTrinn([...document.querySelectorAll('input[name="vuTrinnCheck"]:checked')].map(el => el.value));
+}
+
+function vurderingTrinnEndret() {
+  const u = vurderingUtkast; if (!u) return;
+  u.trinns = valgteVurderingTrinn();
+  renderVurderingElever();
+}
+
+// Nytt fag krysser av trinnene fagets timer har. Bare ved bytte av fag —
+// har du rettet på trinnene selv, blir de stående til du bytter fag igjen.
+function vurderingFagEndret() {
+  const u = vurderingUtkast; if (!u) return;
+  u.fag = document.getElementById('vuFag').value;
+  const forslag = u.fag ? trinnForFag(u.fag) : [];
+  if (forslag.length) { u.trinns = forslag; tegnVurderingTrinn(); }
+  renderVurderingElever();
+}
+
+function vurderingHodeEndret() {
+  const u = vurderingUtkast; if (!u) return;
+  u.fag    = document.getElementById('vuFag').value;
+  u.trinns = valgteVurderingTrinn();
+  if (!vurderingFormLaast(u)) u.form = document.getElementById('vuForm').value;
+  renderVurderingElever();
+}
+
+function vurderingResultat(id) {
+  const u = vurderingUtkast;
+  const k = String(id);
+  if (!u.resultater[k]) u.resultater[k] = { verdi: null, status: null, kommentar: '' };
+  return u.resultater[k];
+}
+
+function oppdaterVurderingLaas() {
+  const laast = vurderingFormLaast(vurderingUtkast);
+  const formSel = document.getElementById('vuForm');
+  formSel.disabled = laast;
+  formSel.value = vurderingUtkast.form;
+  document.getElementById('vuLaastHint').style.display = laast ? '' : 'none';
+  const res = Object.values(vurderingUtkast.resultater).filter(erMedIVurdering).length;
+  const tittel = document.getElementById('vuEleverTittel');
+  const antall = document.querySelectorAll('#vuElever .vu-rad').length;
+  tittel.textContent = antall ? `Elever (${antall}) · ${res} med` : 'Elever';
+}
+
+function renderVurderingElever() {
+  const u = vurderingUtkast;
+  const boks = document.getElementById('vuElever');
+  boks.innerHTML = '';
+  const elever = eleverForVurdering(u.fag, u.trinns, Object.fromEntries(
+    Object.entries(u.resultater).filter(([, r]) => erMedIVurdering(r))));
+
+  if (!elever.length) {
+    const tom = document.createElement('div'); tom.className = 'vu-tom';
+    tom.textContent = (!u.fag || !rensTrinn(u.trinns).length)
+      ? 'Velg fag og trinn for å få elevlista.'
+      : `Ingen elever på ${trinnTekst(u.trinns)} står på timer i ${u.fag}.`;
+    boks.appendChild(tom);
+    oppdaterVurderingLaas();
+    return;
+  }
+  // Overskrift per trinn når lista spenner over flere
+  const flere = new Set(elever.map(s => String(s.trinn))).size > 1;
+  let forrige = null;
+  elever.forEach(s => {
+    if (flere && String(s.trinn) !== forrige) {
+      forrige = String(s.trinn);
+      const h = document.createElement('div'); h.className = 'vu-trinn-hdr';
+      h.textContent = s.trinn != null && s.trinn !== '' ? `${s.trinn}. trinn` : 'Uten trinn';
+      boks.appendChild(h);
+    }
+    boks.appendChild(byggVurderingRad(s));
+  });
+  oppdaterVurderingLaas();
+}
+
+function byggVurderingRad(s) {
+  const u = vurderingUtkast;
+  const id = String(s.id);
+  const r = u.resultater[id] || { verdi: null, status: null, kommentar: '' };
+  const rad = document.createElement('div');
+  rad.className = 'vu-rad' + (u.form === 'tekst' ? ' vu-rad--tekst' : '') + (erMedIVurdering(r) ? ' med' : '');
+  rad.dataset.elevId = id;
+
+  const navn = document.createElement('span'); navn.className = 'vu-navn';
+  navn.textContent = s.navn; navn.title = s.navn;
+  rad.appendChild(navn);
+
+  const tegnPaaNytt = () => { const ny = byggVurderingRad(s); rad.replaceWith(ny); oppdaterVurderingLaas(); };
+
+  if (u.form === 'tekst') {
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'vu-tekst'; inp.placeholder = r.status ? '' : 'Vurdering';
+    inp.value = r.status ? '' : (r.verdi || ''); inp.disabled = !!r.status;
+    inp.oninput = () => {
+      const res = vurderingResultat(id);
+      res.verdi = inp.value; rad.classList.toggle('med', erMedIVurdering(res)); oppdaterVurderingLaas();
+    };
+    rad.appendChild(inp);
+  } else {
+    const gruppe = document.createElement('div'); gruppe.className = 'vu-valg-gruppe';
+    const valg = u.form === 'karakter'
+      ? [1, 2, 3, 4, 5, 6].map(n => [n, String(n)])
+      : Object.entries(MAALNIVAA);
+    valg.forEach(([verdi, tekst]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'vu-valg' + (!r.status && r.verdi === verdi ? ' valgt' : '');
+      b.textContent = tekst; b.dataset.verdi = String(verdi); b.disabled = !!r.status;
+      b.onclick = () => {
+        const res = vurderingResultat(id);
+        res.verdi = res.verdi === verdi ? null : verdi;   // klikk igjen fjerner
+        tegnPaaNytt();
+      };
+      gruppe.appendChild(b);
+    });
+    rad.appendChild(gruppe);
+  }
+
+  const st = document.createElement('select'); st.className = 'vu-status';
+  [['', '—'], ...Object.entries(VURDERINGSSTATUS)].forEach(([k, t]) => {
+    const o = document.createElement('option'); o.value = k; o.textContent = t; st.appendChild(o);
+  });
+  st.value = r.status || '';
+  st.onchange = () => {
+    const res = vurderingResultat(id);
+    res.status = st.value || null;
+    if (res.status) res.verdi = null;   // status i stedet for verdi
+    tegnPaaNytt();
+  };
+  rad.appendChild(st);
+
+  if (u.form !== 'tekst') {
+    const k = document.createElement('input');
+    k.type = 'text'; k.className = 'vu-kommentar'; k.placeholder = 'Kommentar';
+    k.value = r.kommentar || '';
+    k.oninput = () => {
+      const res = vurderingResultat(id);
+      res.kommentar = k.value; rad.classList.toggle('med', erMedIVurdering(res)); oppdaterVurderingLaas();
+    };
+    rad.appendChild(k);
+  }
+  return rad;
+}
+
+function lagreVurderingFraModal() {
+  const u = vurderingUtkast; if (!u) return;
+  u.tittel = document.getElementById('vuTittel').value;
+  u.dato   = document.getElementById('vuDato').value;
+  u.notis  = document.getElementById('vuNotis').value;
+  u.fag    = document.getElementById('vuFag').value;
+  u.trinns = valgteVurderingTrinn();
+  if (!vurderingFormLaast(u)) u.form = document.getElementById('vuForm').value;
+  const lagret = lagreVurdering(u);
+  if (!lagret) { alert('Fyll inn tittel, dato, fag og trinn.'); return; }
+  vurderingUtkast = null;
+  closeOverlay('vurderingOverlay');
+  render();
+}
+
+function slettVurderingFraModal() {
+  const u = vurderingUtkast; if (!u || !u.id) return;
+  const v = vurderinger.find(x => x.id === u.id); if (!v) return;
+  if (!confirm(`Slette «${v.tittel}»? Resultatene for alle elevene følger med.\n\nDen legges i papirkurven på Min side, og kan hentes tilbake i ${PAPIRKURV_DAGER} dager.`)) return;
+  slettVurdering(u.id);
+  vurderingUtkast = null;
+  closeOverlay('vurderingOverlay');
+  render();
+}
+
+// Fra elevloggen. Elevloggmodalen lukkes først, som når en loggpost
+// åpner timen sin — to arbeidsmodaler oppå hverandre blir uoversiktlig.
+function aapneVurderingFraLogg(id) {
+  const ov = document.getElementById('elevloggOverlay');
+  if (ov && ov.classList.contains('open')) closeOverlay('elevloggOverlay');
+  openVurdering(id);
+}
+
+// Vurderingene til én elev i ett fag, øverst i fagblokka i elevloggen
+function byggLoggVurderinger(liste) {
+  const boks = document.createElement('div'); boks.className = 'logg-vurderinger';
+  liste.forEach(({ v, r }) => {
+    const rad = document.createElement('div');
+    rad.className = 'logg-vurdering' + (erSmalSkjerm() ? '' : ' klikkbar');
+    rad.dataset.vurderingId = v.id;
+    if (!erSmalSkjerm()) { rad.title = `Åpne ${v.tittel}`; rad.onclick = () => aapneVurderingFraLogg(v.id); }
+
+    const hoved = document.createElement('div'); hoved.style.flex = '1'; hoved.style.minWidth = '0';
+    const linje = document.createElement('div'); linje.className = 'logg-vurdering-linje';
+    const t = document.createElement('span'); t.className = 'logg-vurdering-tittel'; t.textContent = v.tittel;
+    linje.appendChild(t);
+    const resTekst = resultatTekst(r, v.form);
+    if (resTekst && v.form !== 'tekst' || r.status) {
+      const b = document.createElement('span');
+      b.className = 'logg-vurdering-resultat' + (r.status ? ' status' : '');
+      b.textContent = resTekst;
+      linje.appendChild(b);
+    }
+    hoved.appendChild(linje);
+    // Fritekst-vurderingen ER teksten — vis den som brødtekst, ikke som merke
+    const brod = v.form === 'tekst' && !r.status ? r.verdi : r.kommentar;
+    if (brod) {
+      const k = document.createElement('div'); k.className = 'logg-vurdering-kommentar'; k.textContent = brod;
+      hoved.appendChild(k);
+    }
+    const d = new Date(v.dato + 'T00:00:00');
+    const dato = document.createElement('span'); dato.className = 'logg-date';
+    dato.textContent = `${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    rad.append(hoved, dato);
+    boks.appendChild(rad);
+  });
+  return boks;
 }
 
 // ────────────────────────────────────────────
@@ -2673,7 +3182,13 @@ function deleteStudent(id) {
     .map(ev => ev.id);
   // Notatet følger med i papirkurven — ellers ville en angret sletting
   // gitt eleven tilbake uten det som var skrevet om ham.
-  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id), varsler: getVarsler(id) });
+  // Vurderingsresultatene følger eleven til papirkurven og tilbake
+  const vurdRes = {};
+  vurderinger.forEach(v => {
+    const r = (v.resultater || {})[String(id)];
+    if (r) { vurdRes[v.id] = r; delete v.resultater[String(id)]; }
+  });
+  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id), varsler: getVarsler(id), vurderinger: vurdRes });
 
   // Fjern fra allStudents
   const idx = allStudents.findIndex(st => String(st.id) === String(id));
@@ -2747,6 +3262,7 @@ function setView(v) {
     menyUkesoversikt: erKalender,
     menyElever:       v==='elever',
     menyElevlogg:     v==='elevlogg',
+    menyVurderinger:  v==='vurderinger',
     menyMinSide:      v==='minside'
   };
   Object.entries(menyStatus).forEach(([id, aktiv]) => {
@@ -3402,6 +3918,8 @@ function exportData(medNavn = true) {
   if (medNavn) data.studentNames = navnekart();
   // Varsler bare i full backup. Den anonyme filen er den som deles.
   if (medNavn) data.varsler = varsler;
+  // Vurderinger har resultater per elev — bare i full backup, som varslene.
+  if (medNavn) data.vurderinger = vurderinger;
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -3441,6 +3959,7 @@ function importData() {
         if (data.fravaerFort)     localStorage.setItem('lp_fravaerFort',     JSON.stringify(data.fravaerFort));
         if (data.elevNotater)     localStorage.setItem('lp_elevNotater',     JSON.stringify(data.elevNotater));
         if (data.varsler)         localStorage.setItem('lp_varsler',         JSON.stringify(data.varsler));
+        if (data.vurderinger)     localStorage.setItem('lp_vurderinger',     JSON.stringify(data.vurderinger));
 
         if (data.allStudents) {
           // Elevliste lagres alltid uten navn
@@ -3522,13 +4041,17 @@ function renderSynkKopiStatus() {
   el.textContent = `Kopi fra ${naar}: ${info.antallTimer} time${info.antallTimer !== 1 ? 'r' : ''}, ${info.antallLogg} loggført${info.antallLogg !== 1 ? 'e' : ''}.`;
 }
 
-const PAPIRKURV_ETIKETT = { hendelse: 'Time', elev: 'Elev', 'gjøremål': 'Gjøremål' };
+const PAPIRKURV_ETIKETT = { hendelse: 'Time', elev: 'Elev', 'gjøremål': 'Gjøremål', vurdering: 'Vurdering' };
 
 function papirkurvBeskrivelse(post) {
   const d = post.data || {};
   if (post.type === 'hendelse') {
     const antall = Object.keys(d.lessonData || {}).length;
     return antall ? `${antall} loggført${antall !== 1 ? 'e' : ''} time${antall !== 1 ? 'r' : ''} følger med` : 'ingen loggførte timer';
+  }
+  if (post.type === 'vurdering' && d.vurdering) {
+    const n = Object.keys(d.vurdering.resultater || {}).length;
+    return `${d.vurdering.fag} · ${n} elev${n !== 1 ? 'er' : ''} med`;
   }
   if (post.type === 'elev') {
     const antall = (d.medlemskap || []).length;
@@ -3827,6 +4350,11 @@ function gjenopprettFraPapirkurv(id) {
     if (!allStudents.some(s => String(s.id) === String(d.elev.id))) allStudents.push(d.elev);
     if (d.notat) elevNotater[d.elev.id] = d.notat;
     if (Array.isArray(d.varsler) && d.varsler.length) varsler[String(d.elev.id)] = d.varsler;
+    // Resultatene går tilbake til de vurderingene som fortsatt finnes
+    Object.entries(d.vurderinger || {}).forEach(([vId, r]) => {
+      const v = vurderinger.find(x => x.id === vId);
+      if (v) { if (!v.resultater) v.resultater = {}; v.resultater[String(d.elev.id)] = r; }
+    });
     // Meld eleven inn igjen i timene han sto i, men bare i de som fortsatt finnes
     (d.medlemskap || []).forEach(evId => {
       const ev = events.find(e => String(e.id) === String(evId));
@@ -3837,6 +4365,9 @@ function gjenopprettFraPapirkurv(id) {
 
   } else if (post.type === 'gjøremål' && d.todo) {
     if (!todos.some(t => String(t.id) === String(d.todo.id))) todos.push(d.todo);
+
+  } else if (post.type === 'vurdering' && d.vurdering) {
+    if (!vurderinger.some(v => v.id === d.vurdering.id)) vurderinger.push(d.vurdering);
   }
 
   papirkurv.splice(idx, 1);
@@ -3878,6 +4409,7 @@ function saveToStorage() {
     localStorage.setItem('lp_fravaerFort',     JSON.stringify(fravaerFort));
     localStorage.setItem('lp_elevNotater',     JSON.stringify(elevNotater));
     localStorage.setItem('lp_varsler',         JSON.stringify(varsler));
+    localStorage.setItem('lp_vurderinger',     JSON.stringify(vurderinger));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
     // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
@@ -4063,6 +4595,21 @@ function loadFromStorage() {
         varsler = {};
         Object.entries(lest).forEach(([k, v]) => { if (Array.isArray(v) && v.length) varsler[k] = v; });
       }
+    }
+
+    // Vurderinger. Lista skal være en liste av objekter med id — alt annet kastes.
+    const storedVurd = localStorage.getItem('lp_vurderinger');
+    if (storedVurd) {
+      const lest = JSON.parse(storedVurd);
+      vurderinger = Array.isArray(lest)
+        ? lest.filter(v => v && typeof v === 'object' && v.id && v.dato)
+              .map(v => {
+                // Én trinn → liste (19. okt 2026, samme dag som modulen kom)
+                const { trinn, ...rest } = v;
+                return { ...rest, trinns: rensTrinn(v.trinns !== undefined ? v.trinns : trinn),
+                         resultater: (v.resultater && typeof v.resultater === 'object') ? v.resultater : {} };
+              })
+        : [];
     }
 
     const storedPapirkurv = localStorage.getItem('lp_papirkurv');

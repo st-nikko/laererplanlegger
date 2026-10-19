@@ -717,82 +717,117 @@ Anslag: 20 minutter, inkludert Escape.
 
 ---
 
-## 14. Vurderinger som egen visning
+## 14. Vurderinger, koblet til elevene ✅
 
-**Idéen:** Et eget menypunkt med en oversikt over gjennomførte
-vurderinger, og hva som kom ut av dem.
+**Idéen:** Et eget menypunkt der du fører vurderinger, med resultat per
+elev, og ser dem igjen i elevloggen.
 
-**Status:** Avklart 19. august 2026. Klar til å bygges — omfanget er
-bestemt, og det er vesentlig mindre enn det så ut som først.
+**Status: bygget 19. oktober 2026.** Se «Vurderinger» i CONTEXT.md. Formen
+låses når første verdi er ført, og fritekst-formen har bare ett felt per
+elev. Resten av posten er avklaringen som ble gjort først.
+
+**Avklart på nytt 19. oktober 2026. Erstatter avklaringen fra 19. august**, som var en ren oversikt uten
+elevkobling og uten karakterer. Etter to måneders bruk ville Nikolai ha
+resultatet på eleven.
 
 ### Hva som ble bestemt
 
-Posten sto tidligere åpen fordi «vurdering» kan bety fire ting: karakter,
-underveisvurdering i tekst, registrering av at en vurderingssituasjon
-fant sted, eller halvårsvurdering. Nikolai har valgt:
+- **En vurdering har dato, fag, trinn, tittel og en samlet notis**, som før,
+  og nå også **et resultat per elev**.
+- **Formen velges én gang per vurdering**, ikke per elev:
+  - **fritekst**,
+  - **måloppnåelse**: lav, middels eller høy,
+  - **tallkarakter**: hele tall fra 1 til 6, uten + og −.
+- **Per elev: verdi og kommentar.** Begge er valgfrie hver for seg.
+- **Statuser i stedet for verdi:** «ikke levert», «borte» og «fritatt».
+  De skiller mellom ulike grunner til at en elev ikke har noe resultat.
+- **En tom rad betyr «ikke med i vurderingen»** og lagres ikke. Du
+  trenger altså ikke å fjerne elever som ikke hørte til.
+- **Elevlista: elever på trinnet som har faget.** Det betyr elever som står
+  på minst én av dine timer med samme fagnavn (`fagForElev()`), og som har
+  samme trinn. Arkiverte elever er ikke med. Parallelle grupper kommer
+  begge opp, og tomme rader løser det. «Matematikk» og «Matematikk
+  fordypning» er to ulike fag.
+- **Ikke noe unntak for elever uten karakter (punkt 24).** En elev som er
+  fritatt fra karakter, skal fortsatt vurderes. Punkt 24 kan derfor bygges
+  helt uavhengig av dette.
+- **Resultatene vises begge steder:** i oversikten per vurdering, og i
+  elevloggen under faget.
+- **Ingen snitt.**
+- **Bare på PC.** Se avsnittet om bunnmenyen nedenfor.
 
-- **En oversikt, ikke et vurderingsverktøy.** Kun gjennomførte
-  vurderinger, listet.
-- **Vurderinger registreres i visningen selv**, ikke ved å merke en time.
-  De er altså egne oppføringer med dato, fag, trinn og tittel — ikke et
-  felt på `lessonData`. Det gjør at en innlevering uten en bestemt time
-  også kan føres.
-- **Resultat er én samlet notis per vurdering.** Fritekst: «snittet lavt
-  på oppgave 3», «må tas opp igjen». **Ikke per elev, og ingen
-  karakterer.**
-- **Kun desktop.** Se avsnittet om bunnmenyen under.
+### Datamodell
 
-### Hva det betyr for personvernet
+```js
+{
+  id, dato, fag, trinn, tittel,
+  form: 'tekst' | 'maal' | 'karakter',
+  notis: '…',                       // samlet, for hele vurderingen
+  resultater: {
+    elevId: {
+      verdi: '…' | 'lav' | 'middels' | 'hoy' | 1..6 | null,
+      status: null | 'ikke_levert' | 'borte' | 'fritatt',
+      kommentar: '…'
+    }
+  }
+}
+```
 
-Dette var den tunge innvendingen mot posten slik den sto, og valgene over
-fjerner den. Uten elevkobling er en vurderingsoppføring ikke
-personopplysninger i det hele tatt — den sier at 8. trinn hadde
-norskprøve 12. september, ikke hvem som gjorde det bra.
+Lagres i `lp_vurderinger`. En elev er med i vurderingen hvis eleven har en
+verdi, en status eller en kommentar.
 
-Merk likevel at notisen er fritekst, og at fritekst kan inneholde navn
-brukeren selv skriver inn. Samme forbehold som for `notes` og
-`studentNotes`: pseudonymiseringen beskytter strukturen, ikke innholdet.
+### Personvernet er nå et annet
+
+Avklaringen fra august bygde på at oppføringene ikke var
+personopplysninger. **Det gjelder ikke lenger.** Karakterer og måloppnåelse
+per elev hører til i samme kategori som `studentNotes` og «Om eleven».
+
+- Synken er kryptert, og nøkkelen er knyttet til elev-ID, ikke navn. Det
+  holder, på samme måte som for notatene.
+- **Vurderinger skal aldri inn i noe som publiseres.** Kalenderfeedene
+  ligger ukryptert, se «Kalendere» på Min side. Kommer markøren i
+  kalenderen (se nedenfor), skal den aldri inn i undervisningsfeeden.
+- Vurderingene er **bare med i full backup**, som varslene. «Eksporter uten
+  navn» er filen som deles, og den skal ikke inneholde resultater.
 
 ### Hva som må gjøres
 
 | Sted | Endring |
 |------|---------|
-| `index.html`, `<nav id="sideMeny">` (linje 58–81) | Nytt menyelement med `desktop-kun`, inline SVG i Feather-stil som de andre |
-| `index.html` | Ny fullskjermvisning `#vurderingerView`, samme mønster som `#minSideView` |
-| `setView()` app.js:1845 | Ny gren + `menyVurderinger` i `menyStatus`-objektet |
-| `render()` app.js:470 | Vis/skjul den nye visningen |
-| Ny `renderVurderingerView()` | Liste sortert på dato, med skjema for å legge til |
-| `saveToStorage()` / `loadFromStorage()` app.js:2601 og 2630 | Ny nøkkel `lp_vurderinger` |
-| `SYNK_NOKLER` i sync.js:24 | **Må inn her**, ellers synkes ikke vurderingene til de andre enhetene |
-| `exportData()` app.js:2235 / `importData()` app.js:2257 | Ta med i backup, ellers mistes de ved gjenoppretting |
+| `index.html`, `<nav id="sideMeny">` | Nytt menyelement med `desktop-kun`, med inline SVG i samme stil som de andre |
+| `index.html` | Ny fullskjermvisning `#vurderingerView`, etter samme mønster som `#minSideView` |
+| `setView()` / `render()` | Ny gren for visningen |
+| Ny `renderVurderingerView()` | Liste sortert på dato, med knapp for ny vurdering |
+| Ny modal for én vurdering | Hodet (dato, fag, trinn, tittel, form, notis) og en elevrad per elev, der feltet for verdi følger formen |
+| `renderElevloggInnhold()` | Vurderinger under hver fagblokk, sortert på dato |
+| `saveToStorage()` / `loadFromStorage()` | Ny nøkkel `lp_vurderinger` |
+| `SYNK_NOKLER` i sync.js | **Nøkkelen må inn her**, ellers synkes ikke vurderingene |
+| `exportData()` / `importData()` | Må tas med i backup |
+| Papirkurven | En slettet vurdering havner i papirkurven, som timer og gjøremål |
+| Sletting av elev | Resultatene følger eleven til papirkurven og tilbake |
 
-Datamodell, forslag: `{ id, dato, fag, trinn, tittel, notis }`.
-
-### Bunnmenyen er grunnen til desktop-kun
+### Bunnmenyen er grunnen til at det bare er på PC
 
 `#sideMeny` er sidemeny på PC og **bunnmeny på mobil**. Den har allerede
-fem elementer, hvorav Gjøremål (`#menyGjoeremaal`) bare ligger der fordi
-headeren ble for trang — se punkt 5 og 8 under «Kjente begrensninger» i
-CONTEXT.md. Et sjette element gir rundt 65 px per punkt på en 390 px
-skjerm.
-
-`desktop-kun` finnes allerede som klasse og skjules i mobilblokka, så
-løsningen er på plass. Men merk at det da er **to** menypunkter som ikke
-finnes på mobil-motsatt-vei — vurderinger mangler der, gjøremål finnes
-bare der. Blir det et tredje unntak, er bunnmenyen moden for å tenkes om
-framfor å lappes.
+fem elementer, og et sjette gir rundt 65 px per punkt på en skjerm som er
+390 px bred. `desktop-kun` finnes allerede. Da er det **to** menypunkter
+som ikke er like på PC og mobil: vurderinger mangler på mobil, og gjøremål
+finnes bare der. Kommer det et tredje unntak, bør bunnmenyen tenkes om
+helt i stedet for å lappes.
 
 ### Fortsatt åpent
 
-- **Skal vurderinger kunne knyttes til en time likevel?** Ikke nå. Men
-  hvis oversikten viser seg å bli ført sjelden, er grunnen antakelig at
-  den må fylles ut et sted man ikke er. Da er en snarvei fra
-  timeplanmodalen svaret — ikke en ny datamodell.
-- **Skal de vises i kalenderen?** En markør på dagen en vurdering ble
-  gjennomført ville gjort oversikten toveis. Billig hvis dataene først
-  finnes.
+- ~~Kan formen byttes etter at resultater er ført?~~ Nei. Den låses når
+  første verdi er ført.
+- ~~To tekstfelt per elev i fritekst-formen?~~ Nei, bare ett.
+- **Markør i kalenderen** på datoen for vurderingen. Det er billig når
+  dataene finnes, men den må holdes utenfor feedene.
+- **Snarvei fra en time**, slik at du kan opprette en vurdering derfra med
+  fag, trinn og dato fylt ut. Ikke nå. Dette er svaret hvis vurderinger
+  viser seg å bli ført sjelden fordi de må fylles ut et annet sted.
 
-Anslag: en kveld for visningen med lagring og synk.
+Anslag: to kvelder. Elevradene og visningen i elevloggen er det som er nytt
+sammenlignet med anslaget fra august.
 
 ---
 
@@ -1380,9 +1415,9 @@ strukturer som må migreres hver sin gang og holdes i takt med hverandre.
 **Merk: ingen karakterer lagres.** Feltet sier om eleven *skal ha* karakter
 i faget — som ved vedtak, fritak i skriftlig sidemål eller fritak i
 kroppsøving. Det er en egenskap ved paret elev + fag, ikke et resultat.
-Dette kolliderer derfor **ikke** med post 14, som slår fast at
-vurderingsvisningen ikke skal ha karakterer per elev. De to kan bygges
-uavhengig.
+Post 14 lagrer resultater per elev (fra 19. okt 2026), men den ser ikke
+på dette feltet. En elev uten karakter vurderes fortsatt, se post 14. De
+to kan bygges uavhengig.
 
 ### Migreringen er det som kan gå galt
 

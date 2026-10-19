@@ -68,6 +68,12 @@
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
     <span>Elevlogg</span>
   </button>
+  <!-- Vurderinger føres bare på PC: bunnmenyen på mobil har ikke plass til
+       et sjette punkt. Se «Vurderinger» i CONTEXT.md. -->
+  <button class="meny-item desktop-kun" id="menyVurderinger" onclick="setView('vurderinger')">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><polyline points="9 14 11 16 15 12"/></svg>
+    <span>Vurderinger</span>
+  </button>
   <!-- Gjøremål ligger i header-knappen på PC. På mobil er den plassen for
        trang, så panelet åpnes herfra i stedet. -->
   <button class="meny-item mobil-kun" id="menyGjoeremaal" onclick="toggleSidebar()">
@@ -144,6 +150,15 @@
   <div id="elevloggViewContent">
     <div class="empty-state">Velg en elev for å se logg over deltakelse og tema.</div>
   </div>
+</div>
+
+<!-- VURDERINGER VIEW -->
+<div id="vurderingerView" style="display:none">
+  <div class="vu-topp">
+    <h2 class="minside-tittel">Vurderinger</h2>
+    <button class="btn btn-primary" onclick="nyVurdering()">+ Ny vurdering</button>
+  </div>
+  <div id="vurderingerInnhold"></div>
 </div>
 
 <!-- MIN SIDE VIEW -->
@@ -911,5 +926,61 @@
   if (window.supabaseJs) initSync();
   else window.addEventListener('supabase-klar', initSync);
 </script>
+<!-- VURDERING MODAL — sist av overleggene, så den legger seg øverst -->
+<div class="overlay" id="vurderingOverlay">
+  <div class="event-modal event-modal--bred">
+    <div class="modal-hdr">
+      <span class="modal-hdr-title" id="vurderingHdrTittel">Ny vurdering</span>
+      <button class="modal-close" onclick="closeOverlay('vurderingOverlay')">x</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-row">
+          <div class="form-field" style="flex:2">
+            <label>Tittel</label>
+            <input type="text" id="vuTittel" placeholder="Prøve i brøk, muntlig framføring …">
+          </div>
+          <div class="form-field">
+            <label>Dato</label>
+            <input type="date" id="vuDato">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label>Fag</label>
+            <select id="vuFag" onchange="vurderingFagEndret()"></select>
+          </div>
+          <div class="form-field">
+            <label>Trinn</label>
+            <div class="trinn-checks vu-trinn" id="vuTrinn"></div>
+          </div>
+          <div class="form-field">
+            <label>Form</label>
+            <select id="vuForm" onchange="vurderingHodeEndret()"></select>
+            <span class="vu-laast-hint" id="vuLaastHint" style="display:none">Låst — resultater er ført</span>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>Samlet notis (valgfritt)</label>
+          <textarea id="vuNotis" rows="2" placeholder="Snittet lavt på oppgave 3, må tas opp igjen …"></textarea>
+        </div>
+      </div>
+      <div>
+        <div class="vu-elever-hdr">
+          <span id="vuEleverTittel">Elever</span>
+          <span class="vu-hjelp">Tomme rader er ikke med i vurderingen.</span>
+        </div>
+        <div id="vuElever"></div>
+      </div>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-danger" id="vuSlettBtn" onclick="slettVurderingFraModal()">Slett</button>
+      <div class="spacer"></div>
+      <button class="btn btn-secondary" onclick="closeOverlay('vurderingOverlay')">Avbryt</button>
+      <button class="btn btn-primary" onclick="lagreVurderingFraModal()">Lagre</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
