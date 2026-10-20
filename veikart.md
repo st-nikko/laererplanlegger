@@ -10,72 +10,30 @@ etter.
 
 ---
 
-## 1. «Husk til neste time»
+## Prioritert rekkefølge
 
-**Idéen:** Et felt i timeplanmodalen, fylt ut mens man fører nærvær, som
-vises igjen i den kommende timen i samme fag.
+Satt i gjennomgangen 20. oktober 2026. Raske gevinster først, så det som
+gir mest i hverdagen, til slutt det som har fått lav prioritet. 1–5 kan tas
+i én økt.
 
-**Status:** Ikke bestemt. Verdt å ta hvis bakoverblikk-varianten velges —
-den er liten.
+| # | Post | Omfang |
+|---|------|--------|
+| 1 | 28. Rull kalenderen til nå ved oppstart | Minutter |
+| 2 | 9. Trinn i Outlook-tittelen | ~20 min |
+| 3 | 6. Frist én uke etter møtet, med fristen vist | ~15 min |
+| 4 | 11. Fagfarger, variant A + lagret fargekart | ~1 time |
+| 5 | 15. Klikkbare adresser i fritekst | ~1 time |
+| 6 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
+| 7 | 27. Temaoversikt per fag | En kveld |
+| 8 | 3. «Utgått» og «ingen møtte» | En kveld |
+| 9 | 10. Månedlige møter | En kveld |
+| 10 | 23. Steg på gjøremål | En kveld |
+| 11 | 22. Ekte hover-kort (utprøving) | En kveld |
+| 12 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
+| 13 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
 
-### Det som gjør det enkelt
-
-`lessonData` er allerede én post per `(hendelse-id, dato)` via
-`lessonKey()`, med `{tema, notes, attendance, studentNotes}`. Et felt til er
-én linje i `saveLessonPlan()` og én i `openLessonPlan()`, og det synkes
-automatisk siden hele `lessonData` går med.
-
-**Men det er én linje du ikke kan glemme.** `saveLessonPlan()`
-(app.js:1331) bygger et *helt nytt* objekt:
-
-```js
-setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes });
-```
-
-Alt som ikke står i den literalen forsvinner ved neste lagring. Et nytt
-felt må inn der, ellers slettes det stille første gang timen lagres på
-nytt — også om det ble satt et helt annet sted i koden. Dette gjelder alle
-nye felt i timeplanmodalen, ikke bare dette.
-
-### Det som gjør det vanskelig
-
-Appen har **ikke noe begrep om et fag med en klasse** — bare enkeltoppføringer
-i kalenderen. `events[]` har `trinn`/`trinns`, men ingen `klasse`. To følger av
-det:
-
-- Norsk med 8A og Norsk med 8C ser identiske ut i datamodellen: samme tittel,
-  samme trinn.
-- Norsk med 8A mandag og torsdag er to separate hendelser med hver sin id.
-
-Så «neste time i faget» betyr to ulike ting, med svært ulik pris:
-
-1. **Neste gang denne timen går igjen** — søk framover etter neste dato der
-   `eventsForDate()` gir samme hendelse-id. Enkelt.
-2. **Neste gang jeg møter denne klassen i dette faget, uansett ukedag** —
-   krever et kursbegrep som ikke finnes, eller et nytt klassefelt som må
-   fylles inn på alle eksisterende timer. Datamodellendring.
-
-### Anbefalt grep
-
-**La den kommende timen slå opp bakover** framfor å levere notatet framover:
-«finnes det et huskefelt i forrige time i denne serien?»
-
-Da slipper man å finne et mål mens man skriver, å håndtere at målet flytter
-seg når en time avlyses eller ferien kommer, og et «levert»-flagg. Notatet
-blir tilstandsløst — det ligger der det ble skrevet, og vises der det er
-relevant. Skrives det i siste time før sommeren, skjer det bare ingenting.
-
-### Fortsatt åpent
-
-- **Når slutter notatet å vises?** Henter man bare fra forrige time,
-  forsvinner det av seg selv etter én gang — men da mistes det hvis timen ble
-  avlyst.
-- **Skal det synes i kalenderen før timen åpnes?** Det finnes allerede en
-  prikk for «har plan» (`.event-plan-dot`); en tilsvarende markør ville vist
-  at noe venter uten at man må klikke.
-- **Personvern.** Enda et fritekstfelt som kan inneholde elevnavn, og det
-  synkes. Samme forbehold som for `notes` og `studentNotes`:
-  pseudonymiseringen beskytter strukturen, ikke det brukeren selv skriver.
+Ferdige poster er merket ✅. Forkastede ligger samlet under «Forkastet»
+nederst.
 
 ---
 
@@ -134,6 +92,8 @@ skjermene overens, og hele poenget faller.
 
 **Status:** Ønsket. Tellingen av undervisningstimer, som er den egentlige
 motivasjonen bak statusene, er utsatt — men de er nyttige i seg selv.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. Begge tilstandene, «utgått» og «ingen møtte», tas med.
 
 **Merket for «ingen elever registrert» er bygget** (22. september 2026),
 med `user-slash` fra Font Awesome framfor Feather-stilen foreslått under.
@@ -325,6 +285,8 @@ møtedatoen, framfor møtedatoen selv.
 
 **Status:** Ønsket. Trivielt for engangsmøter, ikke for gjentakende.
 
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. Den beregnede fristen skal vises ved knappen, f.eks. «Frist: 27. okt». Merk: grunnlaget er alt på plass — `moteDatoForSkjema()` (10. sep 2026) gir riktig forekomst for gjentakende møter, så jobben er datofeltet + 7 dager.
+
 ### Utgangspunktet
 
 `leggTilGjøremålFraMøte()` (app.js:2025) setter i dag:
@@ -379,6 +341,8 @@ skoleårets 190 dager som er gjennomført.
 **Status:** Ønsket. Dataene finnes allerede; spørsmålet er hvor tallet skal
 stå og hva det skal telle.
 
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. Plassering: **øverst på Min side.** `terminNedtelling()` (post 25) kan gjenbrukes.
+
 ### Alt som trengs finnes
 
 `fridager[]` har `{fra, til, tittel, type}` med `type` i `ferie` /
@@ -431,6 +395,8 @@ må opprette det på nytt hver gang.
 
 **Status:** Ønsket. Modellvalget avgjør prisen.
 
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes, **lav prioritet.** Bygg intervallet slik at post 10 og denne deler form.
+
 ### To former, og bare den ene er billig
 
 `todos` er i dag `{id, tittel, tekst, linkedFag, linkedStudentId, frist,
@@ -471,6 +437,8 @@ status, slettet}`. Ingen gjentakelse.
 
 **Status:** Ønsket, og nesten gratis — men avhenger av hva «gruppe»
 betyr.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. **Trinn i tittelen** i Outlook, ikke på enetimer. Klasse/gruppe er ikke aktuelt — grupper bygges ikke (post 26).
 
 ### Utgangspunktet
 
@@ -513,6 +481,8 @@ Anslag: 20 minutter for trinn. Klasse er en annen sak.
 legges inn tolv ganger.
 
 **Status:** Ønsket. Krever en ny gren i gjentakelsesmodellen.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. Intervallet bør kunne gjenbrukes av gjentakende gjøremål (post 8).
 
 ### Hvorfor det ikke passer inn som det er
 
@@ -566,6 +536,12 @@ på ulike trinn.
 **Status:** Ønsket, men den ene halvdelen kolliderer med palettreglene.
 Verdt å lese «Visuell identitet» i CONTEXT.md før noe røres.
 
+**Avklart i gjennomgangen 20. oktober 2026:** **Variant A først:** én farge per fag, trinnet tydeligere på PC (merke som på mobil), og lagre fargekartet så fag ikke bytter farge.
+Det Nikolai egentlig ønsker er **farge per gruppe**. Det er mulig nå som
+grupper kan utledes fra elevlista (`timeLinjerForFag()`, post 26). En
+mellomvei er fagfarge i bakgrunnen og egen kantfarge per gruppe. Vurderes
+etter at A er prøvd.
+
 ### Utgangspunktet
 
 `COLOR_POOL` har sju farger. `getSubjectColor(name)` deler dem ut
@@ -615,48 +591,6 @@ blir raden lang.
   kombinasjoner, er det avsnittet over som gjelder. Tell først.
 - **Skal man kunne velge farge selv?** Da blir ΔE-regelen umulig å
   håndheve, men det er brukerens eget verktøy. Verdt en tanke.
-
----
-
-## 12. Merke for ny eller endret time
-
-**Idéen:** Se i kalenderen at en time er ny eller endret siden forrige
-uke.
-
-**Status:** Ønsket, men det dyreste punktet i lista — og grunnen er at
-appen ikke har noen historikk å sammenligne mot.
-
-### Hvorfor det ikke er rett fram
-
-`events[]` er nåtilstanden. `saveEvent()` skriver oppå objektet
-(app.js:1144) uten å ta vare på det som sto der. Det finnes altså ingen
-forrige versjon.
-
-### Tre nivåer, fra billigst
-
-1. **Endringsstempel.** `saveEvent()` setter `sistEndret: <ISO>` på
-   hendelsen; `renderGrid()` viser et merke på hendelser endret de siste N
-   dagene. Ett felt, én linje i rendringen. Svarer på «hva har jeg rørt
-   nylig», ikke på «hva er annerledes denne uka enn forrige».
-   **Anbefalt**, med den ordlyden.
-2. **Sammenlign uke mot uke.** Kjør `eventsForDate()` for samme ukedag
-   forrige uke og se om hendelsen var der. Fanger `gyldigFra`/`gyldigTil`
-   og fridager riktig — men flagger *hver eneste* annenhver-uke-time som
-   ny. Teknisk sant, praktisk ubrukelig.
-3. **Versjonshistorikk per hendelse.** Det egentlige svaret, og en
-   datamodellendring med eget lagringsområde.
-
-### Fortsatt åpent
-
-- **Hva teller som en endring?** Nytt rom fortjener et merke; en rettet
-  skrivefeil i tittelen gjør det ikke. Uten et skille lyser alt opp etter
-  en opprydningsøkt.
-- **Hvor lenge står merket?** Sju dager er det opplagte, men da må det
-  også forsvinne av seg selv — altså sammenlignes mot dagens dato ved hver
-  rendring, ikke settes som en flaggverdi.
-- **Plassen er opptatt.** `.event-plan-dot` (app.css:176) ligger nederst
-  til høyre i blokka. Et merke til må ha en annen plass, eller de to må
-  slås sammen til én merkerad.
 
 ---
 
@@ -837,6 +771,8 @@ sammenlignet med anslaget fra august.
 **Idéen:** Kunne lagre lenker — til fagplan, læreverk, møtelenke.
 
 **Status:** Ønsket. Tre steder er mulige, og de koster ulikt.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes. **Adresser i fritekst blir klikkbare:** timenotater, elevnotater og gjøremålsbeskrivelser, bygget som noder (ikke `innerHTML`). Et fast lenkefelt på timen venter til behovet viser seg.
 
 ### Tre kandidater
 
@@ -1101,6 +1037,8 @@ Anslag: 15 minutter, test inkludert.
 **Status:** Ønsket, men det bør avklares hva «for store» betyr før det
 fikses.
 
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes, **lav prioritet.**
+
 ### Hva som skjer
 
 `.synk-input` har `flex: 1 1 220px` (app.css:651–657) inne i `.synk-rad`, som
@@ -1184,62 +1122,6 @@ Anslag: en halvtime.
 
 ---
 
-## 21. Gjøremål utenfor appen
-
-**Idéen:** Få gjøremålene inn et sted man er fra før — Outlook, Microsoft
-To Do, Todoist.
-
-**Status:** Delvis løst 19. august 2026. Fristene publiseres nå som en
-tredje kalenderfeed. Det som står igjen er ekte oppgaver, og det står igjen
-av en grunn som ikke går bort av seg selv.
-
-### Det som er gjort
-
-Gjøremål med frist blir heldagshendelser på forfallsdatoen, i en feed med
-egen adresse. Enveis: avkryssing skjer i appen. Se «Gjøremålsfeeden» i
-CONTEXT.md for hva som bevisst ikke er med — elevnavn og fritekst.
-
-### Toveis-synk krever noe appen ikke har
-
-**Appen er en statisk side.** Alt i `app.js` og `sync.js` kan leses av alle
-som åpner sidekilden — det er derfor `SUPABASE_ANON` kan ligge der, den er
-laget for å være offentlig. En API-nøkkel til Todoist eller Microsoft
-Graph er *ikke* det. Legges den inn, er den gitt bort.
-
-Ekte toveis-synk trenger derfor enten:
-
-- **En OAuth-innlogging per tjeneste**, der tokenet lever i nettleseren og
-  fornyes. Mulig uten server for noen tjenester, men det er en egen
-  påloggingsflyt å vedlikeholde, i tillegg til den som finnes for Supabase.
-- **Eller en liten backend** som holder hemmeligheten. Da er appen ikke
-  lenger en fil på GitHub Pages, og driften blir en annen sak.
-
-Ingen av delene er urimelige. Men de er et annet prosjekt enn resten av
-appen, og bør velges bevisst framfor å gli inn.
-
-### VTODO ble ikke prøvd
-
-ICS har `VTODO`, som ville gitt ekte oppgaver med avkryssing framfor
-hendelser. Om en **abonnert** nettkalender viser dem varierer mellom
-klienter, og jeg fant ikke et klart svar for Outlook. Det er billig å
-finne ut: bygg en liten VTODO-feed, abonner på den, se etter. Virker det,
-er det en bedre form enn heldagshendelser — virker det ikke, har du brukt
-ti minutter.
-
-Merk at det uansett bare løser retningen ut. Avkryssing i Outlook ville
-ikke funnet veien tilbake, siden en abonnert kalender er les-only.
-
-### Fortsatt åpent
-
-- **Er enveis nok?** Fristene i Outlook dekker «hva skal jeg gjøre denne
-  uka». Skal gjøremålene *behandles* et annet sted, holder det ikke.
-  Bruk feeden noen uker før du bestemmer.
-- **Skal beskrivelsen med?** Den er utelatt fordi fritekst ofte inneholder
-  elevnavn. Vil du ha den likevel, er det et bevisst valg som hører hjemme
-  her — ikke en linje man legger til i forbifarten.
-
----
-
 ## 22. Hover-kort på timene
 
 **Idéen:** Se hva en time inneholder ved å holde musa over den, framfor å
@@ -1249,6 +1131,8 @@ ikke funnet veien tilbake, siden en abonnert kalender er les-only.
 hver blokk gir tema, notat, elevliste med notat per elev, og hvem som var
 borte — se «Hover på timene» i CONTEXT.md. Om et **ekte kort** skal bygges
 avhenger av om denne varianten faktisk blir brukt.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes som **utprøving.** Den grå `title`-boksen er god nok i bruk, men det er verdt å se om et ekte kort er mer nyttig.
 
 ### Hvorfor `title` først
 
@@ -1317,6 +1201,8 @@ bygger elevdelen i én blokk til slutt.
 ser hvor langt du er kommet.
 
 **Status:** Ønsket, med et avklart formål. Ikke bygget.
+
+**Avklart i gjennomgangen 20. oktober 2026:** Beholdes, med anbefalingene i posten (stegene styrer statusen, «2/5» i lista, ingen frist per steg).
 
 ### Hva det er for
 
@@ -1391,79 +1277,6 @@ stegene først finnes.
 - **Rekkefølge.** Skal steg kunne flyttes opp og ned? Dra-og-slipp er
   uforholdsmessig; piler er stygge men billige. Kanskje ingen av delene
   trengs — man skriver dem som regel i riktig rekkefølge.
-
----
-
-## 24. Elev × fag: karakterstatus og fritekst
-
-**Idéen:** Per elev og fag — om eleven vurderes **med eller uten karakter**
-i faget, og et fritekstfelt for det som gjelder eleven i nettopp det faget.
-
-**Status:** Ønsket. Én post og én struktur, av en grunn som er verdt å
-lese før noe bygges.
-
-### Hvorfor de to hører sammen
-
-Dette var to forslag: «vurdering med eller uten karakter i de ulike fagene»
-og «fritekstfelt til hvert fag». **De henger på samme akse — elev × fag —
-og deler derfor oppslag.** Bygges de hver for seg, ender man med to nøstede
-strukturer som må migreres hver sin gang og holdes i takt med hverandre.
-
-```js
-{ elevId: { 'Norsk': { karakter: 'med' | 'uten', notat: '…' } } }
-```
-
-**Merk: ingen karakterer lagres.** Feltet sier om eleven *skal ha* karakter
-i faget — som ved vedtak, fritak i skriftlig sidemål eller fritak i
-kroppsøving. Det er en egenskap ved paret elev + fag, ikke et resultat.
-Post 14 lagrer resultater per elev (fra 19. okt 2026), men den ser ikke
-på dette feltet. En elev uten karakter vurderes fortsatt, se post 14. De
-to kan bygges uavhengig.
-
-### Migreringen er det som kan gå galt
-
-`lp_elevNotater` er i dag **flat**: `{ elevId: 'fritekst' }` — det
-overordnede notatet fra «Om eleven». Ny struktur er nøstet per fag.
-`loadFromStorage()` må derfor gjenkjenne den gamle formen og løfte den inn
-som det generelle notatet, ikke som et fagnotat og ikke i glemmeboka.
-
-Presedens finnes: `loadFromStorage()` reparerer allerede gjentakende møter
-med feil ukedag. Samme mønster — kjenn igjen den gamle formen, konverter,
-og la testen vokte at gammel data overlever.
-
-Forslag til form, der `__generelt` er notatet som ikke hører til et fag:
-
-```js
-{ elevId: { __generelt: '…', 'Norsk': { karakter: 'uten', notat: '…' } } }
-```
-
-### Hvor det vises
-
-Elevloggen **grupperer allerede per fag** (`bySubject` i
-`renderElevloggInnhold()`), så begge deler har en opplagt plass øverst i
-hver fagblokk: en liten velger for med/uten karakter, og et fritekstfelt
-under. Feltet kan gjenbruke `byggElevNotatFelt()` nesten som det er.
-
-| Sted | Endring |
-|------|---------|
-| `elevNotater` + `getElevNotat()`/`setElevNotat()` | Nøstet form, og migrering ved lasting |
-| `renderElevloggInnhold()` | Felt og velger per fagblokk |
-| `byggElevNotatFelt()` | Ta imot fag som parameter |
-| `exportData()`/`importData()`, papirkurv | Følger med som i dag, men strukturen er nøstet |
-
-`lp_elevNotater` står allerede i `SYNK_NOKLER` — ingen ny nøkkel trengs.
-
-### Fortsatt åpent
-
-- **Blir det for mange bokser?** Med fem fag får du seks tekstfelt på én
-  skjerm, pluss det generelle. Kanskje bør fagfeltene være sammenslåtte til
-  man klikker, eller bare vises for fag der det faktisk står noe.
-- **Hvor kommer faglista fra?** Fagblokkene i elevloggen finnes bare for
-  fag eleven har *registrerte timer* i. Skal du kunne sette karakterstatus
-  før første time er ført, må lista komme fra `events[]` i stedet.
-- **Antyder «uten karakter» et vedtak?** I praksis ja. Det er samme sjanger
-  som «Om eleven»-feltet allerede bærer, og synkes kryptert på samme vis —
-  ingen ny kategori, men verdt å ha sagt høyt.
 
 ---
 
@@ -1652,27 +1465,298 @@ som byttes ut, er trinn som *filter* for elevlister — ikke trinn som felt.
 
 ---
 
-## Vurdert og lagt bort inntil videre
+## 27. Temaoversikt per fag
 
-Kartlagt i økt 19, men utsatt til appen har vært brukt et skoleår i praksis.
-Skoleåret 2026/27 starter uken etter 3. august 2026, og fram til da er all
-prioritering gjetning.
+**Idéen:** Velg et fag og se alle temaene du har ført, i rekkefølge med
+dato — en logg over hva gruppa har gått gjennom.
 
-- **Søk i notater.** Funksjonsplanen § 7 lovte søkbare notater. Alt ligger
-  flatt i minnet, så ytelse er ikke problemet. Men det er verdt å avklare om
-  behovet egentlig er fritekstsøk («hvor nevnte jeg brøk?») eller en
-  **temaoversikt per fag** — alle temaer i rekkefølge med dato, som en
-  pensumlogg. `topicsBySubject` finnes allerede, og den er både billigere og
-  trolig oftere brukt. Vent og se hvilken som savnes.
-- **Rull kalenderen til nå ved oppstart.** Rutenettet er 510 px; på telefon
-  ser man omtrent halvparten. Åpner man appen klokka 13, vises formiddagen.
-  Én linje som ruller `.calendar-scroll` til nå-linja. Ikke opplevd som et
-  problem så langt.
-- **Tastaturnavigasjon og skjermleser.** Null `tabindex`, null `role`, én
-  `aria-`. Timer og dagkolonner er `div`-er med `onclick`. Ikke prioritert
-  for et personlig verktøy.
-- **Varsler og påminnelser.** Funksjonsplanen § 6, ikke implementert. Ikke
-  etterspurt.
+**Status:** Ønsket. Hentet inn fra «Vurdert og lagt bort» i
+gjennomgangen 20. oktober 2026. Valgt framfor fritekstsøk, som var den
+andre varianten av «søk i notater» (funksjonsplanen § 7).
+
+### Utgangspunktet
+
+`topicsBySubject` samler allerede temaene per fag. Temaene ligger i
+`lessonData` per `(hendelse-id, dato)`, så dato og time følger med.
+
+### Fortsatt åpent
+
+- **Per fag eller per gruppe?** Har 9A og 9B kommet ulikt langt, er en
+  oversikt per fag blandet. Gruppene kan utledes fra elevlista med
+  `timeLinjerForFag()` (post 26), så det er mulig uten ny datamodell.
+- **Hvor bor den?** Egen visning, eller i elevloggen/vurderinger.
+
+---
+
+## 28. Rull kalenderen til nå ved oppstart
+
+**Idéen:** Rutenettet er 510 px; på telefon ser man omtrent halvparten.
+Åpner man appen klokka 13, vises formiddagen.
+
+**Status:** Ønsket. Hentet inn fra «Vurdert og lagt bort» i
+gjennomgangen 20. oktober 2026. Én linje som ruller `.calendar-scroll`
+til nå-linja ved oppstart.
+
+---
+
+## Forkastet
+
+Poster som er vurdert og lagt helt bort. De står her med hele
+begrunnelsen, slik at de ikke tas opp igjen uten at man ser hva som
+allerede er tenkt. Nummeret er beholdt.
+
+### 1. «Husk til neste time» ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026.**
+
+**Idéen:** Et felt i timeplanmodalen, fylt ut mens man fører nærvær, som
+vises igjen i den kommende timen i samme fag.
+
+**Status:** Ikke bestemt. Verdt å ta hvis bakoverblikk-varianten velges —
+den er liten.
+
+#### Det som gjør det enkelt
+
+`lessonData` er allerede én post per `(hendelse-id, dato)` via
+`lessonKey()`, med `{tema, notes, attendance, studentNotes}`. Et felt til er
+én linje i `saveLessonPlan()` og én i `openLessonPlan()`, og det synkes
+automatisk siden hele `lessonData` går med.
+
+**Men det er én linje du ikke kan glemme.** `saveLessonPlan()`
+(app.js:1331) bygger et *helt nytt* objekt:
+
+```js
+setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes });
+```
+
+Alt som ikke står i den literalen forsvinner ved neste lagring. Et nytt
+felt må inn der, ellers slettes det stille første gang timen lagres på
+nytt — også om det ble satt et helt annet sted i koden. Dette gjelder alle
+nye felt i timeplanmodalen, ikke bare dette.
+
+#### Det som gjør det vanskelig
+
+Appen har **ikke noe begrep om et fag med en klasse** — bare enkeltoppføringer
+i kalenderen. `events[]` har `trinn`/`trinns`, men ingen `klasse`. To følger av
+det:
+
+- Norsk med 8A og Norsk med 8C ser identiske ut i datamodellen: samme tittel,
+  samme trinn.
+- Norsk med 8A mandag og torsdag er to separate hendelser med hver sin id.
+
+Så «neste time i faget» betyr to ulike ting, med svært ulik pris:
+
+1. **Neste gang denne timen går igjen** — søk framover etter neste dato der
+   `eventsForDate()` gir samme hendelse-id. Enkelt.
+2. **Neste gang jeg møter denne klassen i dette faget, uansett ukedag** —
+   krever et kursbegrep som ikke finnes, eller et nytt klassefelt som må
+   fylles inn på alle eksisterende timer. Datamodellendring.
+
+#### Anbefalt grep
+
+**La den kommende timen slå opp bakover** framfor å levere notatet framover:
+«finnes det et huskefelt i forrige time i denne serien?»
+
+Da slipper man å finne et mål mens man skriver, å håndtere at målet flytter
+seg når en time avlyses eller ferien kommer, og et «levert»-flagg. Notatet
+blir tilstandsløst — det ligger der det ble skrevet, og vises der det er
+relevant. Skrives det i siste time før sommeren, skjer det bare ingenting.
+
+#### Fortsatt åpent
+
+- **Når slutter notatet å vises?** Henter man bare fra forrige time,
+  forsvinner det av seg selv etter én gang — men da mistes det hvis timen ble
+  avlyst.
+- **Skal det synes i kalenderen før timen åpnes?** Det finnes allerede en
+  prikk for «har plan» (`.event-plan-dot`); en tilsvarende markør ville vist
+  at noe venter uten at man må klikke.
+- **Personvern.** Enda et fritekstfelt som kan inneholde elevnavn, og det
+  synkes. Samme forbehold som for `notes` og `studentNotes`:
+  pseudonymiseringen beskytter strukturen, ikke det brukeren selv skriver.
+
+### 12. Merke for ny eller endret time ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026. Appen kan uansett ikke se endringer andre gjør i timeplanen.**
+
+**Idéen:** Se i kalenderen at en time er ny eller endret siden forrige
+uke.
+
+**Status:** Ønsket, men det dyreste punktet i lista — og grunnen er at
+appen ikke har noen historikk å sammenligne mot.
+
+#### Hvorfor det ikke er rett fram
+
+`events[]` er nåtilstanden. `saveEvent()` skriver oppå objektet
+(app.js:1144) uten å ta vare på det som sto der. Det finnes altså ingen
+forrige versjon.
+
+#### Tre nivåer, fra billigst
+
+1. **Endringsstempel.** `saveEvent()` setter `sistEndret: <ISO>` på
+   hendelsen; `renderGrid()` viser et merke på hendelser endret de siste N
+   dagene. Ett felt, én linje i rendringen. Svarer på «hva har jeg rørt
+   nylig», ikke på «hva er annerledes denne uka enn forrige».
+   **Anbefalt**, med den ordlyden.
+2. **Sammenlign uke mot uke.** Kjør `eventsForDate()` for samme ukedag
+   forrige uke og se om hendelsen var der. Fanger `gyldigFra`/`gyldigTil`
+   og fridager riktig — men flagger *hver eneste* annenhver-uke-time som
+   ny. Teknisk sant, praktisk ubrukelig.
+3. **Versjonshistorikk per hendelse.** Det egentlige svaret, og en
+   datamodellendring med eget lagringsområde.
+
+#### Fortsatt åpent
+
+- **Hva teller som en endring?** Nytt rom fortjener et merke; en rettet
+  skrivefeil i tittelen gjør det ikke. Uten et skille lyser alt opp etter
+  en opprydningsøkt.
+- **Hvor lenge står merket?** Sju dager er det opplagte, men da må det
+  også forsvinne av seg selv — altså sammenlignes mot dagens dato ved hver
+  rendring, ikke settes som en flaggverdi.
+- **Plassen er opptatt.** `.event-plan-dot` (app.css:176) ligger nederst
+  til høyre i blokka. Et merke til må ha en annen plass, eller de to må
+  slås sammen til én merkerad.
+
+### 21. Gjøremål utenfor appen ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026. Gjøremålene håndteres i appen; fristfeeden blir stående.**
+
+**Idéen:** Få gjøremålene inn et sted man er fra før — Outlook, Microsoft
+To Do, Todoist.
+
+**Status:** Delvis løst 19. august 2026. Fristene publiseres nå som en
+tredje kalenderfeed. Det som står igjen er ekte oppgaver, og det står igjen
+av en grunn som ikke går bort av seg selv.
+
+#### Det som er gjort
+
+Gjøremål med frist blir heldagshendelser på forfallsdatoen, i en feed med
+egen adresse. Enveis: avkryssing skjer i appen. Se «Gjøremålsfeeden» i
+CONTEXT.md for hva som bevisst ikke er med — elevnavn og fritekst.
+
+#### Toveis-synk krever noe appen ikke har
+
+**Appen er en statisk side.** Alt i `app.js` og `sync.js` kan leses av alle
+som åpner sidekilden — det er derfor `SUPABASE_ANON` kan ligge der, den er
+laget for å være offentlig. En API-nøkkel til Todoist eller Microsoft
+Graph er *ikke* det. Legges den inn, er den gitt bort.
+
+Ekte toveis-synk trenger derfor enten:
+
+- **En OAuth-innlogging per tjeneste**, der tokenet lever i nettleseren og
+  fornyes. Mulig uten server for noen tjenester, men det er en egen
+  påloggingsflyt å vedlikeholde, i tillegg til den som finnes for Supabase.
+- **Eller en liten backend** som holder hemmeligheten. Da er appen ikke
+  lenger en fil på GitHub Pages, og driften blir en annen sak.
+
+Ingen av delene er urimelige. Men de er et annet prosjekt enn resten av
+appen, og bør velges bevisst framfor å gli inn.
+
+#### VTODO ble ikke prøvd
+
+ICS har `VTODO`, som ville gitt ekte oppgaver med avkryssing framfor
+hendelser. Om en **abonnert** nettkalender viser dem varierer mellom
+klienter, og jeg fant ikke et klart svar for Outlook. Det er billig å
+finne ut: bygg en liten VTODO-feed, abonner på den, se etter. Virker det,
+er det en bedre form enn heldagshendelser — virker det ikke, har du brukt
+ti minutter.
+
+Merk at det uansett bare løser retningen ut. Avkryssing i Outlook ville
+ikke funnet veien tilbake, siden en abonnert kalender er les-only.
+
+#### Fortsatt åpent
+
+- **Er enveis nok?** Fristene i Outlook dekker «hva skal jeg gjøre denne
+  uka». Skal gjøremålene *behandles* et annet sted, holder det ikke.
+  Bruk feeden noen uker før du bestemmer.
+- **Skal beskrivelsen med?** Den er utelatt fordi fritekst ofte inneholder
+  elevnavn. Vil du ha den likevel, er det et bevisst valg som hører hjemme
+  her — ikke en linje man legger til i forbifarten.
+
+### 24. Elev × fag: karakterstatus og fritekst ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026.**
+
+**Idéen:** Per elev og fag — om eleven vurderes **med eller uten karakter**
+i faget, og et fritekstfelt for det som gjelder eleven i nettopp det faget.
+
+**Status:** Ønsket. Én post og én struktur, av en grunn som er verdt å
+lese før noe bygges.
+
+#### Hvorfor de to hører sammen
+
+Dette var to forslag: «vurdering med eller uten karakter i de ulike fagene»
+og «fritekstfelt til hvert fag». **De henger på samme akse — elev × fag —
+og deler derfor oppslag.** Bygges de hver for seg, ender man med to nøstede
+strukturer som må migreres hver sin gang og holdes i takt med hverandre.
+
+```js
+{ elevId: { 'Norsk': { karakter: 'med' | 'uten', notat: '…' } } }
+```
+
+**Merk: ingen karakterer lagres.** Feltet sier om eleven *skal ha* karakter
+i faget — som ved vedtak, fritak i skriftlig sidemål eller fritak i
+kroppsøving. Det er en egenskap ved paret elev + fag, ikke et resultat.
+Post 14 lagrer resultater per elev (fra 19. okt 2026), men den ser ikke
+på dette feltet. En elev uten karakter vurderes fortsatt, se post 14. De
+to kan bygges uavhengig.
+
+#### Migreringen er det som kan gå galt
+
+`lp_elevNotater` er i dag **flat**: `{ elevId: 'fritekst' }` — det
+overordnede notatet fra «Om eleven». Ny struktur er nøstet per fag.
+`loadFromStorage()` må derfor gjenkjenne den gamle formen og løfte den inn
+som det generelle notatet, ikke som et fagnotat og ikke i glemmeboka.
+
+Presedens finnes: `loadFromStorage()` reparerer allerede gjentakende møter
+med feil ukedag. Samme mønster — kjenn igjen den gamle formen, konverter,
+og la testen vokte at gammel data overlever.
+
+Forslag til form, der `__generelt` er notatet som ikke hører til et fag:
+
+```js
+{ elevId: { __generelt: '…', 'Norsk': { karakter: 'uten', notat: '…' } } }
+```
+
+#### Hvor det vises
+
+Elevloggen **grupperer allerede per fag** (`bySubject` i
+`renderElevloggInnhold()`), så begge deler har en opplagt plass øverst i
+hver fagblokk: en liten velger for med/uten karakter, og et fritekstfelt
+under. Feltet kan gjenbruke `byggElevNotatFelt()` nesten som det er.
+
+| Sted | Endring |
+|------|---------|
+| `elevNotater` + `getElevNotat()`/`setElevNotat()` | Nøstet form, og migrering ved lasting |
+| `renderElevloggInnhold()` | Felt og velger per fagblokk |
+| `byggElevNotatFelt()` | Ta imot fag som parameter |
+| `exportData()`/`importData()`, papirkurv | Følger med som i dag, men strukturen er nøstet |
+
+`lp_elevNotater` står allerede i `SYNK_NOKLER` — ingen ny nøkkel trengs.
+
+#### Fortsatt åpent
+
+- **Blir det for mange bokser?** Med fem fag får du seks tekstfelt på én
+  skjerm, pluss det generelle. Kanskje bør fagfeltene være sammenslåtte til
+  man klikker, eller bare vises for fag der det faktisk står noe.
+- **Hvor kommer faglista fra?** Fagblokkene i elevloggen finnes bare for
+  fag eleven har *registrerte timer* i. Skal du kunne sette karakterstatus
+  før første time er ført, må lista komme fra `events[]` i stedet.
+- **Antyder «uten karakter» et vedtak?** I praksis ja. Det er samme sjanger
+  som «Om eleven»-feltet allerede bærer, og synkes kryptert på samme vis —
+  ingen ny kategori, men verdt å ha sagt høyt.
+
+### Tastaturnavigasjon og skjermleser ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026.** Null `tabindex`, null
+`role`, én `aria-`. Timer og dagkolonner er `div`-er med `onclick`. Stor
+jobb, liten nytte for et personlig verktøy.
+
+### Varsler og påminnelser ✗
+
+**Forkastet i gjennomgangen 20. oktober 2026.** Funksjonsplanen § 6. Varsler
+mens appen er lukket krever push, tillatelser og en avsender, og på iPhone
+bare som hjemskjerm-app. Outlook varsler allerede om timer og møter via den
+importerte undervisningskalenderen.
 
 ---
 
@@ -1688,3 +1772,8 @@ kom også merker og filter på gjøremål, «Foreldremøte» → «Samarbeidsmø
 hover-tooltip på timene (22), et overordnet notat om eleven i elevloggen og
 klikk fra loggpost til time — de sto aldri i veikartet, og er dokumentert i
 CONTEXT.md i stedet.*
+
+*Gjennomgått punkt for punkt 20. oktober 2026: 1, 12, 21 og 24 forkastet,
+sammen med tastatur/skjermleser og varsler fra «lagt bort». Søk i notater
+ble til temaoversikt (27), og rull-til-nå ble post 28. Avklaringene står i
+hver post, og prioriteringen øverst.*
