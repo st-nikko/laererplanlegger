@@ -743,7 +743,8 @@ resultatet på eleven.
   De skiller mellom ulike grunner til at en elev ikke har noe resultat.
 - **En tom rad betyr «ikke med i vurderingen»** og lagres ikke. Du
   trenger altså ikke å fjerne elever som ikke hørte til.
-- **Elevlista: elever på trinnet som har faget.** Det betyr elever som står
+- **Elevlista: elever på trinnet som har faget.** *Erstattet 20. okt 2026
+  av post 26: elevene hentes fra timene du krysser av.* Det betyr elever som står
   på minst én av dine timer med samme fagnavn (`fagForElev()`), og som har
   samme trinn. Arkiverte elever er ikke med. Parallelle grupper kommer
   begge opp, og tomme rader løser det. «Matematikk» og «Matematikk
@@ -1537,6 +1538,117 @@ liste et sted. Fraværsoversikten på Min side er mønsteret.
 - **Utenfor «Eksporter uten navn».** Med i full backup og i synken.
 - **Ikke bygget:** «hvem burde jeg ha varslet». Det krever at appen
   vurderer eleven, og det skal den ikke.
+
+---
+
+## 26. Grupper i tillegg til trinn ✅
+
+**Idéen:** Navngitte grupper (f.eks. «9A matte», «9B matte», «Valgfag
+programmering») som timer og vurderinger knyttes til, i stedet for at alt
+går via trinn. I dag er det flere grupper på samme trinn, og når du legger
+inn en vurdering må du frita elevene som ikke hører til gruppen.
+
+**Status: nivå 1 bygget 20. oktober 2026.** Se «Vurderinger» i CONTEXT.md.
+Under «Timer» i vurderingen krysser du av fagets timer, slått sammen etter
+elevliste, og elevene hentes derfra. Lista kan justeres med «+ Legg til
+elev» og ✕, og lagres på vurderingen. Trinn velges ikke lenger.
+
+Avklart 20. oktober 2026: **nivå 1.** Elevene velges for hver
+vurdering, ut fra timene. Grupper som egen struktur (nivå 2) bygges ikke.
+Elevene blandes på tvers av fag: noen har matte og kroppsøving, andre har
+matte og samfunnsfag. En gruppe ville derfor bare gjelde ett fag og gitt
+lite utover det timene allerede gjør.
+
+### Diagnosen stemmer
+
+Problemet sitter ikke i vurderingsmodulen. `eleverForVurdering()` henter
+elevene på de valgte trinnene som står på *minst én* time i faget
+(`fagForElev()`). Har du to parallelle mattegrupper på 9. trinn, kommer
+begge opp. Det var et bevisst valg i post 14 («parallelle grupper kommer
+begge opp, og tomme rader løser det»). Det holder ikke i praksis. Trinn er
+rett og slett feil nøkkel for hvem som hører sammen.
+
+### Gruppene finnes allerede, bare uten navn
+
+Hver time har sin egen elevliste (`ev.students`). En gruppe er i praksis
+«elevene på disse timene». Det betyr to ting:
+
+- **Det trengs ingen ny kilde til sannhet for å løse vurderingene.** Det
+  holder at vurderingen vet *hvilken time* (eller hvilke timer) den hører
+  til, ikke bare fag og trinn.
+- **Men det finnes en annen kostnad som grupper løser:** har 9A matte fire
+  timer i uka, står elevlista fire steder. Bytter en elev gruppe, må den
+  rettes på hver time. Det er den egentlige grunnen til å lage grupper som
+  egen ting.
+
+### Grupper i tillegg til trinn, ikke i stedet for
+
+Trinn er en egenskap ved **eleven** (karakterår, 10.-trinnsvarsler, bulk-
+import). Gruppe er en egenskap ved **undervisningen**. Begge trengs. Det
+som byttes ut, er trinn som *filter* for elevlister — ikke trinn som felt.
+
+### To nivåer, fra billigst
+
+1. **Vurdering knyttet til timer.** I vurderingsmodalen: «Elever fra»
+   med avkrysning for fagets timer (gruppert på unike elevlister, så fire
+   like timer vises som én). Elevlista blir unionen av `students` på de
+   valgte timene. Trinn kan da utledes i stedet for å velges. Dette løser
+   problemet du har nå uten å røre datamodellen for timer, og passer med
+   «Snarvei fra en time» som står åpent i post 14. Anslag: en kveld.
+2. **Grupper som egen struktur.** Ny nøkkel `lp_grupper`:
+   ```js
+   { id, navn, fag, elever: [elevId], arkivert }
+   ```
+   Timer får `gruppeId` i stedet for (eller i tillegg til) egen
+   `students`. Vurderinger får `gruppeId`. Anslag: tre–fire kvelder,
+   mest på grunn av migreringen og alt som leser `ev.students` i dag.
+
+### Det som kan gå galt i nivå 2
+
+- **Migreringen.** Grupper kan foreslås automatisk fra eksisterende timer:
+  samme tittel + samme elevliste = samme gruppe. Avvik (én elev ekstra på
+  én time) må vises, ikke slås sammen i stillhet.
+- **Historikk.** `eleverPaaTime()` / `oppmoteErFasit()` ble laget nettopp
+  fordi elevlista ligger på hendelsen og ikke på datoen. Flyttes lista til
+  en gruppe, må det samme gjelde: lagret oppmøte er fasit bakover, ellers
+  får en elev som bytter gruppe i november timer han aldri var i.
+- **Enetimer og vikartimer** har ikke grupper. `students` må fortsatt
+  fungere for dem.
+- **Alle stedene som leser `ev.students`:** `fagForElev()`, elevloggen,
+  oppmøte, hover-kortet (22), fraværshaken (16). Må gjennomgås én for én.
+- `SYNK_NOKLER`, `exportData()`/`importData()`, papirkurven og «Eksporter
+  uten navn» må få med den nye nøkkelen. Gruppenavn som «9A» er ikke
+  personopplysninger, men elevlistene er.
+
+### Sammenheng
+
+- **Post 14:** nivå 1 er i praksis en utvidelse av vurderingsmodulen.
+- **Post 11 (farge per trinn):** er det egentlig *gruppen* du vil skille
+  visuelt? Da er et merke med gruppenavn på timen mer presist enn farge per
+  trinn, og kolliderer ikke med palettreglene.
+- **Post 9 (trinn i eksportert kalender):** samme spørsmål — gruppenavn
+  kan være mer nyttig enn trinn.
+
+### Fortsatt åpent
+
+- ~~Nivå 1 først, eller rett på nivå 2?~~ Nivå 1. Nivå 2 er lagt bort
+  (se status). Spørsmålene under gjelder bare hvis det tas opp igjen.
+- **Er en gruppe knyttet til ett fag?** «9A matte» ja. Men en basisgruppe
+  som har både norsk og samfunnsfag med deg, kunne vært én gruppe på tvers
+  av fag. Det endrer modellen (`fag` på gruppen eller på timen).
+- **Kan en elev være i flere grupper i samme fag?** F.eks. ordinær gruppe
+  + fordypning. Med «Matematikk fordypning» som eget fag løser det seg
+  trolig selv.
+- ~~Nivå 1: skal lista kunne justeres for hånd?~~ Ja (20. okt 2026). Elever
+  skal kunne legges til og tas ut etter at timene er valgt.
+- ~~Nivå 1: hvordan elevene hentes.~~ Avkrysning av timer, der timer med
+  samme elevliste vises som én linje med dager, klokkeslett, rom, antall og
+  de første navnene. Nikolai kjenner igjen gruppene på det.
+- ~~Nivå 1: lagres timene på vurderingen?~~ Ja, både `elever` og
+  `timeIds`. Lista oppdateres ikke av seg selv når noen kommer til. Det gjør
+  du med «+ Legg til elev», eller ved å krysse linja av og på igjen.
+- **Hva skjer med vurderinger fra før gruppene fantes?** De har fag +
+  trinn og resultater per elev-ID. De kan stå som de er.
 
 ---
 

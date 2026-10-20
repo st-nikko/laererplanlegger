@@ -942,7 +942,7 @@
           </div>
           <div class="form-field">
             <label>Dato</label>
-            <input type="date" id="vuDato">
+            <input type="date" id="vuDato" onchange="vurderingDatoEndret()">
           </div>
         </div>
         <div class="form-row">
@@ -951,14 +951,14 @@
             <select id="vuFag" onchange="vurderingFagEndret()"></select>
           </div>
           <div class="form-field">
-            <label>Trinn</label>
-            <div class="trinn-checks vu-trinn" id="vuTrinn"></div>
-          </div>
-          <div class="form-field">
             <label>Form</label>
             <select id="vuForm" onchange="vurderingHodeEndret()"></select>
             <span class="vu-laast-hint" id="vuLaastHint" style="display:none">Låst — resultater er ført</span>
           </div>
+        </div>
+        <div class="form-field">
+          <label>Timer</label>
+          <div class="vu-timer" id="vuTimer"></div>
         </div>
         <div class="form-field">
           <label>Samlet notis (valgfritt)</label>
@@ -968,7 +968,8 @@
       <div>
         <div class="vu-elever-hdr">
           <span id="vuEleverTittel">Elever</span>
-          <span class="vu-hjelp">Tomme rader er ikke med i vurderingen.</span>
+          <span class="vu-hjelp">Kryss av timene for å hente elevene. ✕ tar en elev ut.</span>
+          <select id="vuLeggTil" class="vu-legg-til" onchange="vurderingLeggTilElev()"></select>
         </div>
         <div id="vuElever"></div>
       </div>

@@ -2374,13 +2374,16 @@ function renderElevloggInnhold(studentId, container) {
 // rad er «ikke med» og lagres ikke. Med fritekst-form er teksten selve
 // verdien, og det er ingen egen kommentar.
 //
-// Elevlista er elevene på de valgte trinnene som står på minst én av dine
-// timer i faget (fagForElev). Elever som allerede har et resultat blir
-// stående, selv om de senere har byttet gruppe eller trinn.
+// Elevlista (veikart 26, 20. okt 2026) velges per vurdering. Du krysser av
+// timene vurderingen gjelder, og elevene på dem hentes inn. Timer med samme
+// elevliste slås sammen til én linje (timeLinjerForFag), så fire mattetimer
+// for samme gruppe blir én avkrysning. Lista kan justeres for hånd etterpå.
+// Den lagres på vurderingen (`elever`), så den blir stående selv om noen
+// senere bytter time. Elever som har et resultat er alltid med.
 //
-// Flere trinn (19. okt 2026): kroppsøving og valgfag har ofte hele
-// ungdomstrinnet samlet. `trinns` er derfor en liste, og når du velger fag
-// krysses trinnene fagets timer har av på forhånd (trinnForFag).
+// Trinn velges ikke lenger. `trinns` leses ut fra elevene ved lagring, og
+// brukes bare til visning. Vurderinger fra før 20. okt får `elever` fra
+// resultatene sine i loadFromStorage().
 //
 // Personopplysninger: resultatene er knyttet til elev-ID, synkes kryptert
 // som resten, og er bare med i FULL backup — som varslene. De skal aldri
@@ -2444,35 +2447,78 @@ function trinnTekst(trinns) {
   return t.map(n => n + '.').join(' + ') + ' trinn';
 }
 
-// Trinnene fagets timer har — forhåndsvalget når fag velges
-function trinnForFag(fag) {
-  const sett = new Set();
-  events.forEach(ev => {
-    if (ev.category !== 'undervisning' || ev.title !== fag) return;
-    getEventTrinns(ev).forEach(t => sett.add(Number(t)));
-  });
-  return rensTrinn([...sett]);
+function elevForId(id) {
+  const k = String(id);
+  return allStudents.find(x => String(x.id) === k) || { id: parseStudentId(k), navn: fallbackNavn(k) };
+}
+function sorterElever(a, b) {
+  return (Number(a.trinn) || 99) - (Number(b.trinn) || 99) || String(a.navn).localeCompare(String(b.navn), 'nb');
 }
 
-function eleverForVurdering(fag, trinns, resultater) {
-  const ut = new Map();
-  const valgt = rensTrinn(trinns);
-  if (fag && valgt.length) {
-    allStudents.forEach(s => {
-      if (s.arkivert) return;
-      if (!valgt.includes(Number(s.trinn))) return;
-      if (!fagForElev(s.id).includes(fag)) return;
-      ut.set(String(s.id), s);
-    });
-  }
-  Object.keys(resultater || {}).forEach(id => {
-    if (ut.has(id)) return;
+// Trinnene elevene går på — det som vises i oversikten
+function trinnForElever(ider) {
+  return rensTrinn((ider || []).map(id => {
+    const s = allStudents.find(x => String(x.id) === String(id));
+    return s ? s.trinn : null;
+  }));
+}
+
+// Elevene på en time, uten arkiverte og uten dobbel
+function aktiveEleverPaaTime(ev) {
+  return [...new Set((ev.students || []).map(String))].filter(id => {
     const s = allStudents.find(x => String(x.id) === id);
-    ut.set(id, s || { id: parseStudentId(id), navn: fallbackNavn(id) });
+    return s && !s.arkivert;
   });
-  // Per trinn, så alfabetisk — modalen setter en overskrift mellom trinnene
-  return [...ut.values()].sort((a, b) =>
-    (Number(a.trinn) || 99) - (Number(b.trinn) || 99) || String(a.navn).localeCompare(String(b.navn), 'nb'));
+}
+
+// Fagets timer, slått sammen etter elevlista. Fire mattetimer med de samme
+// elevene blir én linje. Timer uten elever, og timer som sluttet å gjelde
+// før datoen for vurderingen, er ikke med.
+function timeLinjerForFag(fag, dato) {
+  if (!fag) return [];
+  const linjer = new Map();
+  events.forEach(ev => {
+    if (ev.category !== 'undervisning' || ev.title !== fag) return;
+    if (dato && ev.gyldigTil && ev.gyldigTil < dato) return;
+    const elever = aktiveEleverPaaTime(ev).sort();
+    if (!elever.length) return;
+    const nokkel = elever.join('|');
+    if (!linjer.has(nokkel)) linjer.set(nokkel, { nokkel, elever, timer: [] });
+    linjer.get(nokkel).timer.push(ev);
+  });
+  const tid = ev => ev.recurs ? `0${ev.weekday}${ev.start || ''}` : `1${ev.date || ''}${ev.start || ''}`;
+  return [...linjer.values()]
+    .map(l => {
+      l.timer.sort((a, b) => tid(a).localeCompare(tid(b)));
+      l.evIds = l.timer.map(ev => String(ev.id));
+      return l;
+    })
+    .sort((a, b) => tid(a.timer[0]).localeCompare(tid(b.timer[0])));
+}
+
+// «Man 08:30 · Ons 10:15», rommet, antallet og de første navnene
+function timeLinjeTekst(l) {
+  const tider = [...new Set(l.timer.map(ev => {
+    if (ev.recurs) return `${DAYS_SHORT[ev.weekday] || ''} ${ev.start || ''}`.trim();
+    const d = new Date(ev.date + 'T00:00:00');
+    return `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]} ${ev.start || ''}`.trim();
+  }))].join(' · ');
+  const rom = [...new Set(l.timer.map(ev => String(ev.room || '').trim()).filter(Boolean))].join(', ');
+  const navn = l.elever.map(id => elevForId(id).navn).sort((a, b) => String(a).localeCompare(String(b), 'nb'));
+  return {
+    tider, rom,
+    antall: `${l.elever.length} ${l.elever.length === 1 ? 'elev' : 'elever'}`,
+    navn: navn.slice(0, 3).join(', ') + (navn.length > 3 ? ' …' : '')
+  };
+}
+
+// Elevlista i en vurdering: dem som er hentet fra timer eller lagt til,
+// pluss alle som har et resultat — et resultat skal aldri forsvinne av syne.
+// Sortert per trinn, så alfabetisk. Modalen setter en overskrift mellom trinnene.
+function eleverForVurdering(u) {
+  const ider = new Set(((u && u.elever) || []).map(String));
+  Object.entries((u && u.resultater) || {}).forEach(([id, r]) => { if (erMedIVurdering(r)) ider.add(String(id)); });
+  return [...ider].map(elevForId).sort(sorterElever);
 }
 
 function vurderingerForElev(elevId) {
@@ -2492,8 +2538,7 @@ function lagreVurdering(utkast) {
   const tittel = String(u.tittel || '').trim();
   const dato   = u.dato || '';
   const fag    = u.fag || '';
-  const trinns = rensTrinn(u.trinns !== undefined ? u.trinns : u.trinn);
-  if (!tittel || !/^\d{4}-\d{2}-\d{2}$/.test(dato) || !fag || !trinns.length) return null;
+  if (!tittel || !/^\d{4}-\d{2}-\d{2}$/.test(dato) || !fag) return null;
   const eksisterende = u.id ? vurderinger.find(v => v.id === u.id) : null;
   let form = VURDERINGSFORMER[u.form] ? u.form : null;
   if (eksisterende && vurderingFormLaast(eksisterende)) form = eksisterende.form;
@@ -2504,10 +2549,16 @@ function lagreVurdering(utkast) {
     const ren = rensResultat(r, form);
     if (ren) resultater[String(id)] = ren;
   });
+  // Lista lagres som den er nå. Den som har et resultat, er alltid med.
+  const elever = [...new Set([...(u.elever || []).map(String), ...Object.keys(resultater)])];
+  const avledet = trinnForElever(elever);
+  const trinns = avledet.length ? avledet : rensTrinn(u.trinns !== undefined ? u.trinns : u.trinn);
   const ny = {
     id: eksisterende ? eksisterende.id : vurderingNyId(),
     dato, fag, trinns, tittel, form,
     notis: String(u.notis || '').trim(),
+    elever,
+    timeIds: [...new Set((u.timeIds || []).map(String))],
     resultater
   };
   if (eksisterende) vurderinger[vurderinger.indexOf(eksisterende)] = ny;
@@ -2548,7 +2599,7 @@ function renderVurderingerView() {
     const hoved = document.createElement('div'); hoved.className = 'vu-liste-hoved';
     const t = document.createElement('span'); t.className = 'vu-liste-tittel'; t.textContent = v.tittel;
     const m = document.createElement('span'); m.className = 'vu-liste-meta';
-    m.textContent = `${v.fag} · ${trinnTekst(v.trinns)} · ${VURDERINGSFORMER[v.form] || v.form}`;
+    m.textContent = [v.fag, trinnTekst(v.trinns), VURDERINGSFORMER[v.form] || v.form].filter(Boolean).join(' · ');
     hoved.append(t, m);
     if (v.notis) {
       const n = document.createElement('span'); n.className = 'vu-liste-notis'; n.textContent = v.notis;
@@ -2581,11 +2632,6 @@ function vurderingFagValg() {
   return [...new Set(events.filter(e => e.category === 'undervisning' && e.title).map(e => e.title))]
     .sort((a, b) => a.localeCompare(b, 'nb'));
 }
-function vurderingTrinnValg() {
-  const sett = new Set();
-  allStudents.forEach(s => { if (!s.arkivert && s.trinn != null && s.trinn !== '') sett.add(String(s.trinn)); });
-  return [...sett].sort((a, b) => Number(a) - Number(b));
-}
 
 function fyllSelect(sel, valg, tomTekst, verdi) {
   sel.innerHTML = '';
@@ -2605,8 +2651,10 @@ function openVurdering(id, forhaand) {
   if (id && !v) { alert('Vurderingen finnes ikke lenger.'); return; }
   vurderingUtkast = v
     ? JSON.parse(JSON.stringify(v))
-    : { id: null, dato: isoDate(TODAY), fag: '', trinns: [], tittel: '', form: 'tekst', notis: '', resultater: {}, ...(forhaand || {}) };
+    : { id: null, dato: isoDate(TODAY), fag: '', trinns: [], tittel: '', form: 'tekst', notis: '', elever: [], timeIds: [], resultater: {}, ...(forhaand || {}) };
   const u = vurderingUtkast;
+  u.elever  = (u.elever  || Object.keys(u.resultater || {})).map(String);
+  u.timeIds = (u.timeIds || []).map(String);
 
   document.getElementById('vurderingHdrTittel').textContent = v ? 'Vurdering' : 'Ny vurdering';
   document.getElementById('vuTittel').value = u.tittel;
@@ -2616,7 +2664,7 @@ function openVurdering(id, forhaand) {
   const fag = vurderingFagValg();
   if (u.fag && !fag.includes(u.fag)) fag.push(u.fag);
   fyllSelect(document.getElementById('vuFag'), fag.map(f => [f, f]), '— Velg fag —', u.fag);
-  tegnVurderingTrinn();
+  tegnVurderingTimer();
   const formSel = document.getElementById('vuForm');
   formSel.innerHTML = '';
   Object.entries(VURDERINGSFORMER).forEach(([k, t]) => { const o = document.createElement('option'); o.value = k; o.textContent = t; formSel.appendChild(o); });
@@ -2627,47 +2675,105 @@ function openVurdering(id, forhaand) {
   document.getElementById('vurderingOverlay').classList.add('open');
 }
 
-// Fag, trinn eller form er endret i skjemaet
-// Avkrysning for trinnene som finnes blant elevene, pluss de som er valgt
-function tegnVurderingTrinn() {
+// Avkrysning for fagets timer, én linje per elevliste
+function tegnVurderingTimer() {
   const u = vurderingUtkast;
-  const boks = document.getElementById('vuTrinn');
+  const boks = document.getElementById('vuTimer');
   boks.innerHTML = '';
-  rensTrinn([...vurderingTrinnValg(), ...u.trinns]).forEach(t => {
-    const l = document.createElement('label');
+  const tom = tekst => { const d = document.createElement('div'); d.className = 'vu-tom'; d.textContent = tekst; boks.appendChild(d); };
+  if (!u.fag) { tom('Velg fag for å se timene.'); return; }
+  const linjer = timeLinjerForFag(u.fag, u.dato);
+  if (!linjer.length) { tom(`Ingen av timene i ${u.fag} har elever. Legg til elevene under.`); return; }
+  const valgt = new Set(u.timeIds.map(String));
+  linjer.forEach(l => {
+    const t = timeLinjeTekst(l);
+    const lab = document.createElement('label'); lab.className = 'vu-time-linje';
     const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.name = 'vuTrinnCheck'; cb.value = String(t);
-    cb.checked = u.trinns.includes(t);
-    cb.onchange = vurderingTrinnEndret;
-    l.append(cb, ` ${t}. trinn`);
-    boks.appendChild(l);
+    cb.type = 'checkbox'; cb.name = 'vuTimeCheck'; cb.value = l.nokkel;
+    cb.checked = l.evIds.some(id => valgt.has(id));
+    cb.onchange = () => { velgTimeLinje(l, cb.checked); renderVurderingElever(); };
+    const tider = document.createElement('span'); tider.className = 'vu-time-tider'; tider.textContent = t.tider;
+    const rom = document.createElement('span'); rom.className = 'vu-time-rom'; rom.textContent = t.rom;
+    const antall = document.createElement('span'); antall.className = 'vu-time-antall'; antall.textContent = t.antall;
+    const navn = document.createElement('span'); navn.className = 'vu-time-navn'; navn.textContent = t.navn;
+    lab.append(cb, tider, rom, antall, navn);
+    boks.appendChild(lab);
   });
 }
 
-function valgteVurderingTrinn() {
-  return rensTrinn([...document.querySelectorAll('input[name="vuTrinnCheck"]:checked')].map(el => el.value));
+// Kryss på: elevene på timene kommer inn i lista. Kryss av: de går ut igjen,
+// men ikke de som også står på en annen avkrysset linje, eller som har fått
+// noe ført.
+function velgTimeLinje(l, paa) {
+  const u = vurderingUtkast;
+  const ids = new Set(u.timeIds.map(String));
+  if (paa) {
+    l.evIds.forEach(id => ids.add(id));
+    u.elever = [...new Set([...u.elever.map(String), ...l.elever])];
+  } else {
+    l.evIds.forEach(id => ids.delete(id));
+    const andre = new Set();
+    timeLinjerForFag(u.fag, u.dato).forEach(x => {
+      if (x.evIds.some(id => ids.has(id))) x.elever.forEach(e => andre.add(e));
+    });
+    u.elever = u.elever.map(String).filter(id =>
+      !l.elever.includes(id) || andre.has(id) || erMedIVurdering(u.resultater[id]));
+  }
+  u.timeIds = [...ids];
 }
 
-function vurderingTrinnEndret() {
-  const u = vurderingUtkast; if (!u) return;
-  u.trinns = valgteVurderingTrinn();
-  renderVurderingElever();
-}
-
-// Nytt fag krysser av trinnene fagets timer har. Bare ved bytte av fag —
-// har du rettet på trinnene selv, blir de stående til du bytter fag igjen.
+// Nytt fag: timevalget nullstilles, og lista beholder bare dem som har fått
+// noe ført. Har faget bare én linje, krysses den av med en gang.
 function vurderingFagEndret() {
   const u = vurderingUtkast; if (!u) return;
-  u.fag = document.getElementById('vuFag').value;
-  const forslag = u.fag ? trinnForFag(u.fag) : [];
-  if (forslag.length) { u.trinns = forslag; tegnVurderingTrinn(); }
+  u.fag  = document.getElementById('vuFag').value;
+  u.dato = document.getElementById('vuDato').value || u.dato;
+  u.timeIds = [];
+  u.elever = u.elever.map(String).filter(id => erMedIVurdering(u.resultater[id]));
+  const linjer = timeLinjerForFag(u.fag, u.dato);
+  if (linjer.length === 1) velgTimeLinje(linjer[0], true);
+  tegnVurderingTimer();
   renderVurderingElever();
+}
+
+// Datoen avgjør hvilke timer som fortsatt gjelder
+function vurderingDatoEndret() {
+  const u = vurderingUtkast; if (!u) return;
+  u.dato = document.getElementById('vuDato').value || u.dato;
+  tegnVurderingTimer();
+}
+
+function vurderingLeggTilElev() {
+  const u = vurderingUtkast; if (!u) return;
+  const sel = document.getElementById('vuLeggTil');
+  const id = sel.value; if (!id) return;
+  if (!u.elever.map(String).includes(id)) u.elever.push(id);
+  renderVurderingElever();
+}
+
+function vurderingFjernElev(id) {
+  const u = vurderingUtkast; if (!u) return;
+  const k = String(id);
+  if (erMedIVurdering(u.resultater[k]) &&
+      !confirm(`Ta ${elevForId(k).navn} ut av vurderingen? Det som er ført for eleven, slettes.`)) return;
+  delete u.resultater[k];
+  u.elever = u.elever.map(String).filter(x => x !== k);
+  renderVurderingElever();
+}
+
+// «+ Legg til elev»: alle aktive elever som ikke står i lista
+function tegnLeggTilElev(medIder) {
+  const sel = document.getElementById('vuLeggTil');
+  if (!sel) return;
+  const med = new Set(medIder.map(String));
+  const kandidater = allStudents.filter(s => !s.arkivert && !med.has(String(s.id))).sort(sorterElever);
+  fyllSelect(sel, kandidater.map(s => [String(s.id), s.trinn != null && s.trinn !== '' ? `${s.navn} (${s.trinn}. trinn)` : s.navn]), '+ Legg til elev', '');
+  sel.disabled = !kandidater.length;
 }
 
 function vurderingHodeEndret() {
   const u = vurderingUtkast; if (!u) return;
   u.fag    = document.getElementById('vuFag').value;
-  u.trinns = valgteVurderingTrinn();
   if (!vurderingFormLaast(u)) u.form = document.getElementById('vuForm').value;
   renderVurderingElever();
 }
@@ -2688,21 +2794,21 @@ function oppdaterVurderingLaas() {
   const res = Object.values(vurderingUtkast.resultater).filter(erMedIVurdering).length;
   const tittel = document.getElementById('vuEleverTittel');
   const antall = document.querySelectorAll('#vuElever .vu-rad').length;
-  tittel.textContent = antall ? `Elever (${antall}) · ${res} med` : 'Elever';
+  tittel.textContent = antall ? `Elever (${antall}) · ${res} ført` : 'Elever';
 }
 
 function renderVurderingElever() {
   const u = vurderingUtkast;
   const boks = document.getElementById('vuElever');
   boks.innerHTML = '';
-  const elever = eleverForVurdering(u.fag, u.trinns, Object.fromEntries(
-    Object.entries(u.resultater).filter(([, r]) => erMedIVurdering(r))));
+  const elever = eleverForVurdering(u);
+  tegnLeggTilElev(elever.map(s => s.id));
 
   if (!elever.length) {
     const tom = document.createElement('div'); tom.className = 'vu-tom';
-    tom.textContent = (!u.fag || !rensTrinn(u.trinns).length)
-      ? 'Velg fag og trinn for å få elevlista.'
-      : `Ingen elever på ${trinnTekst(u.trinns)} står på timer i ${u.fag}.`;
+    tom.textContent = !u.fag
+      ? 'Velg fag, og kryss av timene vurderingen gjelder.'
+      : 'Kryss av timene vurderingen gjelder, eller legg til elever.';
     boks.appendChild(tom);
     oppdaterVurderingLaas();
     return;
@@ -2787,6 +2893,11 @@ function byggVurderingRad(s) {
     };
     rad.appendChild(k);
   }
+  const fjern = document.createElement('button');
+  fjern.type = 'button'; fjern.className = 'vu-fjern'; fjern.textContent = '✕';
+  fjern.title = `Ta ${s.navn} ut av vurderingen`;
+  fjern.onclick = () => vurderingFjernElev(id);
+  rad.appendChild(fjern);
   return rad;
 }
 
@@ -2796,10 +2907,9 @@ function lagreVurderingFraModal() {
   u.dato   = document.getElementById('vuDato').value;
   u.notis  = document.getElementById('vuNotis').value;
   u.fag    = document.getElementById('vuFag').value;
-  u.trinns = valgteVurderingTrinn();
   if (!vurderingFormLaast(u)) u.form = document.getElementById('vuForm').value;
   const lagret = lagreVurdering(u);
-  if (!lagret) { alert('Fyll inn tittel, dato, fag og trinn.'); return; }
+  if (!lagret) { alert('Fyll inn tittel, dato og fag.'); return; }
   vurderingUtkast = null;
   closeOverlay('vurderingOverlay');
   render();
@@ -3188,7 +3298,14 @@ function deleteStudent(id) {
     const r = (v.resultater || {})[String(id)];
     if (r) { vurdRes[v.id] = r; delete v.resultater[String(id)]; }
   });
-  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id), varsler: getVarsler(id), vurderinger: vurdRes });
+  // …og det samme gjør plassen på elevlista (veikart 26)
+  const vurdDeltar = [];
+  vurderinger.forEach(v => {
+    if (!Array.isArray(v.elever) || !v.elever.some(x => String(x) === String(id))) return;
+    vurdDeltar.push(v.id);
+    v.elever = v.elever.filter(x => String(x) !== String(id));
+  });
+  leggIPapirkurv('elev', s.navn, { elev: { ...s }, medlemskap, notat: getElevNotat(id), varsler: getVarsler(id), vurderinger: vurdRes, vurderingDeltakelse: vurdDeltar });
 
   // Fjern fra allStudents
   const idx = allStudents.findIndex(st => String(st.id) === String(id));
@@ -4355,6 +4472,12 @@ function gjenopprettFraPapirkurv(id) {
       const v = vurderinger.find(x => x.id === vId);
       if (v) { if (!v.resultater) v.resultater = {}; v.resultater[String(d.elev.id)] = r; }
     });
+    [...(d.vurderingDeltakelse || []), ...Object.keys(d.vurderinger || {})].forEach(vId => {
+      const v = vurderinger.find(x => x.id === vId);
+      if (!v) return;
+      if (!Array.isArray(v.elever)) v.elever = [];
+      if (!v.elever.some(x => String(x) === String(d.elev.id))) v.elever.push(String(d.elev.id));
+    });
     // Meld eleven inn igjen i timene han sto i, men bare i de som fortsatt finnes
     (d.medlemskap || []).forEach(evId => {
       const ev = events.find(e => String(e.id) === String(evId));
@@ -4606,8 +4729,12 @@ function loadFromStorage() {
               .map(v => {
                 // Én trinn → liste (19. okt 2026, samme dag som modulen kom)
                 const { trinn, ...rest } = v;
+                const resultater = (v.resultater && typeof v.resultater === 'object') ? v.resultater : {};
+                // Elevlista lagres fra 20. okt 2026 (veikart 26). Eldre
+                // vurderinger får den fra dem som har et resultat.
+                const elever = Array.isArray(v.elever) ? [...new Set(v.elever.map(String))] : Object.keys(resultater);
                 return { ...rest, trinns: rensTrinn(v.trinns !== undefined ? v.trinns : trinn),
-                         resultater: (v.resultater && typeof v.resultater === 'object') ? v.resultater : {} };
+                         elever, timeIds: Array.isArray(v.timeIds) ? v.timeIds.map(String) : [], resultater };
               })
         : [];
     }

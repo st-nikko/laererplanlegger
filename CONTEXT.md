@@ -473,6 +473,7 @@ liste:
 
 ```js
 { id, dato, fag, trinns: [8, 9, 10], tittel, form: 'tekst'|'maal'|'karakter', notis,
+  elever: [elevId], timeIds: [evId],
   resultater: { elevId: { verdi, status, kommentar } } }
 ```
 
@@ -481,21 +482,34 @@ liste:
   fast, uansett hva utkastet sier.
 - **Status fortrenger verdi.** Statusene er «ikke levert», «borte» og
   «fritatt». Med status lagres verdien som `null`.
-- **En tom rad lagres ikke** (`rensResultat()` gir null). Elever som ikke
-  hører til, trenger derfor ikke å fjernes.
+- **En tom rad lagres ikke** i `resultater` (`rensResultat()` gir null).
+  Eleven står likevel på lista (`elever`) til du tar henne ut.
 - **Fritekst:** teksten er selve verdien, og det er ingen egen kommentar.
-- **Flere trinn.** Kroppsøving og valgfag har ofte hele ungdomstrinnet
-  samlet, så trinn velges med avkrysning, og `trinns` er en liste. Når du
-  velger fag, krysses trinnene fagets timer har av på forhånd
-  (`trinnForFag()`). Det skjer bare ved bytte av fag. Trinn du har rettet
-  på selv, blir stående. Den første versjonen hadde `trinn` som ett tall,
-  og `loadFromStorage()` gjør det om til en liste. `trinnTekst()` gir
-  «9. trinn», «8. + 10. trinn» eller «8.–10. trinn».
-- **Elevlista** (`eleverForVurdering()`) består av ikke-arkiverte elever på
-  de valgte trinnene som står på minst én time i faget (`fagForElev()`).
-  Den er sortert per trinn og så alfabetisk, med en overskrift per trinn
-  når det er flere enn ett. I tillegg kommer alle som allerede har et
-  resultat, slik at et resultat aldri forsvinner av syne.
+- **Elevlista velges per vurdering** (veikart 26, 20. okt 2026). Under
+  «Timer» står fagets timer, slått sammen etter elevlista
+  (`timeLinjerForFag()`): timer med nøyaktig de samme aktive elevene blir
+  én linje, vist med dager og klokkeslett, rom, antall og de første navnene
+  (`timeLinjeTekst()`). Timer uten elever, og timer med `gyldigTil` før
+  datoen for vurderingen, er ikke med. Har faget bare én linje, krysses den
+  av når faget velges.
+- **Kryss på** henter elevene på linja inn i `elever`. **Kryss av** tar dem
+  ut igjen, men ikke dem som også står på en annen avkrysset linje, eller
+  som har fått noe ført (`velgTimeLinje()`). **Bytte av fag** nullstiller
+  timevalget og beholder bare dem som har noe ført.
+- **Justering for hånd:** «+ Legg til elev» viser alle aktive elever som
+  ikke står i lista. ✕ tar en elev ut. Har eleven noe ført, spørres du
+  først, og resultatet slettes.
+- **Lista lagres** (`elever`), sammen med hvilke timer som var krysset av
+  (`timeIds`), så den blir stående selv om noen senere bytter time.
+  `lagreVurdering()` tar alltid med dem som har et resultat.
+  `eleverForVurdering(u)` er `elever` pluss dem med resultat, sortert per
+  trinn og så alfabetisk, med en overskrift per trinn når det er flere.
+- **Trinn velges ikke.** `trinns` leses ut fra elevene ved lagring
+  (`trinnForElever()`) og brukes bare i oversikten. `trinnTekst()` gir
+  «9. trinn», «8. + 10. trinn» eller «8.–10. trinn». Den aller første
+  versjonen hadde `trinn` som ett tall, og `loadFromStorage()` gjør det om
+  til en liste. Vurderinger fra før 20. okt uten `elever` får lista fra
+  dem som har et resultat.
 - **Modalen jobber på et utkast** (`vurderingUtkast`). Avbryt eller Escape
   endrer ingenting. `.event-modal` gjør at klikk utenfor ikke lukker den.
 - **Elevloggen** viser vurderingene øverst i fagblokka. Et fag med
@@ -506,7 +520,8 @@ liste:
   kryptert. Vurderingene er **bare med i full backup**, som varslene, ikke
   i «Eksporter uten navn». De skal aldri inn i en kalenderfeed.
 - **Papirkurv.** En slettet vurdering havner i papirkurven. Slettes en
-  elev, flyttes resultatene til elevens papirkurvpost, og de settes tilbake
+  elev, flyttes resultatene og plassen på elevlistene til elevens
+  papirkurvpost (`vurderinger`, `vurderingDeltakelse`), og de settes tilbake
   ved gjenoppretting. Vurderinger som er slettet i mellomtiden, hoppes over.
 - **Ikke noe unntak for «uten karakter»** (veikart 24). En elev som er
   fritatt fra karakter, vurderes likevel.

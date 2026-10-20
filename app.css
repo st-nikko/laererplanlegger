@@ -286,15 +286,36 @@
     .vu-laast-hint { font-size: 11px; color: var(--text-muted); }
     .vu-elever-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .vu-hjelp { font-size: 11px; font-weight: 400; color: var(--text-muted); }
-    .vu-trinn { min-height: 36px; align-items: center; }
+    .vu-hjelp { flex: 1; }
+    .vu-legg-til {
+      font-size: 12px; font-family: inherit; padding: 4px 6px; max-width: 220px;
+      border: 1px solid var(--border-input); border-radius: 4px; background: var(--bg); color: var(--text-primary);
+    }
+    /* Timevalget: én linje per elevliste */
+    .vu-timer { display: flex; flex-direction: column; gap: 2px; }
+    .vu-time-linje {
+      display: grid; grid-template-columns: 18px minmax(140px, auto) minmax(50px, auto) 70px minmax(0, 1fr);
+      gap: 10px; align-items: center; padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 13px;
+    }
+    .vu-time-linje:hover { background: var(--surface); }
+    .vu-time-linje input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+    .vu-time-tider { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+    .vu-time-rom, .vu-time-antall { color: var(--text-secondary); white-space: nowrap; }
+    .vu-time-navn { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vu-timer .vu-tom { padding: 4px 0; }
     .vu-trinn-hdr { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); padding: 12px 0 2px; }
     .vu-trinn-hdr:first-child { padding-top: 2px; }
     .vu-tom { font-size: 13px; color: var(--text-muted); padding: 12px 0; }
     .vu-rad {
-      display: grid; grid-template-columns: 160px auto 112px minmax(0, 1fr);
+      display: grid; grid-template-columns: 160px auto 112px minmax(0, 1fr) 24px;
       gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border-faint);
     }
-    .vu-rad--tekst { grid-template-columns: 160px minmax(0, 1fr) 112px; }
+    .vu-rad--tekst { grid-template-columns: 160px minmax(0, 1fr) 112px 24px; }
+    .vu-fjern {
+      width: 24px; height: 24px; padding: 0; border: none; background: none; border-radius: 4px;
+      font-size: 12px; color: var(--text-muted); cursor: pointer; font-family: inherit;
+    }
+    .vu-fjern:hover { background: var(--surface); color: var(--text-primary); }
     .vu-navn { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .vu-rad.med .vu-navn { color: var(--text-primary); font-weight: 500; }
     .vu-valg-gruppe { display: flex; gap: 3px; }
