@@ -768,3 +768,39 @@ finnes — appen fungerer uendret om `sync.js` ikke lastes.
 7. **Annenhver-uke vises ikke i Måned-visning** — `eventsForDate` håndterer weekPattern i uke/dag, men månedvisningen arver dette riktig.
 8. **Mobilheaderen er fortsatt to rader, og det er strukturelt.** Etter opprydningen i økt 19 er rad 1 (visningsvelger · logo · I dag · Ny hendelse) ~347 px og rad 2 (ukenavigasjonen) ~215–237 px. Summen passer ikke på 390 px uansett hvor mye som fjernes fra rad 1, fordi ukenavigasjonen alene trenger over halve bredden. Én rad krever at enten visningsvelgeren eller ukenavigasjonen får en annen form — det er en større øvelse enn å flytte knapper. Rad 1 er dessuten full: på skjermer smalere enn ~350 px bryter den til en tredje rad framfor å flyte utenfor kanten.
 9. **Fontene krever nett ved første last** — Inter og Figtree hentes fra Google Fonts. `display=swap` gjør at appen alltid tegnes, men uten nett brukes systemfonten. Skal appen bli helt frittstående, må fontfilene inn i repoet og `@font-face` erstatte `<link>`-en.
+
+### Små forbedringer 21. okt 2026 (veikart 28, 9, 6, 11 og 15)
+
+- **Rull til nå** (`rullTilNaa()`), kalt én gang etter første `render()`.
+  Nå-linja havner en tredjedel ned i `.calendar-scroll`. Gjør ingenting
+  når uka som vises ikke har nå-linja, eller utenfor `GRID_START_H`–
+  `GRID_END_H`.
+- **Trinn i Outlook-tittelen.** `icsTittel()` gir «Fag · 9. trinn» via
+  `trinnTekst()`. Enetimer får ikke trinn. Med merket fra nedlasting:
+  «Norsk · 9. trinn · LP».
+- **Møtefrist.** `moteTodoFrist()` er datoen i `#moteDatoInput` +
+  `MOTE_FRIST_DAGER` (7). Feltet viser alltid riktig forekomst for et
+  gjentakende møte (`moteDatoForSkjema()`). `#moteTodoFrist` under
+  knappen oppdateres ved åpning og når datoen endres.
+- **Fagfarger.** `subjectColorMap` lagres i `lp_fagfarger` (i
+  `SYNK_NOKLER`, og i backup). Et nytt fag får den minst brukte fargen
+  (`nesteFagfarge()`), så sletting og ny innlegging ikke flytter farger.
+  `getSubjectColor()` skriver nye tildelinger rett til localStorage uten
+  `saveToStorage()`, fordi det skjer under rendring. Nøklene er fagnavn
+  (`ev.title`) — en enetime har faget som tittel, elevnavnet vises bare.
+- **Trinnmerke på PC.** `trinnMerkeTekst()` («9.», «8.+10.», «8.–10.»)
+  står i `.event-trinn-merke` øverst til høyre. Blokka får
+  `.har-trinn-merke` og `--trinn-merke-plass`, så tittelen ikke går inn
+  under merket. Skjult på mobil, der `.event-trinn-kort` gjør jobben.
+  Ikke på enetimer.
+- **Klikkbare adresser.** `finnAdresser()` finner http(s) og «www.»,
+  uten tegnsetting bakerst. `tekstMedLenker()` bygger tekstnoder og
+  `<a>` — aldri innerHTML. Lenkene stopper klikket, så de ikke åpner
+  loggposten eller gjøremålet de står i. Brukes i elevloggen (notater og
+  elevnotat; temaet settes nå også som tekst) og gjøremålslista. Under
+  `#planNotes`, `#todoTextInput` og «Om eleven» står en `.lenkerad`
+  (`festLenkerad()` / `oppdaterLenkerad()`), siden et tekstfelt ikke kan
+  ha klikkbare lenker.
+
+`tests/smaa-forbedringer.test.js` vokter dette, og `tests/ics.test.js`
+trinnet i tittelen.

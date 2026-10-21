@@ -18,11 +18,11 @@ i én økt.
 
 | # | Post | Omfang |
 |---|------|--------|
-| 1 | 28. Rull kalenderen til nå ved oppstart | Minutter |
-| 2 | 9. Trinn i Outlook-tittelen | ~20 min |
-| 3 | 6. Frist én uke etter møtet, med fristen vist | ~15 min |
-| 4 | 11. Fagfarger, variant A + lagret fargekart | ~1 time |
-| 5 | 15. Klikkbare adresser i fritekst | ~1 time |
+| 1 | ~~28. Rull kalenderen til nå ved oppstart~~ ✅ 21. okt | Minutter |
+| 2 | ~~9. Trinn i Outlook-tittelen~~ ✅ 21. okt | ~20 min |
+| 3 | ~~6. Frist én uke etter møtet, med fristen vist~~ ✅ 21. okt | ~15 min |
+| 4 | ~~11. Fagfarger, variant A + lagret fargekart~~ ✅ 21. okt (farge per gruppe står åpent) | ~1 time |
+| 5 | ~~15. Klikkbare adresser i fritekst~~ ✅ 21. okt | ~1 time |
 | 6 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
 | 7 | 27. Temaoversikt per fag | En kveld |
 | 8 | 3. «Utgått» og «ingen møtte» | En kveld |
@@ -278,7 +278,9 @@ men da må alle som abonnerer legge inn den nye adressen.
 
 ---
 
-## 6. Frist én uke etter møtet på gjøremål fra møtemodulen
+## 6. Frist én uke etter møtet på gjøremål fra møtemodulen ✅
+
+**Bygget 21. oktober 2026.** `moteTodoFrist()` gir datoen i møteskjemaet + 7 dager, og «Frist: tir. 28. okt» står under knappen (`oppdaterMoteTodoFrist()`). Se «Små forbedringer 21. okt» i CONTEXT.md.
 
 **Idéen:** Et gjøremål opprettet fra møteskjemaet skal få frist én uke etter
 møtedatoen, framfor møtedatoen selv.
@@ -431,7 +433,9 @@ status, slettet}`. Ingen gjentakelse.
 
 ---
 
-## 9. Trinn i den eksporterte undervisningskalenderen
+## 9. Trinn i den eksporterte undervisningskalenderen ✅
+
+**Bygget 21. oktober 2026.** `icsTittel()` gir «Matematikk · 9. trinn», eller «Kroppsøving · 8.–10. trinn». Enetimer er uendret. Merk: fila må importeres på nytt i Outlook for at titlene skal endres.
 
 **Idéen:** Se hvilket trinn timen gjelder i Outlook, ikke bare fagnavnet.
 
@@ -529,6 +533,8 @@ tredje måned, og verken uke- eller dagsvisningen har lørdag og søndag —
 ---
 
 ## 11. Flere fagfarger, og egen farge per trinn
+
+**Variant A bygget 21. oktober 2026:** fargekartet lagres (`lp_fagfarger`, synket), og trinnet står som merke øverst til høyre i timen på PC. **Farge per gruppe står fortsatt åpent.**
 
 **Idéen:** Flere farger å velge mellom, og at samme fag kan ha ulik farge
 på ulike trinn.
@@ -766,7 +772,9 @@ sammenlignet med anslaget fra august.
 
 ---
 
-## 15. Mulighet for å legge inn lenker
+## 15. Mulighet for å legge inn lenker ✅
+
+**Bygget 21. oktober 2026.** Adresser blir lenker i elevloggen og gjøremålslista, og som en lenkerad under timenotatet, gjøremålsbeskrivelsen og «Om eleven». Fast lenkefelt på timen er ikke bygget.
 
 **Idéen:** Kunne lagre lenker — til fagplan, læreverk, møtelenke.
 
@@ -1488,7 +1496,9 @@ andre varianten av «søk i notater» (funksjonsplanen § 7).
 
 ---
 
-## 28. Rull kalenderen til nå ved oppstart
+## 28. Rull kalenderen til nå ved oppstart ✅
+
+**Bygget 21. oktober 2026.** `rullTilNaa()` etter første `render()`.
 
 **Idéen:** Rutenettet er 510 px; på telefon ser man omtrent halvparten.
 Åpner man appen klokka 13, vises formiddagen.

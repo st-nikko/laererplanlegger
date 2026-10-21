@@ -199,6 +199,15 @@
     /* Trinnet på egen linje. Skjult her: på PC står det allerede i
        undertittelen. Slås på i mobilblokka, der undertittelen er borte. */
     .event-trinn-kort { display: none; }
+    /* Trinnmerket øverst til høyre på PC (veikart 11). Arver tekstfargen,
+       så det passer på alle fagfarger. Tittelen gir plass til det. */
+    .event-trinn-merke {
+      position: absolute; top: 4px; right: 5px;
+      font-size: 10px; font-weight: 600; line-height: 1.4;
+      padding: 0 4px; border-radius: 3px;
+      background: rgba(34,32,29,0.09); opacity: 0.85;
+    }
+    .har-trinn-merke .event-title { padding-right: var(--trinn-merke-plass, 30px); }
     /* Timer uten elever. Følger tekstfargen på blokka, så det passer på
        alle fagfarger, og skaleres med tittelen (mindre på mobil). */
     .ikon-uten-elever { display: inline-block; margin-right: 4px; opacity: 0.75; }
@@ -206,6 +215,13 @@
     .event-sub   { font-size: 10px; opacity: 0.72; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .event-badge { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; background: rgba(34,32,29,0.10); color: inherit; opacity: 0.8; }
     .event-plan-dot { position: absolute; bottom: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--suksess); opacity: 0.85; }
+
+    /* Adresser i fritekst (veikart 15) */
+    .fritekst-lenke { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+    .fritekst-lenke:hover { text-decoration-thickness: 2px; }
+    .lenkerad { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+    .lenkerad .fritekst-lenke { word-break: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .mote-todo-frist { display: block; margin-top: 4px; font-size: 12px; color: var(--text-muted); }
 
     .now-line { position: absolute; left: -2px; right: 0; height: 2px; background: var(--naa); z-index: 20; pointer-events: none; }
     .now-line::before { content: ''; position: absolute; left: -3px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: var(--naa); }
@@ -1120,6 +1136,8 @@
      merke foran tittelen tok det plassen fra selve fagnavnet i en 70 px
      bred kolonne. Klippes bort av seg selv i korte blokker, siden
      .event har overflow: hidden. */
+  .event-trinn-merke { display: none; }
+  .har-trinn-merke .event-title { padding-right: 0; }
   .event-trinn-kort {
     display: block;
     font-size: 9px;

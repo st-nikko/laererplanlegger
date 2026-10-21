@@ -118,12 +118,30 @@ const SPECIAL_COLORS = {
   foreldre: { bg:'#FAECF1', text:'#705861', border:'#C8A8B4' },
   annet:    { bg:'#E9F2E8', text:'#536252', border:'#A2B6A0' },
 };
+// Fag → indeks i COLOR_POOL. Lagret i `lp_fagfarger` og synket (veikart
+// 11, 21. okt 2026). Før det ble kartet bygd på nytt ved hver last, i den
+// rekkefølgen fagene dukket opp under rendringen — slettet man en time og
+// la inn en ny, kunne to fag bytte farge.
+//
+// Et nytt fag får den fargen som er brukt minst, laveste indeks ved likt.
+// Så lenge det er sju fag eller færre, deler ingen to fag farge, og et fag
+// som forsvinner frigjør ikke plassen før det tas i bruk av et nytt.
 const subjectColorMap = {};
-let colorPoolIdx = 0;
+function nesteFagfarge() {
+  const bruk = COLOR_POOL.map(() => 0);
+  Object.values(subjectColorMap).forEach(i => { if (bruk[i] !== undefined) bruk[i]++; });
+  const minst = Math.min(...bruk);
+  return bruk.indexOf(minst);
+}
 function getSubjectColor(name) {
   if (!name) return COLOR_POOL[0];
-  if (!(name in subjectColorMap)) { subjectColorMap[name] = colorPoolIdx++ % COLOR_POOL.length; }
-  return COLOR_POOL[subjectColorMap[name]];
+  if (!(name in subjectColorMap)) {
+    subjectColorMap[name] = nesteFagfarge();
+    // Rett i lagringen, uten saveToStorage(): dette skjer under rendring,
+    // og skal ikke utløse en synk. Neste vanlige lagring tar det med opp.
+    try { localStorage.setItem('lp_fagfarger', JSON.stringify(subjectColorMap)); } catch (e) {}
+  }
+  return COLOR_POOL[subjectColorMap[name]] || COLOR_POOL[0];
 }
 function eventColor(ev) {
   if (ev.category === 'mote')     return SPECIAL_COLORS.mote;
@@ -660,6 +678,17 @@ function trinnKortEtikett(ev) {
   if (ev.sessionType === 'enetime') return ev.title || '';
   const t = getEventTrinns(ev);
   return t.length ? t.join('+') : '';
+}
+
+// «9.», «8.+9.» — merket øverst til høyre i blokka på PC. Ikke på
+// enetimer: der er trinnet underordnet, og tittelen er eleven.
+function trinnMerkeTekst(ev) {
+  if (ev.category !== 'undervisning' || ev.sessionType === 'enetime') return '';
+  const t = rensTrinn(getEventTrinns(ev));
+  if (!t.length) return '';
+  // Sammenhengende: «8.–10.», som trinnTekst() — ellers «8.+10.»
+  if (t.length >= 3 && t[t.length - 1] - t[0] === t.length - 1) return `${t[0]}.–${t[t.length - 1]}.`;
+  return t.map(n => n + '.').join('+');
 }
 
 function skoletimeEtikett(ev) {
@@ -1269,7 +1298,18 @@ function renderGrid() {
         : ev.sessionType === 'enetime'
           ? `<div class="event-trinn-kort">${trinnKort}</div>`
           : `<div class="event-trinn-kort">${trinnKort}. trinn</div>`;
-      block.innerHTML=`${badge}<div class="event-title">${ikonUtenElever}${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
+      // Trinnmerket øverst til høyre (veikart 11, 21. okt 2026): på PC sto
+      // trinnet bare i undertittelen, som lett blir kappet. Fargen er fagets;
+      // merket er det som skiller 8. og 9. trinn. Skjult på mobil, der
+      // .event-trinn-kort gjør samme jobb.
+      const trinnMerke = trinnMerkeTekst(ev);
+      if (trinnMerke) {
+        block.classList.add('har-trinn-merke');
+        // Tittelen gir plass til merket — bredden følger teksten
+        block.style.setProperty('--trinn-merke-plass', (trinnMerke.length * 6 + 16) + 'px');
+      }
+      const trinnMerkeHtml = trinnMerke ? `<span class="event-trinn-merke">${trinnMerke}</span>` : '';
+      block.innerHTML=`${badge}${trinnMerkeHtml}<div class="event-title">${ikonUtenElever}${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
 
       // Hva timen inneholder, som nettleserens egen tooltip. Settes som
       // attributt framfor å bygges inn i markupen: teksten er ren tekst og
@@ -1571,6 +1611,7 @@ function openEventForm(ev, forslag, klikketDato) {
     // Nullstill gjøremål-felt
     document.getElementById('moteTodoTittel').value = '';
     document.getElementById('moteTodoBekreftelse').style.display = 'none';
+    oppdaterMoteTodoFrist();
   }
 
   const wd=ev?(ev.recurs?ev.weekday:getDayOfWeekFromDate(ev.date)):0;
@@ -1878,6 +1919,7 @@ function openLessonPlan(ev, date) {
   document.getElementById('temaList').innerHTML = topics.map(t=>`<option value="${t}">`).join('');
   document.getElementById('temaInput').value  = ld.tema  || '';
   document.getElementById('planNotes').value  = ld.notes || '';
+  oppdaterLenkerad(document.getElementById('planNotes'));
 
   // Populate attendance
   renderAttendanceList(ev, ld.attendance || {}, ld.studentNotes || {});
@@ -2086,7 +2128,90 @@ function byggElevNotatFelt(studentId) {
 
   blokk.appendChild(topp);
   blokk.appendChild(felt);
+  festLenkerad(felt);
   return blokk;
+}
+
+// ── Klikkbare adresser i fritekst (veikart 15, 21. okt 2026) ──
+// Adresser i det man selv skriver blir lenker: i elevloggen og
+// gjøremålslista direkte i teksten, og under tekstfeltene (timenotat,
+// gjøremål, «Om eleven») som en rad med lenker — inne i et tekstfelt kan
+// man ikke klikke.
+//
+// Lenkene bygges som noder, aldri med innerHTML: teksten er brukerens egen,
+// og skal ikke kunne tolkes som markup. Bare http og https; «www.» får
+// https foran. Tegnsetting rett etter adressen («se nrk.no.») er ikke med.
+const ADRESSE_RE = /\bhttps?:\/\/[^\s<>"]+|\bwww\.[^\s<>"]+/gi;
+
+function finnAdresser(tekst) {
+  const ut = [];
+  String(tekst || '').replace(ADRESSE_RE, (treff, pos) => {
+    let a = treff;
+    // Tegnsetting på slutten, og en avsluttende parentes uten åpning
+    while (/[.,;:!?'»”]$/.test(a) || (a.endsWith(')') && (a.match(/\(/g) || []).length < (a.match(/\)/g) || []).length)) a = a.slice(0, -1);
+    const href = /^www\./i.test(a) ? 'https://' + a : a;
+    if (/^https?:\/\/[^/\s]+\.[^/\s]+/i.test(href)) ut.push({ pos, tekst: a, href });
+    return treff;
+  });
+  return ut;
+}
+
+function byggLenke(href, tekst) {
+  const a = document.createElement('a');
+  a.href = href; a.textContent = tekst;
+  a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.className = 'fritekst-lenke';
+  // Lenken sitter ofte inne i noe klikkbart (loggpost, gjøremål)
+  a.addEventListener('click', e => e.stopPropagation());
+  return a;
+}
+
+// Teksten som tekstnoder, med adressene som lenker
+function tekstMedLenker(tekst) {
+  const frag = document.createDocumentFragment();
+  const s = String(tekst || '');
+  let i = 0;
+  finnAdresser(s).forEach(({ pos, tekst: a, href }) => {
+    if (pos > i) frag.appendChild(document.createTextNode(s.slice(i, pos)));
+    frag.appendChild(byggLenke(href, a));
+    i = pos + a.length;
+  });
+  if (i < s.length) frag.appendChild(document.createTextNode(s.slice(i)));
+  return frag;
+}
+
+// «nrk.no/skole/…» — kort nok til å stå på én linje under feltet
+function kortAdresse(href) {
+  const u = href.replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
+  return u.length > 48 ? u.slice(0, 46) + '…' : u;
+}
+
+// Raden under et tekstfelt. Lages første gang den trengs, og oppdateres
+// når teksten endres. Tom og skjult når feltet ikke har adresser.
+function oppdaterLenkerad(felt) {
+  if (!felt) return;
+  let rad = felt.nextElementSibling;
+  if (!rad || !rad.classList.contains('lenkerad')) {
+    rad = document.createElement('div');
+    rad.className = 'lenkerad';
+    felt.insertAdjacentElement('afterend', rad);
+  }
+  rad.innerHTML = '';
+  const sett = new Set();
+  finnAdresser(felt.value).forEach(({ href }) => {
+    if (sett.has(href)) return;
+    sett.add(href);
+    const a = byggLenke(href, kortAdresse(href));
+    a.title = href;
+    rad.appendChild(a);
+  });
+  rad.style.display = sett.size ? '' : 'none';
+}
+function festLenkerad(felt) {
+  if (!felt || felt.dataset.lenkerad) return;
+  felt.dataset.lenkerad = '1';
+  felt.addEventListener('input', () => oppdaterLenkerad(felt));
+  oppdaterLenkerad(felt);
 }
 
 // ── Deltakelse øverst i elevloggen ──
@@ -2349,13 +2474,18 @@ function renderElevloggInnhold(studentId, container) {
       entry.innerHTML=`
         <div style="flex:1">
           <div style="display:flex;align-items:baseline;gap:8px">
-            <span class="logg-tema">${item.tema||'(uten tema)'}</span>
+            <span class="logg-tema"></span>
             ${planlagtHtml}${badgeHtml}
           </div>
-          ${item.notes?`<div class="logg-notes">${item.notes}</div>`:''}
-          ${item.studentNote?`<div class="logg-student-note"><strong>Notat:</strong> ${item.studentNote}</div>`:''}
+          ${item.notes?`<div class="logg-notes"></div>`:''}
+          ${item.studentNote?`<div class="logg-student-note"><strong>Notat:</strong> </div>`:''}
         </div>
         <span class="logg-date">${dateLabel}</span>`;
+      // Brukerens egen tekst settes som tekst, ikke markup — og adressene i
+      // den blir lenker (veikart 15)
+      entry.querySelector('.logg-tema').textContent = item.tema || '(uten tema)';
+      if (item.notes) entry.querySelector('.logg-notes').appendChild(tekstMedLenker(item.notes));
+      if (item.studentNote) entry.querySelector('.logg-student-note').appendChild(tekstMedLenker(item.studentNote));
       block.appendChild(entry);
     });
     container.appendChild(block);
@@ -3558,6 +3688,7 @@ function openTodoForm(editId) {
   document.getElementById('todoFormTitle').textContent = todo ? 'Rediger gjøremål' : 'Nytt gjøremål';
   document.getElementById('todoTittelInput').value = todo ? (todo.tittel||'') : '';
   document.getElementById('todoTextInput').value = todo ? (todo.tekst||'') : '';
+  oppdaterLenkerad(document.getElementById('todoTextInput'));
   document.getElementById('todoFristInput').value = todo ? (todo.frist||'') : '';
   document.getElementById('todoSaveBtn').textContent = todo ? 'Lagre endringer' : 'Lagre';
 
@@ -3589,13 +3720,32 @@ function openTodoForm(editId) {
   document.getElementById('todoFormOverlay').classList.add('open');
 }
 
+// Fristen for et gjøremål fra møteskjemaet: én uke etter møtet (veikart 6,
+// 21. okt 2026). Datoen hentes fra datofeltet i skjemaet, som for et
+// gjentakende møte alltid viser forekomsten man åpnet (moteDatoForSkjema).
+// Er feltet tomt, regnes uka fra i dag.
+const MOTE_FRIST_DAGER = 7;
+function moteTodoFrist() {
+  const felt = document.getElementById('moteDatoInput');
+  const v = felt && /^\d{4}-\d{2}-\d{2}$/.test(felt.value) ? felt.value : isoDate(TODAY);
+  const d = new Date(v + 'T00:00:00');
+  d.setDate(d.getDate() + MOTE_FRIST_DAGER);
+  return isoDate(d);
+}
+// «Frist: tir. 28. okt» ved knappen, så man ser hva man får
+function oppdaterMoteTodoFrist() {
+  const el = document.getElementById('moteTodoFrist');
+  if (!el) return;
+  const d = new Date(moteTodoFrist() + 'T00:00:00');
+  el.textContent = `Frist: ${DAYS_SHORT[ukedagIndeks(d)].toLowerCase()}. ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
+}
+
 function leggTilGjøremålFraMøte() {
   const tittel = document.getElementById('moteTodoTittel').value.trim();
   if (!tittel) return;
   // Hent elevId fra møte-dropdown og dato fra det aktive event-objektet
   const elevId = parseStudentId(document.getElementById('moteElevSelect').value) || null;
-  const ev = editingEventId !== null ? events.find(e => e.id === editingEventId) : null;
-  const frist = (ev && ev.date) ? ev.date : isoDate(TODAY);
+  const frist = moteTodoFrist();
   todos.push({
     id: nextTodoId++,
     tittel,
@@ -3765,7 +3915,7 @@ function renderTodoList() {
     body.appendChild(textDiv);
     if(todo.tekst){
       const descDiv=document.createElement('div'); descDiv.className='todo-desc';
-      descDiv.textContent=todo.tekst;
+      descDiv.appendChild(tekstMedLenker(todo.tekst));
       body.appendChild(descDiv);
     }
 
@@ -4026,7 +4176,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 function exportData(medNavn = true) {
   const data = {
     events, todos, planfestetTid, overtid, lessonData, topicsBySubject,
-    fridager, skoleaar, fravaerFort,
+    fridager, skoleaar, fravaerFort, fagfarger: subjectColorMap,
     // Fritekst om eleven. Følger med i backup, også den anonyme —
     // advarselen i exportDataUtenNavn() sier fra om nettopp dette.
     elevNotater,
@@ -4077,6 +4227,7 @@ function importData() {
         if (data.elevNotater)     localStorage.setItem('lp_elevNotater',     JSON.stringify(data.elevNotater));
         if (data.varsler)         localStorage.setItem('lp_varsler',         JSON.stringify(data.varsler));
         if (data.vurderinger)     localStorage.setItem('lp_vurderinger',     JSON.stringify(data.vurderinger));
+        if (data.fagfarger)       localStorage.setItem('lp_fagfarger',       JSON.stringify(data.fagfarger));
 
         if (data.allStudents) {
           // Elevliste lagres alltid uten navn
@@ -4533,6 +4684,7 @@ function saveToStorage() {
     localStorage.setItem('lp_elevNotater',     JSON.stringify(elevNotater));
     localStorage.setItem('lp_varsler',         JSON.stringify(varsler));
     localStorage.setItem('lp_vurderinger',     JSON.stringify(vurderinger));
+    localStorage.setItem('lp_fagfarger',       JSON.stringify(subjectColorMap));
     // Bevisst utenfor SYNK_NOKLER — se kommentaren over papirkurv-modulen
     localStorage.setItem('lp_papirkurv',       JSON.stringify(papirkurv));
     // Når dataene sist ble rørt her. sync.js bruker den til å oppdage at
@@ -4551,6 +4703,15 @@ function saveToStorage() {
 
 function loadFromStorage() {
   try {
+    // Fagfargene. Bare gyldige indekser; resten deles ut på nytt.
+    Object.keys(subjectColorMap).forEach(k => delete subjectColorMap[k]);
+    const lagredeFarger = JSON.parse(localStorage.getItem('lp_fagfarger') || '{}');
+    if (lagredeFarger && typeof lagredeFarger === 'object') {
+      Object.entries(lagredeFarger).forEach(([fag, i]) => {
+        if (Number.isInteger(i) && i >= 0 && i < COLOR_POOL.length) subjectColorMap[fag] = i;
+      });
+    }
+
     const storedEvents = localStorage.getItem('lp_events');
     if (storedEvents) {
       events = JSON.parse(storedEvents);
@@ -4805,11 +4966,16 @@ function icsLokalTid(isoDato, klokke) {
 }
 
 // Tittel uten elevnavn. Enetimer identifiseres av faget, ikke eleven.
+// Trinnet står i tittelen (veikart 9, 21. okt 2026): Outlook viser bare
+// SUMMARY i uke- og månedsvisningen, så i beskrivelsen var det usynlig.
+// Ikke på enetimer — «Enetime · 8. trinn» snevrer inn hvem det gjelder.
 function icsTittel(ev) {
   if (ev.sessionType === 'enetime') {
     return ev.title ? `${ev.title} (enetime)` : 'Enetime';
   }
-  return ev.title || 'Undervisning';
+  const fag = ev.title || 'Undervisning';
+  const trinn = trinnTekst(getEventTrinns(ev));
+  return trinn ? `${fag} · ${trinn}` : fag;
 }
 
 function icsBeskrivelse(ev) {
@@ -5099,8 +5265,27 @@ window.addEventListener('resize', () => {
   }, 150);
 });
 
+// Rull kalenderen så nå-linja synes (veikart 28, 21. okt 2026). Bare ved
+// oppstart: rutenettet er 510 px, og på telefon ser man halvparten — åpnet
+// man appen klokka 13, sto formiddagen på skjermen. Nå-linja havner en
+// tredjedel ned, så det som nettopp var og det som kommer, synes begge.
+// Gjør ingenting utenfor skoledagen, eller når uka som vises ikke er denne.
+function rullTilNaa(naa) {
+  const rulle = document.querySelector('.calendar-scroll');
+  if (!rulle) return null;
+  if (!document.querySelector('#calGrid .now-line')) return null;
+  const n = naa || new Date();
+  const dec = n.getHours() + n.getMinutes() / 60;
+  if (dec < GRID_START_H || dec > GRID_END_H) return null;
+  const topp = Math.max(0, Math.round((dec - GRID_START_H) * PX_PER_HOUR - rulle.clientHeight / 3));
+  rulle.scrollTop = topp;
+  return topp;
+}
+
 // Init: last lagret data og tegn første visning
 loadFromStorage();
 if (maaSkrivesTilbake) saveToStorage();
 sisteSmal = erSmalSkjerm();
 render();
+rullTilNaa();
+['planNotes', 'todoTextInput'].forEach(id => festLenkerad(document.getElementById(id)));

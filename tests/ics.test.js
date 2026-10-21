@@ -208,10 +208,23 @@ test('lange linjer brytes etter standarden', () => {
   dom.window.close();
 });
 
+test('trinnet står i tittelen, men ikke på enetimer (veikart 9)', () => {
+  const FLERE = { ...NORSK, id: 4, title: 'Kroppsøving', weekday: 3, trinns: [8, 9, 10] };
+  const dom = lagDom({ events: [NORSK, ENETIME, FLERE] }); const w = dom.window;
+  const s = summaries(w.byggICS().ics);
+  sant(s.includes('Norsk · 9. trinn'), 'ett trinn: ' + s.join(' | '));
+  sant(s.includes('Kroppsøving · 8.–10. trinn'), 'flere trinn: ' + s.join(' | '));
+  sant(s.includes('Matematikk (enetime)'), 'enetimen uten trinn');
+  sant(!s.some(t => /enetime.*trinn/.test(t)), 'trinn på enetime');
+  const UTEN = { ...NORSK, trinns: [], trinn: null };
+  like(summaries(lagDom({ events: [UTEN] }).window.byggICS().ics)[0], 'Norsk', 'uten trinn er tittelen bare faget');
+  dom.window.close();
+});
+
 test('nedlastet fil får søkbart merke «LP» bakerst i tittelen', () => {
   const dom = lagDom({ events: [NORSK, ENETIME] }); const w = dom.window;
   const s = summaries(w.byggICS({ merke: 'LP' }).ics);
-  sant(s.includes('Norsk · LP'), 'vanlig time: ' + s[0]);
+  sant(s.includes('Norsk · 9. trinn · LP'), 'vanlig time: ' + s[0]);
   sant(s.includes('Matematikk (enetime) · LP'), 'enetime');
   sant(s.every(t => t.endsWith(' · LP')), 'alle titler skal ha merket');
   dom.window.close();
@@ -223,7 +236,7 @@ test('nedlastingsknappen sender med merket, abonnementet gjør det ikke', () => 
   sant(sync.includes('bygg:      () => byggICS()'), 'abonnementet skal være uten merke');
   const dom = lagDom({ events: [NORSK] });
   const s = summaries(dom.window.byggICS().ics);
-  sant(s.every(t => t === 'Norsk'), 'uten merke skal tittelen være uendret: ' + s[0]);
+  sant(s.every(t => t === 'Norsk · 9. trinn'), 'uten merke skal tittelen bare ha trinnet: ' + s[0]);
   dom.window.close();
 });
 
