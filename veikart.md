@@ -23,14 +23,15 @@ i én økt.
 | 3 | ~~6. Frist én uke etter møtet, med fristen vist~~ ✅ 21. okt | ~15 min |
 | 4 | ~~11. Fagfarger, variant A + lagret fargekart~~ ✅ 21. okt (farge per gruppe står åpent) | ~1 time |
 | 5 | ~~15. Klikkbare adresser i fritekst~~ ✅ 21. okt | ~1 time |
-| 6 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
-| 7 | 27. Temaoversikt per fag | En kveld |
-| 8 | 3. «Utgått» og «ingen møtte» | En kveld |
-| 9 | 10. Månedlige møter | En kveld |
-| 10 | 23. Steg på gjøremål | En kveld |
-| 11 | 22. Ekte hover-kort (utprøving) | En kveld |
-| 12 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
-| 13 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
+| 6 | ~~29. Statistikk over undervisningstimer~~ ✅ 2. nov (lagt inn utenom tur) | En økt |
+| 7 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
+| 8 | 27. Temaoversikt per fag | En kveld |
+| 9 | 3. «Utgått» og «ingen møtte» | En kveld |
+| 10 | 10. Månedlige møter | En kveld |
+| 11 | 23. Steg på gjøremål | En kveld |
+| 12 | 22. Ekte hover-kort (utprøving) | En kveld |
+| 13 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
+| 14 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
 
 Ferdige poster er merket ✅. Forkastede ligger samlet under «Forkastet»
 nederst.
@@ -90,8 +91,10 @@ skjermene overens, og hele poenget faller.
 **Idéen:** Kunne markere at en time ikke ble gjennomført uten å slette den
 — og se i kalenderen når en time står uten elever.
 
-**Status:** Ønsket. Tellingen av undervisningstimer, som er den egentlige
-motivasjonen bak statusene, er utsatt — men de er nyttige i seg selv.
+**Status:** Ønsket. Tellingen av undervisningstimer er bygget som egen
+post (29, 2. november 2026) og teller allerede «ingen møtte» og «uten
+elever». Det som gjenstår her er **«utgått»** — statusen som må lagres
+på timen, og som statistikken venter på som fjerde kategori.
 
 **Avklart i gjennomgangen 20. oktober 2026:** Beholdes. Begge tilstandene, «utgått» og «ingen møtte», tas med.
 
@@ -143,11 +146,11 @@ får neppe et ikon til plass.
 
 ### Sammenheng
 
-Statusene er forutsetningen for å gjøre noe med `calcSFS()`, som i dag er
-død kode: funksjonen kalles ikke fra noe sted og returnerer hardkodede
-tall (`year: 412`, `teach: 186`). Enten bygges den på ekte data — der
-disse statusene inngår — eller så bør den slettes, slik at den ikke lurer
-den som leser koden senere.
+`calcSFS()` er slettet (2. november 2026). Tellingen bor nå i
+`tellUndervisningstimer()` (post 29). Når «utgått» bygges, skal
+`skoletimeKategorier()` sjekke den **først** — en utgått time kan ha både elevliste
+og oppmøte, og skal ikke telles som «med elever». Fargen er holdt av:
+rødt (`--fare`) er ikke brukt i statistikken.
 
 ### Fortsatt åpent
 
@@ -1506,6 +1509,68 @@ andre varianten av «søk i notater» (funksjonsplanen § 7).
 **Status:** Ønsket. Hentet inn fra «Vurdert og lagt bort» i
 gjennomgangen 20. oktober 2026. Én linje som ruller `.calendar-scroll`
 til nå-linja ved oppstart.
+
+---
+
+## 29. Statistikk over undervisningstimer ✅
+
+**Idéen:** Se hvor mange skoletimer med undervisning som har stått på
+planen, og hvor mange av dem som hadde elever, hvor mange som skulle hatt
+elever men der ingen møtte, og hvor mange som står uten elevliste.
+
+**Status: gjennomført 2. november 2026.** Seksjonen «Undervisningstimer»
+på Min side, rett etter «Varsler». Erstatter `calcSFS()`, som er slettet.
+`tests/undervisningsokter.test.js` dekker tellingen og visningen, og er
+verifisert ved å bryte reglene under med vilje.
+
+Første utgave samme dag talte **økter** (en dobbelttime = én). Det ble
+endret til skoletimer etter at Nikolai presiserte hva han mente. Filnavnet
+på testen er fra første utgave.
+
+### Hva som ble bestemt
+
+- **Det telles skoletime for skoletime.** En dobbelttime er to, og hver
+  får sin egen kategori. Skoletimene er dem `finnSkoletimer()` gir — samme
+  regel som oppmøtet. En undervisningstime helt utenfor timeplanen teller
+  som én.
+- **Bare kategorien undervisning.** Møter og vikartimer er ikke med —
+  heller ikke vikartimer merket «telles».
+- **Fram til nå.** I dag telles en skoletime når den er over. Ferier,
+  fridager og dager utenfor skoleåret faller bort via `eventsForDate()`.
+- **Bor på Min side**, og regnes bare ut når Min side åpnes
+  (`renderMinSide()` → `renderUndervisningStatistikk()`). Koster ingenting
+  i kalenderen.
+
+### Kategoriene — `skoletimeKategorier()`
+
+| Kategori | Regel |
+|----------|-------|
+| **Uten elever** | `eleverPaaTime()` er tom for den datoen |
+| **Ingen møtte** | Oppmøte er ført, og hver elev er borte i akkurat denne skoletimen |
+| **Med elever** | Resten — også timer der oppmøtet aldri ble åpnet |
+
+Elevene er dem som var på timen *den dagen* (`eleverPaaTime()`), ikke
+dagens liste. Oppmøtet leses indeks for indeks, slik boksene tegnes: er
+alle borte i første halvdel av en dobbelttime, blir det én «ingen møtte»
+og én «med elever».
+
+### Visningen
+
+- Periode: denne uka, terminen vi er i, eller skoleåret. Termin-knappen
+  vises bare når terminskillet er satt.
+- Fire tall (på planen og de tre kategoriene) og en stolpe med
+  fordelingen.
+- Per uke, når perioden er lengre enn én uke. Ferieuker står tomme.
+- Tabell per fag og trinn (`statLinjeNavn()`). Tall som ikke er 0 i
+  «ingen møtte» og «uten elever» er uthevet.
+- Liste over timer der ingen møtte, med skoletimen («1.–2. time») og
+  lenke til dagen i kalenderen.
+
+### Fortsatt åpent
+
+- **«Utgått»** venter på post 3. Se «Sammenheng» der.
+- **Fagfilter** ble skissert, men tabellen per fag gjør samme jobb. Tas
+  inn hvis det savnes.
 
 ---
 

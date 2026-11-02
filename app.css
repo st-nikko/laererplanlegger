@@ -570,6 +570,37 @@
     .elevvarsel-skjema .elevvarsel-knapp { flex: 0 0 auto; }
     .elevvarsel-hjelp { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
 
+    /* ── UNDERVISNINGSØKTER PÅ MIN SIDE (veikart post 29) ── */
+    /* Fargene følger betydningen ellers i appen: grønn = gikk som planlagt,
+       oker = verdt å se på, grå = lista mangler. Rødt er holdt av til
+       «utgått» (post 3). */
+    .stat-topp { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .stat-periode { display: inline-flex; }
+    /* order: på mobil får .view-toggle order: 1 (headeren), og da havnet
+       datoteksten foran knappene. */
+    .stat-periode-tekst { font-size: 12px; color: var(--text-secondary); order: 2; }
+    .stat-kort { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
+    .stat-boks { background: var(--surface); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+    .stat-etikett { font-size: 12px; color: var(--text-secondary); }
+    .stat-tall { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+    .stat-pst { font-size: 11px; color: var(--text-muted); }
+    .stat-prikk { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+    .stat-prikk.med,  .stat-del.med   { background: var(--suksess-kant); }
+    .stat-prikk.ingen, .stat-del.ingen { background: var(--overtid-kant); }
+    .stat-prikk.uten, .stat-del.uten  { background: var(--border-strong); }
+    .stat-stolpe { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--border-faint); margin-bottom: 18px; }
+    .stat-stolpe .stat-del { height: 100%; }
+    .stat-undertittel { font-size: 12px; font-weight: 600; color: var(--text-primary); margin: 0 0 8px; }
+    .stat-uker { display: flex; gap: 3px; align-items: stretch; height: 110px; margin-bottom: 18px; }
+    .stat-uke { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .stat-uke-stolpe { flex: 1; display: flex; flex-direction: column-reverse; border-radius: 2px; overflow: hidden; }
+    .stat-uke-stolpe .stat-del { width: 100%; }
+    .stat-uke-nr { font-size: 10px; color: var(--text-muted); text-align: center; height: 12px; line-height: 12px; }
+    .stat-tabell th:not(:first-child), .stat-tabell td:not(:first-child) { text-align: right; }
+    .stat-tabell td:not(:first-child) { white-space: nowrap; }
+    .stat-tabell th { vertical-align: bottom; }
+    .stat-tabell td.stat-merk { color: var(--overtid-deep); font-weight: 600; }
+
     /* ── VARSLER PÅ MIN SIDE ── */
     .varsel-nedtelling { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
     .varsel-nedtelling.naer { color: var(--overtid-deep); font-weight: 600; }

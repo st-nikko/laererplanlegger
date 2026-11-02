@@ -817,12 +817,6 @@ function eventHoverTekst(ev, dato) {
   return L.join('\n');
 }
 
-// SFS2213 (hidden from UI)
-function calcSFS() {
-  let weekH=0;
-  for(let i=0;i<5;i++){const d=new Date(currentWeekMonday);d.setDate(d.getDate()+i);const wt=getWorkTimeForDate(isoDate(d));if(wt&&wt.start){const e=wt.end?toDec(wt.end):toDec('15:30');weekH+=e-toDec(wt.start);}}
-  return { week:{hours:weekH,norm:37.5}, year:{hours:412,norm:843.75}, teach:{hours:186,norm:370.5} };
-}
 
 function parseStudentId(v) {
   // Returner tall hvis v er et heltall (seed-elever), ellers behold strengen (UUID)
@@ -4290,6 +4284,7 @@ function renderMinSide() {
   renderSkolerute();
   renderFravaerOversikt();
   renderVarselOversikt();
+  renderUndervisningStatistikk();
   renderPapirkurv();
   renderSynkKopiStatus();
   // Synk- og publiseringsstatus bor i sync.js, som kan mangle
@@ -4432,6 +4427,229 @@ function renderVarselOversikt() {
       gruppe.appendChild(knapp);
     });
     el.appendChild(gruppe);
+  });
+}
+
+// ── Undervisningstimer (veikart post 29) ──
+// Hvor mange skoletimer med undervisning som har stått på planen, og hva
+// som skjedde i dem. Erstatter calcSFS(), som returnerte oppdiktede tall
+// og ikke ble brukt.
+//
+// - **Det telles skoletime for skoletime** (Nikolai, 2. nov 2026). En
+//   dobbelttime er to, og hver av dem får sin egen kategori: er alle
+//   borte i første halvdel, er det én «ingen møtte» og én «med elever».
+//   Skoletimene er dem finnSkoletimer() gir — samme regel som oppmøtet.
+//   En undervisningstime helt utenfor timeplanen teller som én.
+// - **Bare kategorien undervisning.** Møter og vikartimer er ikke med,
+//   heller ikke vikartimer merket «telles».
+// - **Fram til nå.** I dag telles en skoletime når den er over. Fridager,
+//   ferier og dager utenfor skoleåret faller bort fordi eventsForDate()
+//   allerede holder dem utenfor.
+//
+// Tre kategorier i dag. «Utgått» (veikart post 3) blir den fjerde når
+// statusen finnes — den skal da trekkes ut FØR de andre, siden en utgått
+// time kan ha både elevliste og oppmøte.
+const TIME_KATEGORIER = [
+  { id: 'medElever',  tittel: 'Med elever',  klasse: 'med' },
+  { id: 'ingenMotte', tittel: 'Ingen møtte', klasse: 'ingen' },
+  { id: 'utenElever', tittel: 'Uten elever', klasse: 'uten' }
+];
+
+// Kategorien for hver skoletime hendelsen dekker denne datoen:
+// [{ periode, kategori }], én per skoletime.
+//
+// Elevene er dem som var på timen DEN dagen (eleverPaaTime), ikke dagens
+// liste — en elev lagt til i oktober gjør ikke en tom septembertime full.
+//
+// «Ingen møtte» krever at oppmøtet er ført og at hver elev er borte i
+// akkurat den skoletimen. attendance leses indeks for indeks, slik
+// renderAttendanceList() tegner boksene: alt som ikke er `false` er til
+// stede. En time der oppmøtet aldri ble åpnet er derfor «med elever».
+function skoletimeKategorier(ev, dateStr) {
+  const timer = finnSkoletimer(ev);
+  const perioder = timer.length ? timer : [{ n: null, start: ev.start, end: ev.end }];
+  const ld = getLesson(ev.id, dateStr);
+  const elever = eleverPaaTime(ev, dateStr, ld);
+  return perioder.map((periode, i) => {
+    let kategori;
+    if (!elever.length) kategori = 'utenElever';
+    else if (!ld || !ld.attendance) kategori = 'medElever';
+    else {
+      const noenMotte = elever.some(id => {
+        const raw = ld.attendance[id] ?? ld.attendance[String(id)];
+        return raw !== false && !(Array.isArray(raw) && raw[i] === false);
+      });
+      kategori = noenMotte ? 'medElever' : 'ingenMotte';
+    }
+    return { periode, kategori };
+  });
+}
+
+// Fag og trinn, som én linje i tabellen: «Matematikk · 9. trinn». Grupper
+// har ikke navn (post 26), og trinnet er det som skiller dem i praksis.
+function statLinjeNavn(ev) {
+  if (ev.sessionType === 'enetime') return `${ev.title} · enetime`;
+  const t = trinnTekst(getEventTrinns(ev));
+  return t ? `${ev.title} · ${t}` : ev.title;
+}
+
+// Periodene som kan velges. 'termin' faller bort når terminskillet ikke
+// er satt — da er terminen og skoleåret det samme.
+let statistikkPeriode = 'termin';
+
+function statistikkPerioder() {
+  const nr = terminFor(isoDate(TODAY));
+  const p = [{ id: 'uke', tittel: 'Denne uka' }];
+  if (nr) p.push({ id: 'termin', tittel: `${nr}. termin` });
+  p.push({ id: 'aar', tittel: 'Skoleåret' });
+  return p;
+}
+
+function statistikkGrenser(periode) {
+  const iDag = isoDate(TODAY);
+  let start, slutt;
+  if (periode === 'uke') {
+    start = isoDate(getMonday(TODAY)); slutt = iDag;
+  } else if (periode === 'termin' && terminFor(iDag)) {
+    ({ start, slutt } = terminGrenser(terminFor(iDag)));
+  } else {
+    start = skoleaar.start; slutt = skoleaar.slutt;
+  }
+  if (slutt > iDag) slutt = iDag;
+  return { start, slutt };
+}
+
+// Selve tellingen. `naa` er klokka som avgjør om en av dagens skoletimer
+// er over, og kan settes i tester.
+function tellUndervisningstimer(start, slutt, naa) {
+  naa = naa || new Date();
+  const iDag = isoDate(TODAY);
+  const klokke = naa.getHours() + naa.getMinutes() / 60;
+  const tom = () => ({ total: 0, medElever: 0, ingenMotte: 0, utenElever: 0 });
+  const sum = tom();
+  const perUke = [];         // [{ mandag, uke, ...tom() }] i rekkefølge
+  const perLinje = new Map();
+  const ingenMotte = [];     // [{ dato, ev, timer }] — til lista under tabellen
+  if (!start || !slutt || start > slutt) return { ...sum, perUke, perLinje: [], ingenMotteListe: ingenMotte };
+
+  const d = new Date(start + 'T00:00:00');
+  const stopp = new Date(slutt + 'T00:00:00');
+  let uke = null;
+  while (d <= stopp) {
+    const key = isoDate(d);
+    if (key > iDag) break;   // framtiden har ingen timer ennå
+    const mandag = isoDate(getMonday(d));
+    if (!uke || uke.mandag !== mandag) {
+      uke = { mandag, uke: weekNumber(d), ...tom() };
+      perUke.push(uke);
+    }
+    eventsForDate(d).forEach(ev => {
+      if (ev.category !== 'undervisning') return;
+      const navn = statLinjeNavn(ev);
+      const borte = [];
+      skoletimeKategorier(ev, key).forEach(({ periode, kategori }) => {
+        if (key === iDag && !(toDec(periode.end) <= klokke)) return;
+        if (!perLinje.has(navn)) perLinje.set(navn, { navn, fag: ev.title, ...tom() });
+        [sum, uke, perLinje.get(navn)].forEach(x => { x.total++; x[kategori]++; });
+        if (kategori === 'ingenMotte') borte.push(periode);
+      });
+      if (borte.length) ingenMotte.push({ dato: key, ev, timer: borte });
+    });
+    d.setDate(d.getDate() + 1);
+  }
+  const linjer = [...perLinje.values()]
+    .sort((a, b) => a.fag.localeCompare(b.fag, 'nb') || a.navn.localeCompare(b.navn, 'nb'));
+  return { ...sum, perUke, perLinje: linjer, ingenMotteListe: ingenMotte.reverse() };
+}
+
+function velgStatistikkPeriode(p) {
+  statistikkPeriode = p;
+  renderUndervisningStatistikk();
+}
+
+function renderUndervisningStatistikk() {
+  const el = document.getElementById('undervisningStatistikk');
+  if (!el) return;
+
+  const perioder = statistikkPerioder();
+  if (!perioder.some(p => p.id === statistikkPeriode)) statistikkPeriode = 'aar';
+  const { start, slutt } = statistikkGrenser(statistikkPeriode);
+  const t = tellUndervisningstimer(start, slutt);
+
+  const datoKort = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`; };
+  const pst = n => t.total ? Math.round(n / t.total * 100) : 0;
+  // Fagnavn er fritekst og havner i innerHTML
+  const vask = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const knapper = perioder.map(p =>
+    `<button class="view-btn${p.id === statistikkPeriode ? ' active' : ''}" data-stat-periode="${p.id}">${p.tittel}</button>`
+  ).join('');
+  const periodeTekst = !(start && slutt && start <= slutt) ? ''
+    : start === slutt ? datoKort(start) : `${datoKort(start)} – ${datoKort(slutt)}`;
+
+  let html = `
+    <div class="stat-topp">
+      <div class="view-toggle stat-periode">${knapper}</div>
+      <span class="stat-periode-tekst">${periodeTekst}</span>
+    </div>`;
+
+  if (!t.total) {
+    el.innerHTML = html + '<div class="fravaer-tom">Ingen undervisningstimer i perioden ennå.</div>';
+    koblePeriodeKnapper(el);
+    return;
+  }
+
+  html += `<div class="stat-kort">
+    <div class="stat-boks"><span class="stat-etikett">På planen</span><span class="stat-tall">${t.total}</span></div>
+    ${TIME_KATEGORIER.map(k => `
+      <div class="stat-boks"><span class="stat-etikett"><span class="stat-prikk ${k.klasse}"></span>${k.tittel}</span>
+        <span class="stat-tall" data-stat="${k.id}">${t[k.id]}</span><span class="stat-pst">${pst(t[k.id])} %</span></div>`).join('')}
+  </div>`;
+
+  html += `<div class="stat-stolpe" aria-hidden="true">${TIME_KATEGORIER.map(k =>
+    t[k.id] ? `<div class="stat-del ${k.klasse}" style="width:${t[k.id] / t.total * 100}%"></div>` : ''
+  ).join('')}</div>`;
+
+  // Per uke — gir bare mening når perioden er mer enn én uke
+  if (t.perUke.length > 1) {
+    const maks = Math.max(...t.perUke.map(u => u.total), 1);
+    const glis = t.perUke.length > 14;   // vis hvert fjerde ukenummer
+    html += `<div class="stat-undertittel">Per uke</div><div class="stat-uker">${t.perUke.map((u, i) => {
+      const tittel = u.total
+        ? `Uke ${u.uke}: ${u.total} timer — ${u.medElever} med elever, ${u.ingenMotte} ingen møtte, ${u.utenElever} uten elever`
+        : `Uke ${u.uke}: ingen timer`;
+      const deler = TIME_KATEGORIER.map(k =>
+        u[k.id] ? `<div class="stat-del ${k.klasse}" style="height:${u[k.id] / maks * 100}%"></div>` : '').join('');
+      const etikett = (!glis || i % 4 === 0) ? u.uke : '';
+      return `<div class="stat-uke" title="${tittel}"><div class="stat-uke-stolpe">${deler}</div><span class="stat-uke-nr">${etikett}</span></div>`;
+    }).join('')}</div>`;
+  }
+
+  html += `<div class="stat-undertittel">Per fag og trinn</div>
+    <div class="rullbar-x"><table class="innst-tabell stat-tabell">
+      <thead><tr><th>Fag</th><th>Timer</th>${TIME_KATEGORIER.map(k => `<th>${k.tittel}</th>`).join('')}</tr></thead>
+      <tbody>${t.perLinje.map(l => `<tr><td>${vask(l.navn)}</td><td>${l.total}</td>${TIME_KATEGORIER.map(k =>
+        `<td class="${l[k.id] && k.id !== 'medElever' ? 'stat-merk' : ''}">${l[k.id]}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+
+  if (t.ingenMotteListe.length) {
+    html += `<div class="stat-undertittel">Timer der ingen møtte</div><div class="fravaer-mangler">${
+      t.ingenMotteListe.map(({ dato, ev, timer }) => {
+        const d = new Date(dato + 'T00:00:00');
+        const nr = timer.map(p => p.n).filter(Boolean);
+        const hvilke = !nr.length ? '' : nr.length === 1 ? ` · ${nr[0]}. time` : ` · ${nr[0]}.–${nr[nr.length - 1]}. time`;
+        return `<button class="fravaer-mangler-rad" data-stat-dato="${dato}" title="Åpne dagen i kalenderen">${DAYS_SHORT[ukedagIndeks(d)]} ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}${hvilke} · ${vask(statLinjeNavn(ev))}</button>`;
+      }).join('')}</div>`;
+  }
+
+  el.innerHTML = html;
+  koblePeriodeKnapper(el);
+  el.querySelectorAll('[data-stat-dato]').forEach(b => { b.onclick = () => goToDayView(b.dataset.statDato); });
+}
+
+function koblePeriodeKnapper(el) {
+  el.querySelectorAll('[data-stat-periode]').forEach(b => {
+    b.onclick = () => velgStatistikkPeriode(b.dataset.statPeriode);
   });
 }
 
