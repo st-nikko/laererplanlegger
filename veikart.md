@@ -1545,6 +1545,7 @@ på testen er fra første utgave.
 
 | Kategori | Regel |
 |----------|-------|
+| **Ekstralærer** | Timen er merket som ekstralærer — fast på hendelsen eller for den ene dagen. Sjekkes først |
 | **Uten elever** | `eleverPaaTime()` er tom for den datoen |
 | **Ingen møtte** | Oppmøte er ført, og hver elev er borte i akkurat denne skoletimen |
 | **Med elever** | Resten — også timer der oppmøtet aldri ble åpnet |
@@ -1554,11 +1555,34 @@ dagens liste. Oppmøtet leses indeks for indeks, slik boksene tegnes: er
 alle borte i første halvdel av en dobbelttime, blir det én «ingen møtte»
 og én «med elever».
 
+### Ekstralærer (lagt til 3. november 2026)
+
+Timer der du underviser uten å ha hovedansvaret for det pedagogiske. Uten
+dette havnet de under «uten elever» eller «ingen møtte», selv om du hadde
+undervisning. To veier inn:
+
+- **Fast:** haken «Jeg er ekstralærer i denne timen» i timeskjemaet, under
+  Økttype. Lagres som `ev.ekstralaerer`. Timen får «ekstralærer» i
+  undertittelen, hover og Outlook-beskrivelsen, og ikke ikonet for timer
+  uten elever. Flagget forsvinner hvis timen gjøres om til møte eller
+  vikar, som `tellSomUndervisning`.
+- **Én dag:** haken «Denne dagen var jeg ekstralærer i en annen gruppe i
+  stedet» nederst i timemodalen. Lagres som `ekstralaerer: true` på
+  timeposten i `lessonData`, og bare når den er på. Skjules når timen
+  allerede er fast ekstralærer.
+
+Gjelder hele timen, ikke enkeltskoletimer. Går foran elevliste og
+oppmøte. Fargen er lyng (`--lyng-kant`). `tests/ekstralaerer.test.js`.
+
+**Merk:** dagshaken endrer ikke elevenes deltakelse. Lagres timemodalen
+med alle krysset av som til stede, teller timen fortsatt som deltatt for
+elevene, som før.
+
 ### Visningen
 
 - Periode: denne uka, terminen vi er i, eller skoleåret. Termin-knappen
   vises bare når terminskillet er satt.
-- Fire tall (på planen og de tre kategoriene) og en stolpe med
+- Fem tall (på planen og de fire kategoriene) og en stolpe med
   fordelingen.
 - Per uke, når perioden er lengre enn én uke. Ferieuker står tomme.
 - Tabell per fag og trinn (`statLinjeNavn()`). Tall som ikke er 0 i

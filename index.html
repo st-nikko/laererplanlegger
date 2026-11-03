@@ -243,9 +243,10 @@
     <p class="minside-hjelpetekst">
       Hvor mange skoletimer med undervisning som har stått på planen, fram
       til nå. Det telles skoletime for skoletime, så en dobbelttime er to.
-      Møter og vikartimer er ikke med. <b>Uten elever</b> betyr at timen ikke
-      har noen elevliste. <b>Ingen møtte</b> betyr at alle elevene på lista er
-      ført som borte i den skoletimen.
+      Møter og vikartimer er ikke med. <b>Ekstralærer</b> er timer der du er
+      merket som ekstralærer, fast på timen eller for én dag. <b>Uten
+      elever</b> betyr at timen ikke har noen elevliste. <b>Ingen møtte</b>
+      betyr at alle elevene på lista er ført som borte i den skoletimen.
     </p>
     <div id="undervisningStatistikk"></div>
   </div>
@@ -575,6 +576,10 @@
         <div class="info-note" id="parallellNote" style="display:none">
           ↔ Eleven(e) trekkes ut fra ordinær undervisning og har time med deg i stedet.
         </div>
+        <label class="checkbox-row" title="Telles som «Ekstralærer» i statistikken på Min side, ikke som «uten elever»">
+          <input type="checkbox" id="ekstralaererInput">
+          Jeg er ekstralærer i denne timen (ikke hovedansvar for det pedagogiske)
+        </label>
       </div>
 
       <!-- Møte -->
@@ -778,6 +783,13 @@
           <button class="select-all-btn" onclick="toggleAllAttendance()">Alle til stede / ingen</button>
         </div>
         <div class="student-list" id="attendanceList"></div>
+      </div>
+      <div class="divider" id="planEkstralaererSkille"></div>
+      <div class="form-section" id="planEkstralaererSeksjon">
+        <label class="checkbox-row">
+          <input type="checkbox" id="planEkstralaererInput">
+          Denne dagen var jeg ekstralærer i en annen gruppe i stedet
+        </label>
       </div>
     </div>
 

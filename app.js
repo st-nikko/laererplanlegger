@@ -642,7 +642,7 @@ function eventsForDate(date) {
 // framfor å laste hele biblioteket: det virker uten nett og koster ingen
 // nedlasting. Lisens: CC BY 4.0, https://fontawesome.com/license/free
 function erUtenElever(ev) {
-  return ev.category === 'undervisning' && !(ev.students || []).length;
+  return ev.category === 'undervisning' && !ev.ekstralaerer && !(ev.students || []).length;
 }
 const IKON_UTEN_ELEVER =
   '<span class="ikon-uten-elever" title="Ingen elever registrert" aria-label="Ingen elever registrert" role="img">'
@@ -709,6 +709,7 @@ function eventSubLabel(ev) {
   // står det ingen steder på blokka.
   if (ev.sessionType === 'enetime')   return `${ev.title} · enetime${room} · ${ev.start}–${ev.end}`;
   if (ev.sessionType === 'parallell') return `${trinnStr} (parallell)${room} · ${ev.start}–${ev.end}`;
+  if (ev.ekstralaerer) return `${trinnStr} · ekstralærer${room} · ${ev.start}–${ev.end}`;
   return `${trinnStr}${room} · ${ev.start}–${ev.end}`;
 }
 
@@ -795,6 +796,8 @@ function eventHoverTekst(ev, dato) {
   if (ev.sessionType === 'parallell') L.push('Parallell time');
 
   const ld = getLesson(ev.id, isoDate(dato));
+  if (ev.ekstralaerer)            L.push('Ekstralærer');
+  else if (ld && ld.ekstralaerer) L.push('Ekstralærer i en annen gruppe denne dagen');
 
   if (ld && ld.tema)  L.push('', 'Tema: ' + kapp(ld.tema, 80));
   if (ld && ld.notes) L.push('', ...bryt(kapp(ld.notes, HOVER_NOTAT_MAKS)));
@@ -1583,6 +1586,7 @@ function openEventForm(ev, forslag, klikketDato) {
     });
     document.getElementById('romInput').value    = ev ? ev.room||'' : '';
     setSessionType(ev ? (ev.sessionType||'gruppe') : 'gruppe');
+    document.getElementById('ekstralaererInput').checked = !!(ev && ev.ekstralaerer);
   } else if (cat === 'vikar') {
     document.getElementById('vikarNotesInput').value = ev ? ev.vikarNotes||'' : '';
     document.getElementById('vikarTellInput').checked = !!(ev && ev.tellSomUndervisning);
@@ -1765,6 +1769,9 @@ function saveEvent() {
   // undervisning eller møte, forsvinner flagget — ellers ville det ligget
   // igjen og telt dobbelt om timen senere ble vikar igjen.
   const tellSomUndervisning = formCategory==='vikar' && document.getElementById('vikarTellInput').checked;
+  // Ekstralærer: du er med i timen, men har ikke hovedansvaret (veikart
+  // 29). Bare undervisning — samme grunn som flagget over.
+  const ekstralaerer = formCategory==='undervisning' && document.getElementById('ekstralaererInput').checked;
   if(formCategory==='undervisning'){
     title=document.getElementById('fagInput').value.trim();
     trinns_=getSelectedTrinns();
@@ -1807,11 +1814,11 @@ function saveEvent() {
       const m=mandagForUkeNaer(startWeek, ref);
       if(m) events[idx].gyldigFra=isoDate(m);
     }
-    if(idx!==-1){events[idx]={...events[idx],title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,students:studentIds,vikarNotes,elevId,tellSomUndervisning};}
+    if(idx!==-1){events[idx]={...events[idx],title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,students:studentIds,vikarNotes,elevId,tellSomUndervisning,ekstralaerer};}
     savedId=editingEventId;
   } else {
     savedId=nextId++;
-    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,tellSomUndervisning,gyldigFra:gyldigFraForNy({recurs,date,startWeek,moteDato},visningensMandag()),gyldigTil:null});
+    events.push({id:savedId,recurs,weekday:recurs?weekday:undefined,date:recurs?undefined:date,title,trinn,trinns:trinns_,room,category,sessionType,start,end,startWeek,weekPattern,students:studentIds,vikarNotes,elevId,tellSomUndervisning,ekstralaerer,gyldigFra:gyldigFraForNy({recurs,date,startWeek,moteDato},visningensMandag()),gyldigTil:null});
   }
 
   if(category==='undervisning') getSubjectColor(title);
@@ -1918,6 +1925,13 @@ function openLessonPlan(ev, date) {
   // Populate attendance
   renderAttendanceList(ev, ld.attendance || {}, ld.studentNotes || {});
 
+  // Ekstralærer denne dagen. Er hele timen allerede ekstralærer, er haken
+  // overflødig og skjules.
+  const fastEkstra = !!ev.ekstralaerer;
+  document.getElementById('planEkstralaererSeksjon').style.display = fastEkstra ? 'none' : '';
+  document.getElementById('planEkstralaererSkille').style.display  = fastEkstra ? 'none' : '';
+  document.getElementById('planEkstralaererInput').checked = !fastEkstra && !!ld.ekstralaerer;
+
   document.getElementById('planOverlay').classList.add('open');
 }
 
@@ -2012,7 +2026,11 @@ function saveLessonPlan() {
     if(inp.value.trim()) studentNotes_[parseStudentId(inp.dataset.sid)]=inp.value.trim();
   });
   // `lagret`: oppmøte ført før timen er bare et utgangspunkt — se eleverPaaTime()
-  setLesson(planEventId, planDateStr, { tema, notes, attendance, studentNotes: studentNotes_, lagret: isoDate(TODAY) });
+  const ld_ = { tema, notes, attendance, studentNotes: studentNotes_, lagret: isoDate(TODAY) };
+  // Lagres bare når den er på, så postene ikke vokser med et felt som
+  // nesten alltid er false.
+  if (document.getElementById('planEkstralaererInput').checked) ld_.ekstralaerer = true;
+  setLesson(planEventId, planDateStr, ld_);
   const ev=events.find(e=>e.id===planEventId);
   if(ev&&tema) addTopic(ev.title, tema);
   saveToStorage();
@@ -4446,11 +4464,18 @@ function renderVarselOversikt() {
 //   ferier og dager utenfor skoleåret faller bort fordi eventsForDate()
 //   allerede holder dem utenfor.
 //
-// Tre kategorier i dag. «Utgått» (veikart post 3) blir den fjerde når
-// statusen finnes — den skal da trekkes ut FØR de andre, siden en utgått
-// time kan ha både elevliste og oppmøte.
+// «Ekstralærer» (3. nov 2026) trekkes ut FØR de andre: timen har du hatt
+// undervisning i, men uten hovedansvaret for det pedagogiske. To veier
+// dit — fast på hendelsen (`ev.ekstralaerer`), eller for én dag på
+// timeposten (`lessonData[…].ekstralaerer`), når du ble satt inn i en
+// annen gruppe i stedet for din egen time. Det gjelder hele timen, ikke
+// enkelte skoletimer.
+//
+// «Utgått» (veikart post 3) blir neste kategori når statusen finnes, og
+// skal også sjekkes før elevlista og oppmøtet.
 const TIME_KATEGORIER = [
   { id: 'medElever',  tittel: 'Med elever',  klasse: 'med' },
+  { id: 'ekstralaerer', tittel: 'Ekstralærer', klasse: 'ekstra' },
   { id: 'ingenMotte', tittel: 'Ingen møtte', klasse: 'ingen' },
   { id: 'utenElever', tittel: 'Uten elever', klasse: 'uten' }
 ];
@@ -4470,9 +4495,11 @@ function skoletimeKategorier(ev, dateStr) {
   const perioder = timer.length ? timer : [{ n: null, start: ev.start, end: ev.end }];
   const ld = getLesson(ev.id, dateStr);
   const elever = eleverPaaTime(ev, dateStr, ld);
+  const ekstra = !!ev.ekstralaerer || !!(ld && ld.ekstralaerer);
   return perioder.map((periode, i) => {
     let kategori;
-    if (!elever.length) kategori = 'utenElever';
+    if (ekstra) kategori = 'ekstralaerer';
+    else if (!elever.length) kategori = 'utenElever';
     else if (!ld || !ld.attendance) kategori = 'medElever';
     else {
       const noenMotte = elever.some(id => {
@@ -4525,7 +4552,7 @@ function tellUndervisningstimer(start, slutt, naa) {
   naa = naa || new Date();
   const iDag = isoDate(TODAY);
   const klokke = naa.getHours() + naa.getMinutes() / 60;
-  const tom = () => ({ total: 0, medElever: 0, ingenMotte: 0, utenElever: 0 });
+  const tom = () => ({ total: 0, medElever: 0, ekstralaerer: 0, ingenMotte: 0, utenElever: 0 });
   const sum = tom();
   const perUke = [];         // [{ mandag, uke, ...tom() }] i rekkefølge
   const perLinje = new Map();
@@ -4616,7 +4643,7 @@ function renderUndervisningStatistikk() {
     const glis = t.perUke.length > 14;   // vis hvert fjerde ukenummer
     html += `<div class="stat-undertittel">Per uke</div><div class="stat-uker">${t.perUke.map((u, i) => {
       const tittel = u.total
-        ? `Uke ${u.uke}: ${u.total} timer — ${u.medElever} med elever, ${u.ingenMotte} ingen møtte, ${u.utenElever} uten elever`
+        ? `Uke ${u.uke}: ${u.total} timer — ${u.medElever} med elever, ${u.ekstralaerer} ekstralærer, ${u.ingenMotte} ingen møtte, ${u.utenElever} uten elever`
         : `Uke ${u.uke}: ingen timer`;
       const deler = TIME_KATEGORIER.map(k =>
         u[k.id] ? `<div class="stat-del ${k.klasse}" style="height:${u[k.id] / maks * 100}%"></div>` : '').join('');
@@ -4629,7 +4656,7 @@ function renderUndervisningStatistikk() {
     <div class="rullbar-x"><table class="innst-tabell stat-tabell">
       <thead><tr><th>Fag</th><th>Timer</th>${TIME_KATEGORIER.map(k => `<th>${k.tittel}</th>`).join('')}</tr></thead>
       <tbody>${t.perLinje.map(l => `<tr><td>${vask(l.navn)}</td><td>${l.total}</td>${TIME_KATEGORIER.map(k =>
-        `<td class="${l[k.id] && k.id !== 'medElever' ? 'stat-merk' : ''}">${l[k.id]}</td>`).join('')}</tr>`).join('')}
+        `<td class="${l[k.id] && (k.id === 'ingenMotte' || k.id === 'utenElever') ? 'stat-merk' : ''}">${l[k.id]}</td>`).join('')}</tr>`).join('')}
       </tbody></table></div>`;
 
   if (t.ingenMotteListe.length) {
@@ -5202,6 +5229,7 @@ function icsBeskrivelse(ev) {
   if (trinn.length) deler.push(trinn.map(t => t + '.').join(' + ') + ' trinn');
   if (ev.sessionType === 'parallell') deler.push('Parallell time');
   if (ev.sessionType === 'enetime')   deler.push('Enetime');
+  if (ev.ekstralaerer)                deler.push('Ekstralærer');
   return deler.join(' · ');
 }
 
