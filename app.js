@@ -497,6 +497,19 @@ let workModalDateKey = null;
 // ────────────────────────────────────────────
 // HELPERS
 // ────────────────────────────────────────────
+// Gjør tekst trygg å sette inn i en HTML-mal. ALT som kommer fra brukeren
+// eller fra lagrede data — navn, fag, titler, rom, merker, klokkeslett —
+// skal gjennom esc() når det havner i innerHTML, også i attributter
+// (value="…", data-…="…"). Uten den ødelegger et elevnavn med «<» eller
+// «&» visningen, og en importert eller synket fil kan kjøre kode på siden
+// der passfrasen og elevnavnene ligger. Bruk textContent der det går;
+// esc() er for malene som allerede finnes. tests/escaping.test.js vokter
+// dette.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 // Returnerer fridagen hvis dato faller innenfor fra–til, ellers null
 function erFridag(dato) {
   const key = isoDate(dato);
@@ -1167,13 +1180,13 @@ function renderDayHeaders() {
     let chip='';
     if(ot){
       const h=toDec(ot.end)-toDec(ot.start);
-      chip=`<div class="work-chip"><span class="work-dot overtime"></span>${ot.start} – ${ot.end} (${fmtHours(h)})<button class="reg-btn" style="margin-left:6px" onclick="openOvertidModal('${key}')">Endre</button></div>`;
+      chip=`<div class="work-chip"><span class="work-dot overtime"></span>${esc(ot.start)} – ${esc(ot.end)} (${fmtHours(h)})<button class="reg-btn" style="margin-left:6px" onclick="openOvertidModal('${key}')">Endre</button></div>`;
     } else {
       const pft=planfestetTid[dayIdx]||planfestetTid[0];
-      chip=`<div class="work-chip"><span class="work-dot planned"></span>${pft.start} – ${pft.end}<button class="reg-btn" style="margin-left:6px" onclick="openOvertidModal('${key}')">+ Overtid</button></div>`;
+      chip=`<div class="work-chip"><span class="work-dot planned"></span>${esc(pft.start)} – ${esc(pft.end)}<button class="reg-btn" style="margin-left:6px" onclick="openOvertidModal('${key}')">+ Overtid</button></div>`;
     }
     const frigagHeader = erFridag(d);
-    const frigagHeaderHtml = frigagHeader ? `<span class="fridag-label">${frigagHeader.tittel}</span>` : '';
+    const frigagHeaderHtml = frigagHeader ? `<span class="fridag-label">${esc(frigagHeader.tittel)}</span>` : '';
     // Datoen sto tidligere to ganger — «Man 10.» og et stort «10» under.
     // Nå bare én gang.
     el.innerHTML+=`<div class="day-header ${today?'today':''}"><span class="day-name">${DAYS_SHORT[dayIdx]} ${d.getDate()}.</span>${frigagHeaderHtml}${chip}</div>`;
@@ -1363,8 +1376,8 @@ function renderGrid() {
       const trinnKort = trinnKortEtikett(ev);
       const trinnLinje = !trinnKort ? ''
         : ev.sessionType === 'enetime'
-          ? `<div class="event-trinn-kort">${trinnKort}</div>`
-          : `<div class="event-trinn-kort">${trinnKort}. trinn</div>`;
+          ? `<div class="event-trinn-kort">${esc(trinnKort)}</div>`
+          : `<div class="event-trinn-kort">${esc(trinnKort)}. trinn</div>`;
       // Trinnmerket øverst til høyre (veikart 11, 21. okt 2026): på PC sto
       // trinnet bare i undertittelen, som lett blir kappet. Fargen er fagets;
       // merket er det som skiller 8. og 9. trinn. Skjult på mobil, der
@@ -1376,7 +1389,7 @@ function renderGrid() {
         block.style.setProperty('--trinn-merke-plass', (trinnMerke.length * 6 + 16) + 'px');
       }
       const trinnMerkeHtml = trinnMerke ? `<span class="event-trinn-merke">${trinnMerke}</span>` : '';
-      block.innerHTML=`${badge}${trinnMerkeHtml}<div class="event-title">${ikonUtenElever}${timePre}${eventDisplayLabel(ev)}</div>${trinnLinje}<div class="event-sub">${eventSubLabel(ev)}</div>`;
+      block.innerHTML=`${badge}${trinnMerkeHtml}<div class="event-title">${ikonUtenElever}${timePre}${esc(eventDisplayLabel(ev))}</div>${trinnLinje}<div class="event-sub">${esc(eventSubLabel(ev))}</div>`;
 
       // Hva timen inneholder, som nettleserens egen tooltip. Settes som
       // attributt framfor å bygges inn i markupen: teksten er ren tekst og
@@ -1435,7 +1448,7 @@ function renderLegend() {
       seen.add(ev.title);
       const c=getSubjectColor(ev.title);
       const item=document.createElement('div'); item.className='legend-item';
-      item.innerHTML=`<div class="legend-swatch" style="background:${c.border}"></div>${ev.title}`;
+      item.innerHTML=`<div class="legend-swatch" style="background:${c.border}"></div>${esc(ev.title)}`;
       el.appendChild(item);
     }
   });
@@ -1510,7 +1523,7 @@ function calcPftSummary(inputs) {
     const mins = (em - sm) * 60;
     totalMin += mins > 0 ? mins : 0;
     const h = Math.floor(mins/60), m = Math.round(mins%60);
-    return `<span style="color:var(--text-primary);font-weight:500">${d}</span> ${s}–${e} (${h}t${m?(' '+m+'min'):''})`;
+    return `<span style="color:var(--text-primary);font-weight:500">${d}</span> ${esc(s)}–${esc(e)} (${h}t${m?(' '+m+'min'):''})`;
   });
   const th = Math.floor(totalMin/60), tm = Math.round(totalMin%60);
   return `<div style="display:flex;flex-direction:column;gap:4px;font-size:12px">${rows.map(r=>`<div>${r}</div>`).join('')}<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:600;color:var(--text-primary)">Total per uke: ${th}t ${tm}min</div></div>`;
@@ -1764,7 +1777,7 @@ function onTrinnChange() { renderStudentList(); }
 function updateFagDatalist() {
   const dl=document.getElementById('fagList');
   const subjects=[...new Set(events.filter(e=>e.category==='undervisning').map(e=>e.title))];
-  dl.innerHTML=subjects.map(s=>`<option value="${s}">`).join('');
+  dl.innerHTML=subjects.map(s=>`<option value="${esc(s)}">`).join('');
 }
 
 function renderStudentList() {
@@ -1780,7 +1793,7 @@ function renderStudentList() {
   students.forEach(s=>{
     const checked=selectedStudentIds.has(s.id);
     const item=document.createElement('label'); item.className='student-item';
-    item.innerHTML=`<input type="${isEnetime?'radio':'checkbox'}" name="studentPick" ${checked?'checked':''} data-id="${s.id}" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0"><span class="student-name">${s.navn}</span><span class="student-trinn">${s.trinn}. trinn</span>`;
+    item.innerHTML=`<input type="${isEnetime?'radio':'checkbox'}" name="studentPick" ${checked?'checked':''} data-id="${esc(s.id)}" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0"><span class="student-name">${esc(s.navn)}</span><span class="student-trinn">${esc(s.trinn)}. trinn</span>`;
     item.querySelector('input').addEventListener('change',e=>{
       if(isEnetime){selectedStudentIds.clear();if(e.target.checked)selectedStudentIds.add(s.id);}
       else{if(e.target.checked)selectedStudentIds.add(s.id);else selectedStudentIds.delete(s.id);}
@@ -1987,7 +2000,7 @@ function openLessonPlan(ev, date) {
 
   // Populate tema
   const topics = getTopicsForSubject(ev.title);
-  document.getElementById('temaList').innerHTML = topics.map(t=>`<option value="${t}">`).join('');
+  document.getElementById('temaList').innerHTML = topics.map(t=>`<option value="${esc(t)}">`).join('');
   document.getElementById('temaInput').value  = ld.tema  || '';
   document.getElementById('planNotes').value  = ld.notes || '';
   oppdaterLenkerad(document.getElementById('planNotes'));
@@ -2629,7 +2642,7 @@ function renderElevloggInnhold(studentId, container) {
   Object.entries(bySubject).forEach(([subject, items])=>{
     const c=getSubjectColor(subject);
     const block=document.createElement('div'); block.className='logg-subject-block';
-    block.innerHTML=`<div class="logg-subject-title"><span class="logg-subject-dot" style="background:${c.border}"></span>${subject}</div>`;
+    block.innerHTML=`<div class="logg-subject-title"><span class="logg-subject-dot" style="background:${c.border}"></span>${esc(subject)}</div>`;
     const fagTall=perFag[subject];
     if(fagTall&&fagTall.total){
       const pf=document.createElement('span'); pf.className='logg-fag-prosent';
@@ -3336,7 +3349,7 @@ let visArkiverte     = false; // Vis/skjul arkivert-seksjon
 // Lappen vises bare når eleven har et ekte navn. Mangler navnet, står det
 // «Elev 4f2a» allerede, og lappen ville blitt dobbel.
 function elevLappHtml(s) {
-  return s.navnMangler ? '' : ` <span class="elev-lapp" title="Elev-ID. Bruk denne til å finne igjen navnet fra en enhet som har det.">${elevLapp(s.id)}</span>`;
+  return s.navnMangler ? '' : ` <span class="elev-lapp" title="Elev-ID. Bruk denne til å finne igjen navnet fra en enhet som har det.">${esc(elevLapp(s.id))}</span>`;
 }
 
 function renderElevView() {
@@ -3397,19 +3410,19 @@ function renderElevView() {
     const pctClass = att.percent === null ? '' : att.percent < 80 ? 'att-low' : att.percent < 90 ? 'att-mid' : 'att-ok';
     const startStr = s.startDato || '—';
     html += `
-        <tr class="elev-table-row elev-hovud-rad" data-student-id="${s.id}">
-          <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span>${elevLappHtml(s)}</td>
-          <td>${s.trinn}. trinn</td>
-          <td>${startStr}</td>
+        <tr class="elev-table-row elev-hovud-rad" data-student-id="${esc(s.id)}">
+          <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${esc(s.navn)}</span>${elevLappHtml(s)}</td>
+          <td>${esc(s.trinn)}. trinn</td>
+          <td>${esc(startStr)}</td>
           <td class="${pctClass}">${pctStr} <span class="att-detail">(${att.present}/${att.total})</span>${senHtml}</td>
-          <td><button class="btn-small" data-action="logg" data-student-id="${s.id}">Elevlogg</button></td>
+          <td><button class="btn-small" data-action="logg" data-student-id="${esc(s.id)}">Elevlogg</button></td>
           <td>
-            <button class="btn-small" data-action="rediger" data-student-id="${s.id}">Rediger</button>
-            <button class="btn-small" data-action="arkiver" data-student-id="${s.id}">Arkiver</button>
-            <button class="btn-small btn-danger" data-action="slett" data-student-id="${s.id}">Slett</button>
+            <button class="btn-small" data-action="rediger" data-student-id="${esc(s.id)}">Rediger</button>
+            <button class="btn-small" data-action="arkiver" data-student-id="${esc(s.id)}">Arkiver</button>
+            <button class="btn-small btn-danger" data-action="slett" data-student-id="${esc(s.id)}">Slett</button>
           </td>
         </tr>
-        <tr class="elev-detalj-rad" data-student-id="${s.id}" style="display:none">
+        <tr class="elev-detalj-rad" data-student-id="${esc(s.id)}" style="display:none">
           <td colspan="6" class="elev-detalj-celle"></td>
         </tr>`;
   });
@@ -3439,12 +3452,12 @@ function renderElevView() {
       const datoStr = s.arkivertDato || '—';
       html += `
           <tr>
-            <td><span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span>${elevLappHtml(s)}</td>
-            <td>${s.trinn}. trinn</td>
-            <td>${datoStr}</td>
+            <td><span class="${s.navnMangler ? 'navn-mangler' : ''}">${esc(s.navn)}</span>${elevLappHtml(s)}</td>
+            <td>${esc(s.trinn)}. trinn</td>
+            <td>${esc(datoStr)}</td>
             <td>
-              <button class="btn-small" data-action="gjenaktiver" data-student-id="${s.id}">Gjenaktiver</button>
-              <button class="btn-small btn-danger" data-action="slett" data-student-id="${s.id}">Slett permanent</button>
+              <button class="btn-small" data-action="gjenaktiver" data-student-id="${esc(s.id)}">Gjenaktiver</button>
+              <button class="btn-small btn-danger" data-action="slett" data-student-id="${esc(s.id)}">Slett permanent</button>
             </td>
           </tr>`;
     });
@@ -3517,7 +3530,7 @@ function toggleElevDetalj(id) {
         const a = perFag[f];
         const cls = a.percent === null ? '' : a.percent < 80 ? 'att-low' : a.percent < 90 ? 'att-mid' : 'att-ok';
         const pct = a.percent !== null ? a.percent + '%' : '—';
-        inner += `<tr><td>${f}</td><td>${a.present}</td><td>${a.total}</td><td class="${cls}">${pct}</td></tr>`;
+        inner += `<tr><td>${esc(f)}</td><td>${a.present}</td><td>${a.total}</td><td class="${cls}">${pct}</td></tr>`;
       });
     }
     inner += `</tbody></table>`;
@@ -3787,7 +3800,7 @@ function renderMonthView() {
     cell.className = `month-cell${todayCls}${otherCls}${fridagCls}${utenforCls}`;
     cell.onclick = () => goToDayView(key);
     const frigagMonth = erFridag(cursor);
-    cell.innerHTML = `<span class="month-day-num">${cursor.getDate()}</span>${frigagMonth ? `<span class="fridag-label">${frigagMonth.tittel}</span>` : ''}`;
+    cell.innerHTML = `<span class="month-day-num">${cursor.getDate()}</span>${frigagMonth ? `<span class="fridag-label">${esc(frigagMonth.tittel)}</span>` : ''}`;
 
     const dayEvs = eventsForDate(cursor);
     let pillCount = 0;
@@ -3898,7 +3911,7 @@ function openTodoForm(editId) {
   // tilbudt framfor å måtte huske hvordan du skrev det sist.
   document.getElementById('todoMerkeInput').value = todo ? (todo.merke||'') : '';
   document.getElementById('todoMerkeListe').innerHTML =
-    alleMerker().map(m => `<option value="${m}">`).join('');
+    alleMerker().map(m => `<option value="${esc(m)}">`).join('');
 
   const fagSel = document.getElementById('todoFagSelect');
   const subjects = [...new Set(events.filter(e=>e.category==='undervisning').map(e=>e.title))];
@@ -4282,7 +4295,7 @@ function renderSkjulteGjøremål() {
     const rad = document.createElement('div'); rad.className = 'skjult-rad';
     rad.innerHTML = `
       <div class="skjult-rad-info">
-        <span class="skjult-rad-tittel">${t.tittel||t.text||''}</span>
+        <span class="skjult-rad-tittel">${esc(t.tittel||t.text||'')}</span>
         <span class="skjult-rad-meta">${type}${fristTekst}</span>
       </div>
       <div class="skjult-rad-handlinger">
@@ -4555,12 +4568,12 @@ function renderPapirkurv() {
     return `
       <div class="skjult-rad">
         <div class="skjult-rad-info">
-          <span class="skjult-rad-tittel">${PAPIRKURV_ETIKETT[p.type] || p.type}: ${p.tittel}</span>
-          <span class="skjult-rad-meta">${papirkurvDatoTekst(p.tidspunkt)}${besk ? ' · ' + besk : ''}</span>
+          <span class="skjult-rad-tittel">${esc(PAPIRKURV_ETIKETT[p.type] || p.type)}: ${esc(p.tittel)}</span>
+          <span class="skjult-rad-meta">${papirkurvDatoTekst(p.tidspunkt)}${besk ? ' · ' + esc(besk) : ''}</span>
         </div>
         <div class="skjult-rad-handlinger">
-          <button class="btn-small skjult-btn-gjenopprett" data-pk-gjenopprett="${p.id}">Gjenopprett</button>
-          <button class="btn-small btn-danger skjult-btn-slett" data-pk-slett="${p.id}">Fjern</button>
+          <button class="btn-small skjult-btn-gjenopprett" data-pk-gjenopprett="${esc(p.id)}">Gjenopprett</button>
+          <button class="btn-small btn-danger skjult-btn-slett" data-pk-slett="${esc(p.id)}">Fjern</button>
         </div>
       </div>`;
   }).join('') +
@@ -4795,7 +4808,7 @@ function renderUndervisningStatistikk() {
   const datoKort = s => { const d = new Date(s + 'T00:00:00'); return `${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`; };
   const pst = n => t.total ? Math.round(n / t.total * 100) : 0;
   // Fagnavn er fritekst og havner i innerHTML
-  const vask = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const vask = esc;
 
   const knapper = perioder.map(p =>
     `<button class="view-btn${p.id === statistikkPeriode ? ' active' : ''}" data-stat-periode="${p.id}">${p.tittel}</button>`
@@ -4902,13 +4915,13 @@ function renderSkolerute() {
     const til = f.til !== f.fra ? f.til.split('-').reverse().join('.') : '—';
     const redigeres = f.id === redigererFridagId;
     html += `<tr${redigeres ? ' class="rad-redigeres"' : ''}>
-      <td>${f.tittel}</td>
-      <td>${typeLabel[f.type] || f.type}</td>
-      <td>${fra}</td>
-      <td>${til}</td>
+      <td>${esc(f.tittel)}</td>
+      <td>${esc(typeLabel[f.type] || f.type)}</td>
+      <td>${esc(fra)}</td>
+      <td>${esc(til)}</td>
       <td style="white-space:nowrap">
-        <button class="btn-small" data-rediger-fridag="${f.id}">Rediger</button>
-        <button class="btn-icon-slett" data-fridag-id="${f.id}" title="Slett">×</button>
+        <button class="btn-small" data-rediger-fridag="${esc(f.id)}">Rediger</button>
+        <button class="btn-icon-slett" data-fridag-id="${esc(f.id)}" title="Slett">×</button>
       </td>
     </tr>`;
   });
@@ -5101,6 +5114,53 @@ function tomPapirkurv() {
   renderPapirkurv();
 }
 
+// ── Når lagringen svikter, og varig lagring ──
+// localStorage kan bli full, være blokkert (privat modus, innstillinger)
+// eller bli ryddet av nettleseren. Safari på iPhone sletter data for
+// nettsider som ikke er besøkt på sju dager, med mindre siden er lagt til
+// på hjemskjermen. Synken redder bare det som rakk å bli lastet opp.
+function visLagringsfeil(e) {
+  const boks = document.getElementById('lagringsVarsel');
+  if (!boks) return;
+  const full = e && (e.name === 'QuotaExceededError' || e.code === 22);
+  document.getElementById('lagringsVarselTekst').textContent =
+    (full ? 'Lagringen i nettleseren er full. ' : 'Nettleseren nekter å lagre. ')
+    + 'Det siste du gjorde er IKKE lagret på denne enheten. '
+    + 'Ta «Eksporter data» på Min side før du lukker fanen.';
+  boks.hidden = false;
+}
+function skjulLagringsfeil() {
+  const boks = document.getElementById('lagringsVarsel');
+  if (boks) boks.hidden = true;
+}
+
+// Ber nettleseren om ikke å rydde bort dataene når plassen blir knapp.
+// Chrome, Edge og Safari avgjør selv (oftere ja for installerte og mye
+// brukte sider); Firefox spør brukeren én gang og husker svaret. Status
+// vises under «Data» på Min side. Returnerer true/false, eller null der
+// nettleseren ikke har API-et.
+let lagringVarig = null;
+async function beOmVarigLagring() {
+  const s = navigator.storage;
+  if (!s || typeof s.persist !== 'function') { lagringVarig = null; visLagringStatus(); return null; }
+  try {
+    lagringVarig = (typeof s.persisted === 'function' && await s.persisted()) || await s.persist();
+  } catch (e) {
+    lagringVarig = false;
+  }
+  visLagringStatus();
+  return lagringVarig;
+}
+function visLagringStatus() {
+  const el = document.getElementById('lagringStatus');
+  if (!el) return;
+  el.textContent = lagringVarig === true
+    ? 'Lagringen er varig: nettleseren rydder ikke bort dataene her.'
+    : lagringVarig === false
+      ? 'Nettleseren kan rydde bort dataene her hvis plassen blir knapp. Synk eller jevnlig eksport er backupen. På iPhone: legg appen til på hjemskjermen.'
+      : '';
+}
+
 function saveToStorage() {
   try {
     localStorage.setItem('lp_events',          JSON.stringify(events));
@@ -5126,8 +5186,16 @@ function saveToStorage() {
     // det i det stille. Skrives sist, så den bare settes når resten gikk.
     localStorage.setItem('lp_sist_endret',     new Date().toISOString());
   } catch(e) {
+    // Full eller blokkert lagring. Før ble dette bare logget i konsollen,
+    // og man jobbet videre i tro om at alt ble lagret. Nå sies det fra.
     console.warn('Kunne ikke lagre til localStorage:', e);
+    visLagringsfeil(e);
+    // Ikke last opp: localStorage er nå halvveis skrevet, og sync.js leser
+    // derfra. Skykopien er siste hele tilstand — den skal ikke overskrives
+    // med en blanding.
+    return;
   }
+  skjulLagringsfeil();
 
   // Skyv endringene til skyen hvis synk er satt opp (sync.js).
   // Funksjonen finnes ikke hvis sync.js ikke er lastet — appen skal
@@ -5723,4 +5791,5 @@ if (maaSkrivesTilbake) saveToStorage();
 sisteSmal = erSmalSkjerm();
 render();
 rullTilNaa();
+beOmVarigLagring();
 ['planNotes', 'todoTextInput'].forEach(id => festLenkerad(document.getElementById(id)));

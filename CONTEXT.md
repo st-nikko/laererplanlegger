@@ -32,7 +32,8 @@ arbeidstid i ett grensesnitt. Brukes på PC og mobil, ofte mellom timer.
 
 | Fil | Innhold |
 |-----|---------|
-| `index.html` | All markup: header, visninger, alle modaler. Laster `app.js`, så Supabase som ESM-modul, så `sync.js` |
+| `index.html` | All markup: header, visninger, alle modaler. Laster `app.js`, så Supabase som ESM-modul fra `vendor/`, så `sync.js` |
+| `vendor/` | Supabase-klienten med fast versjon og sjekksum. **Aldri skript fra CDN** — se `vendor/README.md` |
 | `app.js` | All appkode, global scope. Seksjoner under |
 | `sync.js` | Kryptert synk og ICS-publisering. Seksjoner under |
 | `app.css` | All CSS. Farger kun som variabler i `:root` |
@@ -108,9 +109,13 @@ overskrift.
   (`icsTittel()`) (`ics`, `gjoeremaal` — «ELEVNAVN KOMMER ALDRI MED»).
 - `elevLapp()` er eneste kilde til de fire tegnene som vises uten navn
   (`pseudonymisering`).
-- Brukertekst settes som `textContent` eller attributt, aldri i
-  `innerHTML` (`hover`). **Kjent hull:** flere eldre `innerHTML`-maler
-  setter inn navn og titler uten escaping.
+- Brukertekst settes med `textContent`. Der en mal med `innerHTML`
+  trengs, går alt fra brukeren eller lagrede data gjennom `esc()` — også
+  i attributter som `value="…"` og `data-…="…"`. Escape der teksten
+  settes inn, ikke i hjelperne: `eventDisplayLabel()` m.fl. brukes også
+  til `title` og ICS (`escaping`, `hover`).
+- Ingen skript fra andre adresser. Tredjepartskode ligger i `vendor/` med
+  fast versjon og sjekksum (`escaping`).
 
 **Synk** — les «Synken kan spise data» i `DETALJER.md` før du rører `sync.js`
 - Siste skriver vinner, på hele blokka. Ingen sammenslåing.
@@ -118,6 +123,14 @@ overskrift.
   en evig push-løkke (`synk`).
 - Push krever at enheten har pullet (`lp_sync_pullet`). Pull stopper hvis
   `lp_sist_endret` viser ulagrede lokale endringer (`synk`).
+
+**Lagring**
+- Feiler `saveToStorage()`, vises `#lagringsVarsel` øverst, og
+  ingenting lastes opp — localStorage er da halvveis skrevet, og
+  skykopien skal ikke overskrives med en blanding. Varselet forsvinner
+  ved neste vellykkede lagring (`lagring`).
+- `beOmVarigLagring()` ber om varig lagring ved oppstart. Svaret står
+  under «Data» på Min side (`lagring`).
 
 **Tid og dato**
 - Les aldri dagens dato inn i en variabel ved oppstart. Bruk `TODAY`, som
@@ -181,16 +194,19 @@ Palett, typografiskala og logobegrunnelse står i `DETALJER.md`.
   avslutter med `process.exit`.
 - Verifiser ved å bryte: gjør endringen om igjen med vilje og se testen
   bli rød.
-- Layout sjekkes i Playwright, ikke jsdom. `ERR_TUNNEL_CONNECTION_FAILED`
-  for Google Fonts og jsdelivr er ventet i sandkassen.
+- Layout sjekkes i Playwright, ikke jsdom. Siden må serveres over http
+  (`python3 -m http.server`) — ES-moduler lastes ikke fra `file://`.
+  `ERR_TUNNEL_CONNECTION_FAILED` for Google Fonts er ventet i sandkassen.
+- Standardskoleåret i appen er 2025/26. Tester som skal tegne timer i dag
+  må sette `skoleaar` selv.
 
 ## Kjente begrensninger
 
 - Ingen service worker eller manifest: appen kan ikke installeres og
-  virker ikke uten nett.
-- Supabase-klienten hentes ulåst (`@supabase/supabase-js@2`) fra
-  jsdelivr, og passfrasen ligger i klartekst i localStorage.
-- `saveToStorage()` svelger feil (full lagring) og varsler bare i konsollen.
+  virker ikke uten nett. På iPhone kan Safari derfor rydde bort dataene
+  etter sju dager uten besøk.
+- Passfrasen til synken ligger i klartekst i localStorage. Det er prisen
+  for automatisk synk; vernet er at ingen fremmed kode kjører på siden.
 - Fontene krever nett ved første last; uten nett brukes systemfonten.
 - Mobilheaderen er to rader, og det er strukturelt (se `DETALJER.md`).
 - Ukesvisningen er trang på 390 px. Neste grep er å åpne i dagsvisning

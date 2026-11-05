@@ -18,6 +18,13 @@
 </head>
 <body>
 
+<!-- Vises bare når saveToStorage() feiler. Står øverst og over alt annet:
+     det betyr at det du gjør nå ikke blir lagret. Se «Lagring» i CONTEXT.md -->
+<div id="lagringsVarsel" class="lagrings-varsel" role="alert" hidden>
+  <span id="lagringsVarselTekst"></span>
+  <button class="lagrings-varsel-lukk" onclick="skjulLagringsfeil()" aria-label="Lukk">×</button>
+</div>
+
 <!-- HEADER -->
 <header>
   <div class="logo" onclick="goToToday()" title="Til dagens kalender">
@@ -438,6 +445,7 @@
       Elevnavn lagres separat og blir liggende på denne enheten.
       «Eksporter uten navn» gir en fil med anonyme elev-IDer.
     </p>
+    <p class="minside-hjelpetekst" id="lagringStatus" style="margin-top:8px"></p>
   </div>
 
   <div class="minside-seksjon">
@@ -940,9 +948,10 @@
 <script src="app.js"></script>
 
 <!-- Supabase-klienten lastes som modul og legges på window slik at
-     sync.js kan bruke den uten at resten av appen blir moduler -->
+     sync.js kan bruke den uten at resten av appen blir moduler.
+     Fast versjon i repoet, ikke fra CDN — se vendor/README.md -->
 <script type="module">
-  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+  import { createClient } from './vendor/supabase-js-2.118.0.mjs';
   window.supabaseJs = { createClient };
   window.dispatchEvent(new Event('supabase-klar'));
 </script>

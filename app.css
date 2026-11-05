@@ -1030,6 +1030,39 @@
   border-radius: 6px;
 }
 
+/* Lagringsfeil: over alt, også modalene — det du skriver nå går tapt */
+.lagrings-varsel {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(560px, calc(100vw - 16px));
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--fare-soft);
+  border: 1px solid var(--fare-kant);
+  border-left: 3px solid var(--fare);
+  border-radius: 6px;
+  box-shadow: var(--skygge-modal-lett);
+}
+.lagrings-varsel[hidden] { display: none; }
+.lagrings-varsel span { flex: 1; }
+.lagrings-varsel-lukk {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
 /* ────────────────────────────────────────────
    SYNK MELLOM ENHETER
    ──────────────────────────────────────────── */

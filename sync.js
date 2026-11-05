@@ -46,6 +46,14 @@ const LS_PULLET      = 'lp_sync_pullet';   // har denne enheten lest skyen?
 const LS_SYNK_KOPI   = 'lp_synk_kopi';     // lokal kopi tatt før siste pull
 const ICS_BUCKET     = 'kalender';
 
+// Feilmeldinger fra nettverket og serveren vises i statusboksen. De er
+// tekst, ikke markup. Samme som esc() i app.js, men sync.js skal virke
+// og testes uten app.js.
+function escSynk(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 let supabase       = null;
 let synkBruker     = null;   // innlogget bruker, eller null
 let synkStatus     = 'av';   // av | venter | synker | ok | feil
@@ -564,7 +572,7 @@ function tegnSynkStatus() {
       <strong>${STATUS_TEKST[synkStatus] || synkStatus}</strong>
       ${innlogget && pass ? `<span class="synk-sist">Sist: ${sistSynkTekst()}</span>` : ''}
     </div>
-    ${synkMelding ? `<div class="synk-melding">${synkMelding}</div>` : ''}`;
+    ${synkMelding ? `<div class="synk-melding">${escSynk(synkMelding)}</div>` : ''}`;
 
   const seksjonInn  = document.getElementById('synkInnlogging');
   const seksjonPass = document.getElementById('synkPassfraseSeksjon');
