@@ -34,6 +34,7 @@ i én økt.
 | 14 | 22. Ekte hover-kort (utprøving) | En kveld |
 | 15 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
 | 16 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
+| 17 | 32. Synkpassordet ut av klartekst | En kveld |
 
 Ferdige poster er merket ✅. Forkastede ligger samlet under «Forkastet»
 nederst.
@@ -1669,6 +1670,56 @@ verifisert ved å bryte reglene under med vilje.
 - **Startdatoen flyttes ikke** (Nikolai). Er elevens startdato etter
   timen, står det en advarsel under eleven: timen telles ikke i
   deltakelsen før startdatoen, og den endres under Elever.
+
+---
+
+## 32. Synkpassordet ut av klartekst
+
+**Lagt inn 5. november 2026**, etter sikkerhetsgjennomgangen samme dag.
+
+**Idéen:** Passfrasen til synken ligger i dag som ren tekst i
+`localStorage` (`lp_sync_passfrase`). Den trengs for at synken skal gå
+av seg selv, uten at man skriver den inn ved hver oppstart. Men alt som
+får kjøre skript på siden, eller som har tilgang til nettleserens lagring,
+kan lese den — og med den kan man låse opp skykopien fra en hvilken som
+helst enhet.
+
+### Hva som allerede er gjort
+
+Den viktigste veien inn er stengt: Supabase lastes fra `vendor/` med fast
+versjon framfor fra CDN, og all brukertekst i HTML-maler går gjennom
+`esc()`. Det som står igjen, er en ondsinnet nettleserutvidelse eller noen
+ved en ulåst maskin.
+
+### Anbefalt form
+
+Lagre **grunnnøkkelen**, ikke passfrasen og ikke AES-nøkkelen.
+`utledNokkel()` begynner med `importKey('raw', passfrase, 'PBKDF2', false,
+['deriveKey'])`. Den nøkkelen er allerede ikke-uttrekkbar, og IndexedDB
+kan lagre `CryptoKey`-objekter direkte. Ved oppstart hentes den fra
+IndexedDB, og `deriveKey()` kjøres med saltet som før. Siden kan da
+fortsatt kryptere og dekryptere, men verken skript eller noen med tilgang
+til lagringen kan lese passfrasen ut som tekst og ta den med til en annen
+enhet.
+
+### Det som må passes på
+
+- **Saltet er nytt ved hver opplasting** (`krypter()` lager 16 tilfeldige
+  byte). Det er derfor grunnnøkkelen må lagres, ikke den ferdige
+  AES-nøkkelen: en AES-nøkkel er bundet til ett salt og ville sluttet å
+  virke etter første push. Saltlogikken trenger ikke røres.
+- **Migrering.** Enheter som har `lp_sync_passfrase` skal lage nøkkelen
+  ved første oppstart og så slette passfrasen. Ikke slett før nøkkelen er
+  verifisert ved en vellykket dekryptering.
+- **Synken har spist data før.** Les «Synken kan spise data» i
+  DETALJER.md først. `harPassfrase()` styrer at push krever pull; den må
+  bli «har nøkkel», ellers kan en enhet uten nøkkel laste opp tom tilstand.
+- **Test på ekte** med to enheter før push: logg inn, synk, endre på den
+  ene, se det på den andre.
+
+### Fortsatt åpent
+
+- Skal «Glem passfrase» på Min side bli «Glem nøkkel på denne enheten»?
 
 ---
 
