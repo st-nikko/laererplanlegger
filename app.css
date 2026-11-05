@@ -4,6 +4,7 @@
       /* ── FLATE — varm sand ── */
       --bg: #FCFBF9;
       --surface: #F6F4F0;
+      --kort: #FFFFFF;
       --border: #E2DED6;
       --border-faint: #EDEAE4;
       --border-strong: #CFC9BF;
@@ -349,13 +350,19 @@
     }
     .vu-tekst:disabled { background: var(--surface); }
     /* I elevloggen: øverst i fagblokka, før timene */
-    .logg-vurderinger { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    /* Vurderingene er hvite kort med blå kant, timene grå flater — så de
+       to ikke glir over i hverandre. Overskriftene «Vurderinger» og
+       «Timer» og luften mellom dem gjør resten (5. nov 2026). */
+    .logg-vurderinger { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
     .logg-vurdering {
       display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; font-size: 13px;
-      border-radius: 6px; background: var(--surface); border-left: 3px solid var(--accent-kant);
+      border-radius: 6px; background: var(--kort); border: 1px solid var(--accent-kant);
+      border-left: 4px solid var(--accent); box-shadow: var(--skygge-svak);
     }
     .logg-vurdering.klikkbar { cursor: pointer; }
     .logg-vurdering.klikkbar:hover { background: var(--meny-aktiv-bg); }
+    .logg-del-tittel { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); margin: 4px 0 6px; }
     .logg-vurdering-linje { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
     .logg-vurdering-tittel { font-weight: 500; }
     .logg-vurdering-resultat { padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; background: var(--meny-aktiv-bg); color: var(--accent-deep); border: 1px solid var(--accent-kant); }

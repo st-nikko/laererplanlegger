@@ -699,6 +699,11 @@ resultatet på eleven.
   helt uavhengig av dette.
 - **Resultatene vises begge steder:** i oversikten per vurdering, og i
   elevloggen under faget.
+- **Tydeligere skille i elevloggen (5. nov 2026).** Vurderingene står
+  under overskriften «Vurderinger» som hvite kort med blå venstrekant og
+  svak skygge, og timene under «Timer» som før, med mer luft mellom.
+  Overskriftene vises bare når faget har vurderinger. Valgt blant tre
+  skisser: overskriftene fra den ene, kortene fra den andre.
 - **Ingen snitt.**
 - **Bare på PC.** Se avsnittet om bunnmenyen nedenfor.
 

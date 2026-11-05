@@ -2637,7 +2637,16 @@ function renderElevloggInnhold(studentId, container) {
       pf.title=`Til stede i ${fagTall.present} av ${fagTall.total} skoletimer i ${subject}`;
       block.firstElementChild.appendChild(pf);
     }
-    if (vurdPerFag[subject]) block.appendChild(byggLoggVurderinger(vurdPerFag[subject]));
+    // Vurderinger og timer får hver sin lille overskrift når faget har
+    // vurderinger — ellers gled de over i hverandre (5. nov 2026). Uten
+    // vurderinger står timene alene, og en «Timer»-overskrift ville bare
+    // gjentatt det åpenbare.
+    if (vurdPerFag[subject]) {
+      const del = tekst => { const d = document.createElement('div'); d.className = 'logg-del-tittel'; d.textContent = tekst; return d; };
+      block.appendChild(del('Vurderinger'));
+      block.appendChild(byggLoggVurderinger(vurdPerFag[subject]));
+      if (items.length) block.appendChild(del('Timer'));
+    }
 
     // Sorter etter dato, nyeste først
     items.sort((a,b)=>b.date.localeCompare(a.date)).forEach(item=>{

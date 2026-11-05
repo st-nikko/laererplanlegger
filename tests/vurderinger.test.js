@@ -403,6 +403,31 @@ test('en elev uten resultat får ingen vurderingsrad', () => {
   dom.window.close();
 });
 
+test('overskriftene «Vurderinger» og «Timer» skiller de to i fagblokka', () => {
+  const dom = lagDom({ vurderinger: [PROVE] }); const w = dom.window; const doc = w.document;
+  const c = doc.getElementById('elevloggViewContent');
+  const titler = () => [...c.querySelectorAll('.logg-subject-block')]
+    .map(b => [b.querySelector('.logg-subject-title').textContent.split(/\d/)[0].trim(),
+               [...b.querySelectorAll('.logg-del-tittel')].map(t => t.textContent)]);
+  // Bare vurdering, ingen førte timer: bare «Vurderinger»
+  w.renderElevloggInnhold('a', c);
+  like(titler(), [['Norsk', ['Vurderinger']]], 'uten timer');
+  // Med en ført time: begge, i rekkefølge — og vurderingene står før «Timer»
+  w.eval("lessonData['1_2026-10-12'] = { tema: 'Novelle', attendance: { a: [true] }, lagret: '2026-10-12' }");
+  w.renderElevloggInnhold('a', c);
+  like(titler(), [['Norsk', ['Vurderinger', 'Timer']]], 'med timer');
+  const blokk = c.querySelector('.logg-subject-block');
+  const barn = [...blokk.children].map(e => e.className);
+  sant(barn.indexOf('logg-vurderinger') < barn.lastIndexOf('logg-del-tittel'), 'vurderingene før «Timer»: ' + barn.join(','));
+  sant(barn.lastIndexOf('logg-del-tittel') < barn.findIndex(k => /logg-entry/.test(k)), 'timene etter «Timer»');
+  // Et fag uten vurderinger får ingen overskrifter
+  w.eval("events.push({ id: 9, title: 'Matematikk', category: 'undervisning', recurs: true, weekday: 0, start: '10:20', end: '11:05', room: '', trinn: 9, trinns: [9], sessionType: 'gruppe', students: ['a'], weekPattern: 'every', gyldigFra: '2000-01-01', gyldigTil: null })");
+  w.eval("lessonData['9_2026-10-12'] = { tema: 'Brøk', attendance: { a: [true] }, lagret: '2026-10-12' }");
+  w.renderElevloggInnhold('a', c);
+  sant(titler().some(([f, t]) => f === 'Matematikk' && t.length === 0), 'Matematikk uten overskrifter: ' + JSON.stringify(titler()));
+  dom.window.close();
+});
+
 // ══════════════════════════════════════════════════════════════
 // SYNK, BACKUP OG PAPIRKURV
 // ══════════════════════════════════════════════════════════════
