@@ -725,6 +725,20 @@
     .student-name { font-size: 13px; flex: 1; }
     .student-trinn { font-size: 11px; color: var(--text-muted); }
     .absent-label { font-size: 11px; color: var(--fare); }
+    /* Forsentkomming (veikart 30). Av = stiplet og dempet, på = fylt oker
+       med «✓ Kom sent». Teksten skifter også, så valget synes selv om
+       fargen ikke gjør det. */
+    .sen-knapp { font: inherit; font-size: 11px; line-height: 1; padding: 4px 9px; border-radius: 12px;
+      border: 1px dashed var(--border-input); background: transparent; color: var(--text-muted);
+      cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+    .sen-knapp:hover:not(:disabled) { color: var(--overtid-deep); border-color: var(--overtid-kant); }
+    .sen-knapp.paa { border: 1px solid var(--overtid); background: var(--overtid); color: var(--paa-accent); font-weight: 600; }
+    .sen-knapp.paa:hover { color: var(--paa-accent); }
+    .sen-knapp:disabled { opacity: 0.3; cursor: default; }
+    .logg-sen-merke { background: var(--overtid-soft); color: var(--overtid-deep); border: 1px solid var(--overtid-kant);
+      padding: 0 6px; border-radius: 4px; font-size: 0.75rem; white-space: nowrap; }
+    .elev-deltakelse-sen { font-size: 12px; color: var(--overtid-deep); margin-left: 8px; }
+    .att-sen { font-size: 11px; color: var(--overtid-deep); font-weight: 500; margin-left: 4px; }
 
     .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-family: inherit; font-weight: 500; cursor: pointer; border: none; }
     .btn-secondary { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }

@@ -806,10 +806,15 @@ function eventHoverTekst(ev, dato) {
   const elever = eleverPaaTime(ev, isoDate(dato), ld);
   if (elever.length) {
     const borte = fravaerendeIEvent(ev, ld, elever);
-    L.push('', `Elever (${elever.length})${borte.length ? ` · ${borte.length} fraværende` : ''}:`);
+    const att = (ld && ld.attendance) || {};
+    const sen = id => senEtikett(ev, att[id] ?? att[String(id)]);
+    const antSen = elever.filter(sen).length;
+    const telling = [borte.length ? `${borte.length} fraværende` : '', antSen ? `${antSen} kom sent` : ''].filter(Boolean).join(', ');
+    L.push('', `Elever (${elever.length})${telling ? ' · ' + telling : ''}:`);
     elever.slice(0, HOVER_ELEVER_MAKS).forEach(id => {
       const notat = ld && ld.studentNotes ? (ld.studentNotes[id] || ld.studentNotes[String(id)]) : '';
-      const merke = borte.includes(id) ? ' (borte)' : '';
+      const merker = [borte.includes(id) ? 'borte' : '', sen(id)].filter(Boolean);
+      const merke = merker.length ? ` (${merker.join(', ')})` : '';
       L.push(`  ${elevNavn(id)}${merke}${notat ? ' — ' + kapp(notat, HOVER_ELEVNOTAT_MAKS) : ''}`);
     });
     if (elever.length > HOVER_ELEVER_MAKS) {
@@ -906,6 +911,71 @@ function calcAttendance(studentId) {
 
 function calcAttendancePerFag(studentId) {
   return deltakelseForElev(studentId).perFag;
+}
+
+// ── Forsentkomming (veikart 30, 5. nov 2026) ──
+// Lagres i attendance på samme plass som nærværet: `'sen'` i stedet for
+// `true` for den skoletimen eleven kom for sent til. Alt som leser nærvær
+// spør om verdien er «ikke false», så en elev som kom sent er til stede
+// overalt ellers — deltakelse, fravær, timestatistikk — uten at noe av det
+// måtte endres. Ingen minutter: «sen» er nok (Nikolai).
+//
+// Hvilke skoletimer (indekser) eleven kom for sent til. Bare innenfor
+// skoletimene timen dekker, slik tilstedeISkoletimer() leser.
+function senISkoletimer(raw, antall) {
+  if (!Array.isArray(raw)) return [];
+  const ut = [];
+  for (let i = 0; i < antall; i++) if (raw[i] === 'sen') ut.push(i);
+  return ut;
+}
+
+// Kort etikett for én time: «sen» for en enkelttime, «sen 1. t» eller
+// «sen 1.+2. t» for en time som dekker flere skoletimer.
+function senEtikett(ev, raw) {
+  const timer = finnSkoletimer(ev);
+  const idx = senISkoletimer(raw, Math.max(timer.length, 1));
+  if (!idx.length) return '';
+  if (timer.length < 2) return 'sen';
+  return 'sen ' + idx.map(i => timer[i].n + '.').join('+') + ' t';
+}
+
+// Terminen vi er i, eller hele skoleåret når terminskillet ikke er satt.
+function denneTerminen() {
+  const nr = terminFor(isoDate(TODAY));
+  if (nr) return { ...terminGrenser(nr), navn: 'denne terminen' };
+  return { start: skoleaar.start, slutt: skoleaar.slutt, navn: 'i skoleåret' };
+}
+
+// Antall skoletimer eleven kom for sent til i perioden, fram til i dag.
+// Samme utvalg som deltakelseForElev(): timer eleven var på, fra
+// startdatoen, utenom ferier og fridager.
+function forsentForElev(studentId, start, slutt) {
+  const student = allStudents.find(s => String(s.id) === String(studentId));
+  const startDato = student ? (student.startDato || '2000-01-01') : '2000-01-01';
+  const iDag = isoDate(TODAY);
+  let n = 0;
+  Object.keys(lessonData).forEach(key => {
+    const parts = key.split('_');
+    const dateStr = parts.slice(1).join('_');
+    if (dateStr < startDato || dateStr > iDag) return;
+    if (start && dateStr < start) return;
+    if (slutt && dateStr > slutt) return;
+    const dato = new Date(dateStr + 'T00:00:00');
+    const fd = erFridag(dato);
+    if (fd && (fd.type === 'ferie' || fd.type === 'fridag')) return;
+    if (erUtenforSkoleaar(dato)) return;
+    const ev = events.find(e => String(e.id) === parts[0]);
+    if (!ev || ev.category !== 'undervisning') return;
+    if (!varPaaTime(ev, dateStr, studentId, lessonData[key])) return;
+    const att = lessonData[key].attendance || {};
+    n += senISkoletimer(att[studentId] ?? att[String(studentId)], Math.max(finnSkoletimer(ev).length, 1)).length;
+  });
+  return n;
+}
+
+function forsentDenneTerminen(studentId) {
+  const t = denneTerminen();
+  return { antall: forsentForElev(studentId, t.start, t.slutt), navn: t.navn };
 }
 
 // ────────────────────────────────────────────
@@ -1959,18 +2029,23 @@ function renderAttendanceList(ev, attendance, studentNotes) {
     if (!flereTimer) {
       // ── Én skoletime: én avkrysningsboks uten etikett (som tidligere) ──
       const present = Array.isArray(raw) ? raw[0] !== false : raw !== false;
-      const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer';
+      // Sen-knappen står utenfor <label>: et klikk inne i en label ville
+      // også slått avkrysningsboksen av og på.
+      const linje=document.createElement('div'); linje.style.cssText='display:flex;align-items:center;gap:10px';
+      const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:0';
       const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=present;
       cb.dataset.id=s.id; cb.dataset.periodIdx='0';
       const nameSpan=document.createElement('span'); nameSpan.className='student-name'; nameSpan.textContent=s.navn;
       row.appendChild(cb); row.appendChild(nameSpan);
       if(!present){const al=document.createElement('span');al.className='absent-label';al.textContent='Fraværende';row.appendChild(al);}
+      const sen=lagSenKnapp(cb, Array.isArray(raw) && raw[0]==='sen');
       cb.addEventListener('change',e=>{
         const lbl=row.querySelector('.absent-label');
         if(e.target.checked){if(lbl)lbl.remove();}
         else{if(!lbl){const l=document.createElement('span');l.className='absent-label';l.textContent='Fraværende';row.appendChild(l);}}
       });
-      item.appendChild(row);
+      linje.appendChild(row); linje.appendChild(sen);
+      item.appendChild(linje);
     } else {
       // ── Flere skoletimer: elevnavn + én boks per time med periodenummer ──
       const nameRow=document.createElement('div'); nameRow.style.cssText='font-weight:600;font-size:13px;color:var(--text-primary);padding-bottom:2px;';
@@ -1978,12 +2053,14 @@ function renderAttendanceList(ev, attendance, studentNotes) {
       const cbRow=document.createElement('div'); cbRow.style.cssText='display:flex;flex-wrap:wrap;gap:10px;';
       timer.forEach((p, i) => {
         const checked = Array.isArray(raw) ? (raw[i] !== false) : (raw !== false);
+        const par=document.createElement('span'); par.style.cssText='display:inline-flex;align-items:center;gap:6px;';
         const lbl=document.createElement('label'); lbl.style.cssText='display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--text-secondary);';
         const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=checked;
         cb.dataset.id=s.id; cb.dataset.periodIdx=String(i);
         const txt=document.createTextNode(`${p.n}. t`);
         lbl.appendChild(cb); lbl.appendChild(txt);
-        cbRow.appendChild(lbl);
+        par.appendChild(lbl); par.appendChild(lagSenKnapp(cb, Array.isArray(raw) && raw[i]==='sen'));
+        cbRow.appendChild(par);
       });
       item.appendChild(nameRow); item.appendChild(cbRow);
     }
@@ -1998,11 +2075,36 @@ function renderAttendanceList(ev, attendance, studentNotes) {
   });
 }
 
+// Sen-knappen ved én avkrysningsboks. Av: stiplet kant og «Sen». På:
+// fylt oker og «✓ Kom sent» — teksten skifter også, så valget synes uten
+// å skille farger. Kan bare slås på når eleven er krysset av som til
+// stede; tas krysset av, slås den av.
+function lagSenKnapp(cb, paa) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sen-knapp';
+  b.dataset.id = cb.dataset.id;
+  b.dataset.periodIdx = cb.dataset.periodIdx;
+  b.title = 'Kom for sent til denne timen';
+  const tegn = (on) => {
+    b.classList.toggle('paa', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.textContent = on ? '✓ Kom sent' : 'Sen';
+  };
+  const oppdater = () => { b.disabled = !cb.checked; if (!cb.checked) tegn(false); };
+  b.addEventListener('click', e => { e.stopPropagation(); if (cb.checked) tegn(b.getAttribute('aria-pressed') !== 'true'); });
+  cb.addEventListener('change', oppdater);
+  tegn(!!paa && cb.checked);
+  oppdater();
+  return b;
+}
+
 function toggleAllAttendance() {
   const checks=[...document.getElementById('attendanceList').querySelectorAll('input[type="checkbox"]')];
   const allOn=checks.every(c=>c.checked);
   checks.forEach(c=>{
     c.checked=!allOn;
+    c.dispatchEvent(new Event('change'));
     const row=c.closest('label');
     const lbl=row?row.querySelector('.absent-label'):null;
     if(!allOn){if(lbl)lbl.remove();}
@@ -2020,6 +2122,12 @@ function saveLessonPlan() {
     const idx = parseInt(cb.dataset.periodIdx, 10);
     if (!attendance[id]) attendance[id] = [];
     attendance[id][idx] = cb.checked;
+  });
+  // Forsentkomming: 'sen' i stedet for true. Bare der boksen er krysset av.
+  document.getElementById('attendanceList').querySelectorAll('.sen-knapp[aria-pressed="true"]').forEach(b=>{
+    const id = parseStudentId(b.dataset.id);
+    const idx = parseInt(b.dataset.periodIdx, 10);
+    if (attendance[id] && attendance[id][idx] === true) attendance[id][idx] = 'sen';
   });
   const studentNotes_={};
   document.getElementById('attendanceList').querySelectorAll('textarea[data-sid]').forEach(inp=>{
@@ -2245,6 +2353,14 @@ function byggDeltakelse(studentId) {
   tekst.textContent = `deltakelse · til stede i ${d.present} av ${d.total} skoletimer`;
   blokk.appendChild(tall);
   blokk.appendChild(tekst);
+  const sen = forsentDenneTerminen(studentId);
+  if (sen.antall) {
+    const s = document.createElement('span');
+    s.className = 'elev-deltakelse-sen';
+    s.textContent = `${sen.antall} ${sen.antall === 1 ? 'gang' : 'ganger'} sen ${sen.navn}`;
+    s.title = 'Skoletimer eleven kom for sent til. En dobbelttime der eleven kom sent til begge, teller to.';
+    blokk.appendChild(s);
+  }
   return blokk;
 }
 
@@ -2421,11 +2537,13 @@ function renderElevloggInnhold(studentId, container) {
     }
     // raw===true eller undefined → ingen badge
 
+    const senTekst = planlagt ? '' : senEtikett(ev, raw);
+
     // Per-elev-notat
     const sn=ld.studentNotes||{};
     const studentNote=(sn[studentId]??sn[String(studentId)])||'';
 
-    entries.push({ date:dateStr, ev, tema:ld.tema, notes:ld.notes, attendanceBadge, studentNote, planlagt });
+    entries.push({ date:dateStr, ev, tema:ld.tema, notes:ld.notes, attendanceBadge, senTekst, studentNote, planlagt });
   });
 
   // Vurderinger per fag. De gir en fagblokk også der ingen time er ført.
@@ -2471,6 +2589,9 @@ function renderElevloggInnhold(studentId, container) {
       const badgeHtml=item.attendanceBadge
         ?`<span class="logg-attendance-badge" style="${item.attendanceBadge.style};padding:1px 6px;border-radius:4px;font-size:0.75rem;white-space:nowrap">${item.attendanceBadge.label}</span>`
         :'';
+      const senHtml=item.senTekst
+        ?`<span class="logg-sen-merke">${item.senTekst.charAt(0).toUpperCase()+item.senTekst.slice(1)}</span>`
+        :'';
       const planlagtHtml=item.planlagt
         ?`<span class="logg-planlagt-merke">Planlagt</span>`
         :'';
@@ -2487,7 +2608,7 @@ function renderElevloggInnhold(studentId, container) {
         <div style="flex:1">
           <div style="display:flex;align-items:baseline;gap:8px">
             <span class="logg-tema"></span>
-            ${planlagtHtml}${badgeHtml}
+            ${planlagtHtml}${badgeHtml}${senHtml}
           </div>
           ${item.notes?`<div class="logg-notes"></div>`:''}
           ${item.studentNote?`<div class="logg-student-note"><strong>Notat:</strong> </div>`:''}
@@ -3204,6 +3325,8 @@ function renderElevView() {
 
   sorted.forEach(s => {
     const att = calcAttendance(s.id);
+    const sen = forsentDenneTerminen(s.id);
+    const senHtml = sen.antall ? ` <span class="att-sen" title="Kom for sent ${sen.antall} ${sen.antall === 1 ? 'gang' : 'ganger'} ${sen.navn}">${sen.antall}× sen</span>` : '';
     const pctStr = att.percent !== null ? att.percent + '%' : '—';
     const pctClass = att.percent === null ? '' : att.percent < 80 ? 'att-low' : att.percent < 90 ? 'att-mid' : 'att-ok';
     const startStr = s.startDato || '—';
@@ -3212,7 +3335,7 @@ function renderElevView() {
           <td><span class="elv-pil">▶</span> <span class="${s.navnMangler ? 'navn-mangler' : ''}">${s.navn}</span>${elevLappHtml(s)}</td>
           <td>${s.trinn}. trinn</td>
           <td>${startStr}</td>
-          <td class="${pctClass}">${pctStr} <span class="att-detail">(${att.present}/${att.total})</span></td>
+          <td class="${pctClass}">${pctStr} <span class="att-detail">(${att.present}/${att.total})</span>${senHtml}</td>
           <td><button class="btn-small" data-action="logg" data-student-id="${s.id}">Elevlogg</button></td>
           <td>
             <button class="btn-small" data-action="rediger" data-student-id="${s.id}">Rediger</button>

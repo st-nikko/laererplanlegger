@@ -24,14 +24,15 @@ i én økt.
 | 4 | ~~11. Fagfarger, variant A + lagret fargekart~~ ✅ 21. okt (farge per gruppe står åpent) | ~1 time |
 | 5 | ~~15. Klikkbare adresser i fritekst~~ ✅ 21. okt | ~1 time |
 | 6 | ~~29. Statistikk over undervisningstimer~~ ✅ 2. nov (lagt inn utenom tur) | En økt |
-| 7 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
-| 8 | 27. Temaoversikt per fag | En kveld |
-| 9 | 3. «Utgått» og «ingen møtte» | En kveld |
-| 10 | 10. Månedlige møter | En kveld |
-| 11 | 23. Steg på gjøremål | En kveld |
-| 12 | 22. Ekte hover-kort (utprøving) | En kveld |
-| 13 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
-| 14 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
+| 7 | ~~30. Forsentkomming i nærværsføringen~~ ✅ 5. nov (lagt inn utenom tur) | En økt |
+| 8 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
+| 9 | 27. Temaoversikt per fag | En kveld |
+| 10 | 3. «Utgått» og «ingen møtte» | En kveld |
+| 11 | 10. Månedlige møter | En kveld |
+| 12 | 23. Steg på gjøremål | En kveld |
+| 13 | 22. Ekte hover-kort (utprøving) | En kveld |
+| 14 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
+| 15 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
 
 Ferdige poster er merket ✅. Forkastede ligger samlet under «Forkastet»
 nederst.
@@ -1595,6 +1596,41 @@ elevene, som før.
 - **«Utgått»** venter på post 3. Se «Sammenheng» der.
 - **Fagfilter** ble skissert, men tabellen per fag gjør samme jobb. Tas
   inn hvis det savnes.
+
+---
+
+## 30. Forsentkomming i nærværsføringen ✅
+
+**Idéen:** En knapp for forsentkomming i nærværslista. Når timen går over
+flere skoletimer, må det kunne føres for hver av dem.
+
+**Status: gjennomført 5. november 2026.** Variant A av tre som ble
+skissert: en «Sen»-knapp ved siden av hver avkrysningsboks.
+`tests/forsentkomming.test.js`, verifisert ved å bryte reglene under med
+vilje.
+
+### Hva som ble bestemt
+
+- **Knappen står ved hver boks** — én for en enkelttime, én per skoletime
+  for en dobbelttime. Av: stiplet kant og «Sen». På: fylt oker og
+  «✓ Kom sent». Teksten skifter også, fordi første skisse var for svak til
+  å se om knappen var valgt.
+- **Bare når eleven er til stede.** Tas krysset av, slås knappen av og
+  låses. «Alle til stede / ingen» gjør det samme.
+- **Ingen minutter.** «Sen» er nok (Nikolai).
+- **Vises** som antall i elevloggen øverst («2 ganger sen denne
+  terminen») og i Oppmøte-kolonnen i Elever («2× sen»), som merke på timen
+  i elevloggen («Sen», «Sen 1. t»), og i hover på timen («Kari (sen 1. t)»).
+  Antallet er for terminen vi er i, eller skoleåret uten terminskille.
+
+### Lagring
+
+`'sen'` i stedet for `true` på den skoletimen i `attendance`, for
+eksempel `['sen', true]`. Alt som leser nærvær spør om verdien er «ikke
+`false`», så sen er til stede i deltakelse, fravær og timestatistikken
+uten endringer der. Ingen migrering. Telles per skoletime, og bare
+innenfor skoletimene timen dekker (`senISkoletimer()`), som
+`tilstedeISkoletimer()`.
 
 ---
 
