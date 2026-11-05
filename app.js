@@ -2010,68 +2010,125 @@ function renderAttendanceList(ev, attendance, studentNotes) {
   studentNotes = studentNotes || {};
   const list = document.getElementById('attendanceList');
   // Samme utvalg som tellingen: en gammel time viser dem som var med da
-  const students = eleverPaaTime(ev, planDateStr, getLesson(ev.id, planDateStr)).map(id=>studentById(id)).filter(Boolean);
+  const ld = getLesson(ev.id, planDateStr);
+  const students = eleverPaaTime(ev, planDateStr, ld).map(id=>studentById(id)).filter(Boolean);
+  renderManglerElever(ev, students);
   if(!students.length){list.innerHTML='<div class="student-list-empty">Ingen elever registrert for denne timen</div>';return;}
   list.innerHTML='';
+  students.forEach(s => list.appendChild(byggNaervaerElev(ev, s, attendance, studentNotes)));
+}
 
+// Én elev i nærværslista: avkrysningsboks(er), sen-knapp(er) og notat.
+function byggNaervaerElev(ev, s, attendance, studentNotes) {
   // Finn skoletimer hendelsen dekker — avgjør antall avkrysningsbokser per elev
   const timer = finnSkoletimer(ev);
   const flereTimer = timer.length > 1;
+  // Les lagret verdi — støtter begge nøkkelformater
+  const raw = attendance[s.id] ?? attendance[String(s.id)];
 
-  students.forEach(s=>{
-    // Les lagret verdi — støtter begge nøkkelformater
-    const raw = attendance[s.id] ?? attendance[String(s.id)];
+  // Wrapper div (column layout)
+  const item=document.createElement('div'); item.className='student-item';
+  item.style.cssText='flex-direction:column;align-items:stretch;gap:4px;';
 
-    // Wrapper div (column layout)
-    const item=document.createElement('div'); item.className='student-item';
-    item.style.cssText='flex-direction:column;align-items:stretch;gap:4px;';
+  if (!flereTimer) {
+    // ── Én skoletime: én avkrysningsboks uten etikett (som tidligere) ──
+    const present = Array.isArray(raw) ? raw[0] !== false : raw !== false;
+    // Sen-knappen står utenfor <label>: et klikk inne i en label ville
+    // også slått avkrysningsboksen av og på.
+    const linje=document.createElement('div'); linje.style.cssText='display:flex;align-items:center;gap:10px';
+    const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:0';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=present;
+    cb.dataset.id=s.id; cb.dataset.periodIdx='0';
+    const nameSpan=document.createElement('span'); nameSpan.className='student-name'; nameSpan.textContent=s.navn;
+    row.appendChild(cb); row.appendChild(nameSpan);
+    if(!present){const al=document.createElement('span');al.className='absent-label';al.textContent='Fraværende';row.appendChild(al);}
+    const sen=lagSenKnapp(cb, Array.isArray(raw) && raw[0]==='sen');
+    cb.addEventListener('change',e=>{
+      const lbl=row.querySelector('.absent-label');
+      if(e.target.checked){if(lbl)lbl.remove();}
+      else{if(!lbl){const l=document.createElement('span');l.className='absent-label';l.textContent='Fraværende';row.appendChild(l);}}
+    });
+    linje.appendChild(row); linje.appendChild(sen);
+    item.appendChild(linje);
+  } else {
+    // ── Flere skoletimer: elevnavn + én boks per time med periodenummer ──
+    const nameRow=document.createElement('div'); nameRow.style.cssText='font-weight:600;font-size:13px;color:var(--text-primary);padding-bottom:2px;';
+    nameRow.textContent=s.navn;
+    const cbRow=document.createElement('div'); cbRow.style.cssText='display:flex;flex-wrap:wrap;gap:10px;';
+    timer.forEach((p, i) => {
+      const checked = Array.isArray(raw) ? (raw[i] !== false) : (raw !== false);
+      const par=document.createElement('span'); par.style.cssText='display:inline-flex;align-items:center;gap:6px;';
+      const lbl=document.createElement('label'); lbl.style.cssText='display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--text-secondary);';
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=checked;
+      cb.dataset.id=s.id; cb.dataset.periodIdx=String(i);
+      const txt=document.createTextNode(`${p.n}. t`);
+      lbl.appendChild(cb); lbl.appendChild(txt);
+      par.appendChild(lbl); par.appendChild(lagSenKnapp(cb, Array.isArray(raw) && raw[i]==='sen'));
+      cbRow.appendChild(par);
+    });
+    item.appendChild(nameRow); item.appendChild(cbRow);
+  }
 
-    if (!flereTimer) {
-      // ── Én skoletime: én avkrysningsboks uten etikett (som tidligere) ──
-      const present = Array.isArray(raw) ? raw[0] !== false : raw !== false;
-      // Sen-knappen står utenfor <label>: et klikk inne i en label ville
-      // også slått avkrysningsboksen av og på.
-      const linje=document.createElement('div'); linje.style.cssText='display:flex;align-items:center;gap:10px';
-      const row=document.createElement('label'); row.style.cssText='display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:0';
-      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=present;
-      cb.dataset.id=s.id; cb.dataset.periodIdx='0';
-      const nameSpan=document.createElement('span'); nameSpan.className='student-name'; nameSpan.textContent=s.navn;
-      row.appendChild(cb); row.appendChild(nameSpan);
-      if(!present){const al=document.createElement('span');al.className='absent-label';al.textContent='Fraværende';row.appendChild(al);}
-      const sen=lagSenKnapp(cb, Array.isArray(raw) && raw[0]==='sen');
-      cb.addEventListener('change',e=>{
-        const lbl=row.querySelector('.absent-label');
-        if(e.target.checked){if(lbl)lbl.remove();}
-        else{if(!lbl){const l=document.createElement('span');l.className='absent-label';l.textContent='Fraværende';row.appendChild(l);}}
-      });
-      linje.appendChild(row); linje.appendChild(sen);
-      item.appendChild(linje);
-    } else {
-      // ── Flere skoletimer: elevnavn + én boks per time med periodenummer ──
-      const nameRow=document.createElement('div'); nameRow.style.cssText='font-weight:600;font-size:13px;color:var(--text-primary);padding-bottom:2px;';
-      nameRow.textContent=s.navn;
-      const cbRow=document.createElement('div'); cbRow.style.cssText='display:flex;flex-wrap:wrap;gap:10px;';
-      timer.forEach((p, i) => {
-        const checked = Array.isArray(raw) ? (raw[i] !== false) : (raw !== false);
-        const par=document.createElement('span'); par.style.cssText='display:inline-flex;align-items:center;gap:6px;';
-        const lbl=document.createElement('label'); lbl.style.cssText='display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--text-secondary);';
-        const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=checked;
-        cb.dataset.id=s.id; cb.dataset.periodIdx=String(i);
-        const txt=document.createTextNode(`${p.n}. t`);
-        lbl.appendChild(cb); lbl.appendChild(txt);
-        par.appendChild(lbl); par.appendChild(lagSenKnapp(cb, Array.isArray(raw) && raw[i]==='sen'));
-        cbRow.appendChild(par);
-      });
-      item.appendChild(nameRow); item.appendChild(cbRow);
-    }
+  // Notatfelt per elev — textarea for lengre notater
+  const noteInp=document.createElement('textarea');
+  noteInp.className='student-note-input'; noteInp.placeholder='Notat for denne timen…';
+  noteInp.value=studentNotes[s.id]||''; noteInp.dataset.sid=s.id;
+  noteInp.addEventListener('click',e=>e.stopPropagation());
+  item.appendChild(noteInp);
+  // Startdatoen er etter denne timen: da regnes timen ikke med i
+  // deltakelsen eller elevloggen, selv om eleven står i lista. Bare en
+  // advarsel — startdatoen flyttes ikke (Nikolai, 5. nov 2026).
+  if (s.startDato && planDateStr < s.startDato) {
+    const adv = document.createElement('div');
+    adv.className = 'naervaer-advarsel';
+    const d = new Date(s.startDato + 'T00:00:00');
+    adv.textContent = `Startdatoen er ${d.getDate()}. ${MONTHS[d.getMonth()]}. Timen telles ikke i deltakelsen før startdatoen — endre den under Elever om eleven begynte tidligere.`;
+    item.appendChild(adv);
+  }
+  return item;
+}
 
-    // Notatfelt per elev — textarea for lengre notater
-    const noteInp=document.createElement('textarea');
-    noteInp.className='student-note-input'; noteInp.placeholder='Notat for denne timen…';
-    noteInp.value=studentNotes[s.id]||''; noteInp.dataset.sid=s.id;
-    noteInp.addEventListener('click',e=>e.stopPropagation());
-    item.appendChild(noteInp);
-    list.appendChild(item);
+// ── Elever som står på timen nå, men ikke ble ført denne dagen ──
+// For en holdt time er det lagrede oppmøtet fasit (eleverPaaTime), så en
+// elev lagt til timen etterpå vises ikke. Det er riktig for timer hen
+// ikke var i, men galt når du glemte å føre hen på timen hen faktisk
+// begynte i. Her kan du legge hen inn i akkurat denne timen. Lagres som
+// vanlig oppmøte når du trykker Lagre.
+function renderManglerElever(ev, viste) {
+  const el = document.getElementById('planManglerElever');
+  if (!el) return;
+  el.innerHTML = '';
+  const vist = new Set(viste.map(s => String(s.id)));
+  const mangler = (ev.students || [])
+    .map(id => studentById(id))
+    .filter(s => s && !s.arkivert && !vist.has(String(s.id)));
+  if (!mangler.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  const tekst = document.createElement('div');
+  tekst.className = 'mangler-tekst';
+  tekst.textContent = 'Står på timen nå, men ble ikke ført denne dagen:';
+  el.appendChild(tekst);
+  mangler.forEach(s => {
+    const rad = document.createElement('div');
+    rad.className = 'mangler-rad';
+    const navn = document.createElement('span');
+    navn.textContent = s.navn;
+    const knapp = document.createElement('button');
+    knapp.type = 'button';
+    knapp.className = 'btn-small';
+    knapp.textContent = 'Legg til';
+    knapp.dataset.leggTil = s.id;
+    knapp.onclick = () => {
+      const list = document.getElementById('attendanceList');
+      const tom = list.querySelector('.student-list-empty');
+      if (tom) tom.remove();
+      list.appendChild(byggNaervaerElev(ev, s, {}, {}));
+      rad.remove();
+      if (!el.querySelector('.mangler-rad')) el.style.display = 'none';
+    };
+    rad.appendChild(navn);
+    rad.appendChild(knapp);
+    el.appendChild(rad);
   });
 }
 

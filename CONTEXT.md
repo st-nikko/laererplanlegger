@@ -767,6 +767,8 @@ finnes — appen fungerer uendret om `sync.js` ikke lastes.
 6. ~~**SFS2213-beregning (`calcSFS`)**~~ — slettet 2. nov 2026. Tellingen av undervisningstimer bor i `tellUndervisningstimer()` på Min side, se veikart post 29.
 
 **Forsentkomming (veikart 30):** `attendance[elev][i]` kan være `'sen'` i tillegg til `true`/`false`. Alt som leser nærvær må sjekke `!== false`, ikke `=== true`. Hjelpere: `senISkoletimer()`, `senEtikett()`, `forsentForElev()`, `forsentDenneTerminen()`, `lagSenKnapp()`.
+
+**Legg til elev i en holdt time (veikart 31):** `renderManglerElever()` viser elever som står på `ev.students`, men ikke er i det lagrede oppmøtet for en holdt time, med en «Legg til»-knapp. `byggNaervaerElev()` bygger én elevrad i nærværslista, og viser en advarsel når elevens startdato er etter timen.
 7. **Annenhver-uke vises ikke i Måned-visning** — `eventsForDate` håndterer weekPattern i uke/dag, men månedvisningen arver dette riktig.
 8. **Mobilheaderen er fortsatt to rader, og det er strukturelt.** Etter opprydningen i økt 19 er rad 1 (visningsvelger · logo · I dag · Ny hendelse) ~347 px og rad 2 (ukenavigasjonen) ~215–237 px. Summen passer ikke på 390 px uansett hvor mye som fjernes fra rad 1, fordi ukenavigasjonen alene trenger over halve bredden. Én rad krever at enten visningsvelgeren eller ukenavigasjonen får en annen form — det er en større øvelse enn å flytte knapper. Rad 1 er dessuten full: på skjermer smalere enn ~350 px bryter den til en tredje rad framfor å flyte utenfor kanten.
 9. **Fontene krever nett ved første last** — Inter og Figtree hentes fra Google Fonts. `display=swap` gjør at appen alltid tegnes, men uten nett brukes systemfonten. Skal appen bli helt frittstående, må fontfilene inn i repoet og `@font-face` erstatte `<link>`-en.

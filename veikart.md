@@ -25,14 +25,15 @@ i én økt.
 | 5 | ~~15. Klikkbare adresser i fritekst~~ ✅ 21. okt | ~1 time |
 | 6 | ~~29. Statistikk over undervisningstimer~~ ✅ 2. nov (lagt inn utenom tur) | En økt |
 | 7 | ~~30. Forsentkomming i nærværsføringen~~ ✅ 5. nov (lagt inn utenom tur) | En økt |
-| 8 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
-| 9 | 27. Temaoversikt per fag | En kveld |
-| 10 | 3. «Utgått» og «ingen møtte» | En kveld |
-| 11 | 10. Månedlige møter | En kveld |
-| 12 | 23. Steg på gjøremål | En kveld |
-| 13 | 22. Ekte hover-kort (utprøving) | En kveld |
-| 14 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
-| 15 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
+| 8 | ~~31. Legg til elev i en time som er holdt~~ ✅ 5. nov (lagt inn utenom tur) | En time |
+| 9 | 7. Ferienedtelling og skoledager, øverst på Min side | 1–2 timer |
+| 10 | 27. Temaoversikt per fag | En kveld |
+| 11 | 3. «Utgått» og «ingen møtte» | En kveld |
+| 12 | 10. Månedlige møter | En kveld |
+| 13 | 23. Steg på gjøremål | En kveld |
+| 14 | 22. Ekte hover-kort (utprøving) | En kveld |
+| 15 | 8. Gjentakende gjøremål — lav prioritet | En kveld |
+| 16 | 19. Mobil: felt på Min side — lav prioritet | 5 min – 1 time |
 
 Ferdige poster er merket ✅. Forkastede ligger samlet under «Forkastet»
 nederst.
@@ -1631,6 +1632,38 @@ eksempel `['sen', true]`. Alt som leser nærvær spør om verdien er «ikke
 uten endringer der. Ingen migrering. Telles per skoletime, og bare
 innenfor skoletimene timen dekker (`senISkoletimer()`), som
 `tilstedeISkoletimer()`.
+
+---
+
+## 31. Legg til elev i en time som er holdt ✅
+
+**Problemet:** En ny elev begynte i en time på mandag, men ble ikke lagt
+inn før torsdag. Mandagstimen var allerede ført, og eleven dukket ikke opp
+der — bare fra neste mandag.
+
+**Hvorfor:** For en holdt time med lagret oppmøte er det lagrede oppmøtet
+fasit for hvem som var der (`eleverPaaTime()`, 19. okt 2026). Det skal
+hindre at en elev lagt til midt i året får godskrevet timer helt tilbake
+til august. Regelen er riktig, men det fantes ingen vei rundt den for den
+ene timen der eleven faktisk var med.
+
+**Status: gjennomført 5. november 2026.** `tests/legg-til-elev.test.js`,
+verifisert ved å bryte reglene under med vilje.
+
+### Hva som ble bestemt
+
+- **«Legg til» i timemodalen.** Står det elever på timen nå som ikke ble
+  ført den dagen, vises de i en rad over nærværslista: «Står på timen nå,
+  men ble ikke ført denne dagen». Et klikk setter eleven inn som til
+  stede — med kryss, sen-knapp og notat som de andre — og lagres med
+  Lagre. Elever du ikke legger til, holdes utenfor som før.
+- Raden vises bare for holdte timer med lagret oppmøte. I dag og fram i tid
+  følger lista timen som vanlig. Arkiverte elever tilbys ikke.
+- Lista tegnes ikke på nytt når du legger til — det du alt har krysset av,
+  blir stående (`byggNaervaerElev()`).
+- **Startdatoen flyttes ikke** (Nikolai). Er elevens startdato etter
+  timen, står det en advarsel under eleven: timen telles ikke i
+  deltakelsen før startdatoen, og den endres under Elever.
 
 ---
 
