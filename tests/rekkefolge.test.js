@@ -2,7 +2,7 @@
 //
 // Selve musebevegelsen kan jsdom ikke måle (ingen layout), så her testes
 // logikken: ordneTodos() og flyttTodo(). Draget i ekte nettleser er
-// sjekket med Playwright — se CONTEXT.md, «Egen rekkefølge».
+// sjekket med Playwright — se DETALJER.md, «Egen rekkefølge».
 
 const fs   = require('fs');
 const path = require('node:path').join(__dirname, '..') + '/';

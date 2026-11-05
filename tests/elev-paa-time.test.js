@@ -5,7 +5,7 @@
 // lest som «til stede». Han fikk godskrevet timer han aldri var i.
 //
 // Regelen nå: for en holdt time er det lagrede oppmøtet fasit. Se
-// eleverPaaTime() i app.js og «Hvem var med på timen» i CONTEXT.md.
+// eleverPaaTime() i app.js og «Hvem var med på timen» i DETALJER.md.
 
 const fs   = require('fs');
 const path = require('node:path').join(__dirname, '..') + '/';

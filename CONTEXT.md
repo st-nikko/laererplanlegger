@@ -1,810 +1,197 @@
 # Lærerplanlegger — Kontekst
 
-## Hva appen gjør
+Kort oppslag for den som skal endre koden. **Les dette først, og
+`DETALJER.md` bare for den delen du rører.** Der står begrunnelsene,
+feilene som ble funnet og hva testene vokter, ordrett fra før
+oppryddingen 5. november 2026.
 
-Personlig planleggingsverktøy for faglærer på ungdomsskole (8–10. trinn). Samler timeplan, arbeidstid, timeplaner/elevlogg og gjøremål i ett nettleserbasert grensesnitt. Ingen sky, ingen pålogging — all data lever i nettleserens minne (nullstilles ved refresh).
-
-Målbruker: én lærer, personlig verktøy, rask tilgang mellom timer.
-
----
-
-## Filstruktur
-
-```
-Lærerplanlegger/
-├── index.html          # HTML-markup, ~800 linjer. Alle modaler, header, kalendergrid-placeholders, student-form.
-│                       # (het ukesoversikt.html t.o.m. økt 17 — omdøpt for GitHub Pages)
-├── app.css             # All CSS, ~760 linjer. CSS-variabler, layout, modal-stiler, event-stiler, elev-admin-stiler.
-├── app.js              # All JavaScript, ~2670 linjer. Se seksjoner nedenfor.
-├── sync.js             # Kryptert synk mot Supabase. Egen fil for å holde app.js nede.
-├── favicon.svg         # Logomerket. Toppraden har to celler, ikke tre — se «Visuell identitet»
-├── favicon.ico         # 16+32 px fallback for eldre nettlesere
-├── apple-touch-icon.png # 180×180, fullflate (iOS avrunder selv)
-├── CONTEXT.md          # Dette dokumentet
-├── SESSION-NOTES.md    # Løpende øktnotater
-├── funksjonsplan.md    # Originalt kravdokument fra juni 2026 (referanse, fase 1–3 er gjennomført)
-├── veikart.md          # Vurderte, men ikke besluttede utvidelser — med de tekniske funnene
-└── tests/              # jsdom-tester, kjøres med node
-```
-
-### app.js — seksjoner
-
-| Seksjon | Innhold |
-|---------|---------|
-| CONFIG  | `PERIODS` (skoletimetabell), gridkonstanter, `DAYS_*`, `MONTHS_*`, `TODAY` (hardkodet), navigasjonstilstand, `lunsjLuke()` |
-| COLORS  | `COLOR_POOL`, `SPECIAL_COLORS`, `getSubjectColor()`, `eventColor()` |
-| STUDENTS + LESSON DATA | `allStudents[]` (`{id,navn,trinn,startDato}`), `lessonData{}`, `topicsBySubject{}`, seed-data |
-| ELEVNAVN | `elevLapp()`, `fallbackNavn()`, `elevNavn()`, `elevlisteUtenNavn()`, `navnekart()`, `hydrerNavn()`, `antallUtenNavn()` — holder navn utenfor det som kan synkes. `elevLapp()` er eneste kilde til hvilke fire tegn som vises: `fallbackNavn()` bygger på den, og `elevLappHtml()` viser den ved siden av ekte navn i elevtabellen. Siden navnene ikke synkes, er denne lappen gjenopprettingsveien — man leser den av på en enhet som har navnene og skriver dem inn på en som mangler dem. Endres utsnittet ett sted, må det endres begge; `pseudonymisering.test.js` vokter det |
-| EVENTS + WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `getWorkTimeForDate()` |
-| HELPERS | `getMonday()`, `isoDate()`, `toDec()`, `toPx()`, `weekNumber()`, `eventsForDate()`, `parseStudentId()`, `calcAttendance()` |
-| RENDER | `render()`, `renderWeekLabel()` (skriver lang og kort etikett i hver sin span), `renderDayHeaders()`, `renderGrid()` (tidsakse med klokkeslett, `.period-band` bak hver skoletime i dagkolonnene, `.lunsj-band` i hver kolonne), `renderLegend()` |
-| LUNSJ | `lunsjLuke()` i CONFIG finner den **lengste luka mellom to skoletimer** i `PERIODS` — det er lunsjen, og den er ikke registrert noe annet sted. `renderGrid()` tegner et `.lunsj-band` som fyller luka i hver dagkolonne, og et `.lunsj-merke` («Lunsj») i tidsaksen; merket skjules på mobil, der aksen er 32 px. Båndet er en **varm tone med kant over og under** — bevisst en annen kulør enn den accent-tonede `.period-band` og den nøytralt grå `.offwork-block`, så de tre flatene ikke kan forveksles. Første forsøk var én strek midt i luka; den forsvant i et rutenett som har streker hvert kvarter fra før. Skriv aldri inn `11:05`/`11:35` noe sted: `PERIODS` skal forbli eneste kilde til klokkeslett, slik at skillet flytter seg hvis skolen endrer timeplanen. `tests/lunsj.test.js` regner ut fasiten uavhengig og slår ut på en hardkodet tid. Båndet har `z-index: 2` — over de andre flatene, under `.event`, slik at en time som krysser lunsjen dekker det framfor å bli delt i to |
-| FRAVÆRSRAD | `renderFravaerRad()`, `settFravaerFort()`, `skalFoereFravaer()`, `fravaerSomMangler()`, `renderFravaerOversikt()` — haken for at fraværet er ført i skolens **eget** system. Se «Fraværsraden» nedenfor; den er *ikke* appens nærværsføring |
-| HOVER | `eventHoverTekst()`, `fravaerendeIEvent()`, `kapp()`, `bryt()` — hva timen inneholder, satt som `title` på blokka i `renderGrid()` og på pilla i `renderMonthView()`. Se «Hover på timene» nedenfor |
-| SKOLETIMER | `skoletimerForHendelse()`, `skoletimeEtikett()` — hvilke timer en hendelse dekker. Bare `undervisning` og `vikar` får etikett; et møte klokka 14 er ikke «6. time». Overlapp avgjør, ikke eksakt start, så en time som begynner 08:15 regnes som 1. time og en dobbelttime blir «1.–2. time». Etiketten vises foran faget i `.event-title` via `.event-time-nr`, som skjules på mobil der kolonnen er ~70 px |
-| PLANFESTET TID MODAL | `calcPftSummary()`, `openPlanfestetTidModal()`, `savePlanfestetTid()` |
-| OVERTID MODAL | `openOvertidModal()`, `saveOvertid()`, `slettOvertid()` |
-| EVENT FORM MODAL | `openEventForm(ev, forslag, klikketDato)`, `moteDatoForSkjema()`, `setFormCategory()`, `setSessionType()`, `saveEvent()`, `deleteEvent()` m.fl. `moteDatoForSkjema()` sikrer at datofeltet alltid viser en dato med møtets egen ukedag — `saveEvent()` leser ukedagen ut av det feltet, så en feil dato flytter møtet. Se «Datofeltet i møteskjemaet» nedenfor |
-| LESSON PLAN MODAL | `openLessonPlan()`, `renderAttendanceList()`, `saveLessonPlan()`, `kopierEvent()` |
-| ELEVNOTAT | `elevNotater{}`, `getElevNotat()`, `setElevNotat()`, `byggElevNotatFelt()` — overordnet fritekst om eleven, i **egen** nøkkel `lp_elevNotater`. Se «Overordnet notat om eleven» nedenfor |
-| ELEVLOGG → TIME | `aapneTimeFraLogg(evId, dato)` — en loggpost er sammendraget av én time, og klikk åpner den timen på **postens egen dato**. Lukker `#elevloggOverlay` først: fra modalen ville to overlegg ellers stått oppå hverandre og Escape lukket feil ett. Samme mønster som `openEditFromPlan()`. Sier fra hvis timen er slettet siden posten ble skrevet |
-| ELEVLOGG MODAL | `openElevlogg()`, `renderElevlogg()` (modal-fallback), `renderElevloggInnhold(studentId, container)` — delt innholdsbygger brukt av både modal og fullskjerm-visning. Filtrerer bort timer holdt **før elevens `startDato`**: elevlista ligger på hendelsen, ikke på datoen, så en elev lagt inn midt i året står ellers på alle tidligere datoer av samme time. Timer fram i tid blir stående, merket «Planlagt». Se «Hvilke datoer elevloggen viser» nedenfor |
-| VURDERINGER | `vurderinger[]`, `lagreVurdering()`, `slettVurdering()`, `rensResultat()`, `vurderingFormLaast()`, `eleverForVurdering()`, `vurderingerForElev()`, `rensTrinn()`, `trinnTekst()`, `trinnForFag()`, `renderVurderingerView()`, `openVurdering()`/`nyVurdering()`, `byggVurderingRad()`, `byggLoggVurderinger()`. Se «Vurderinger» nedenfor |
-| ELEVLOGG VIEW | `renderElevloggView()` (fyller elevvelger, beholder valgt elev ved re-render), `elevloggViewChanged()` — rendrer logg i `#elevloggView` via `renderElevloggInnhold()` |
-| ELEVADMIN | `renderElevView()`, `openStudentForm()`, `saveStudent()`, `deleteStudent()` |
-| VIEW SWITCHING | `setView()` (setter også `.visning-dag` på `#weekDayView`, som CSS bruker for å slippe å krympe hendelsene i dagsvisning, **og lukker gjøremålspanelet når `erSmalSkjerm()`** — på mobil er det et overlegg over hele kalenderen, så visningen skiftet bak det; på PC er det en kolonne og skal bli stående), `changeNav()`, `goToDayView()` |
-| MONTH VIEW | `renderMonthView()` |
-| SIDEBAR / TODO | `toggleSidebar()`, `openTodoForm()`, `saveTodo()`, `cycleTodoStatus()`, `renderTodoList()`, `alleMerker()`, `normaliserMerke()`, `harMerke()`, `todoFilterValg()`, `passererFilter()`, `settTodoFilter()`, `renderTodoFilter()` — merker og filter, se «Gjøremålsmerker og filter» nedenfor |
-| MISC + INIT | `goToToday()`, `closeOverlay()`, `exportData()`, `importData()`, modallukking — se «Hvordan modaler lukkes» nedenfor |
-| ICS-EKSPORT | `byggICS()`, `eksporterICS()`, `icsTittel()`, `icsEscape()`, `icsBrytLinje()` — undervisningstimer til Outlook. Kun `category === 'undervisning'`; møter kommer som innkallinger i Outlook. Gjentakelser utvides via `eventsForDate()` framfor RRULE, så ferier og ukemønstre arves. `icsTittel()` bruker faget, aldri elevnavnet |
-| GJØREMÅLSKALENDER | `byggGjoeremaalICS()`, `gjoeremaalForFeed()`, `gjoeremaalTittel()`, `icsDato()`, `icsDatoNeste()` — frister som heldagshendelser. **Tar aldri med elevnavn eller `tekst`** (fritekst); bare tittel, merke og fag. Se «Gjøremålsfeeden» nedenfor |
-| ARBEIDSTIDSKALENDER | `arbeidstidForDato()`, `slaaSammenIntervaller()`, `fraDesimal()`, `byggArbeidstidICS()` — viser bare *når* man er opptatt, aldri hva. Grunnlag: planfestet tid eller registrert overtid, utvidet av hendelser. Blokker slås sammen kun når de overlapper eller møtes, så et kveldsmøte blir en egen blokk framfor å strekke arbeidsdagen. Helger tas med bare når det ligger en hendelse der. Alle blokker heter «På jobb» |
-| MIN SIDE | `renderMinSide()` — innstillinger (skoleår, skolerute) som fullskjerm-visning i `#minSideView`; `lagreSkoleaar()`, `renderSkolerute()`, `leggTilFridag()`, `slettFridag()`. Import/eksport-knappene ligger også her (UI), logikken i MISC. Seksjonen «Undervisningstimer» (`renderUndervisningStatistikk()`, `tellUndervisningstimer()`, `skoletimeKategorier()`) teller skoletime for skoletime per kategori, også «Ekstralærer» (`ev.ekstralaerer` fast, `lessonData[…].ekstralaerer` for én dag) — se veikart post 29 |
-| PAPIRKURV | `leggIPapirkurv()`, `gjenopprettFraPapirkurv()`, `slettFraPapirkurv()`, `tomPapirkurv()`, `ryddPapirkurv()`, `renderPapirkurv()` — mellomlager for slettede timer, elever og gjøremål. Lagres i `lp_papirkurv`, **bevisst utenfor `SYNK_NOKLER`**: den inneholder elevnavn og data brukeren har valgt å slette, og skal ikke reise mellom enheter. Derfor lagres elevobjektet her *med* navnet, i motsetning til `lp_students`. Ryddes for oppføringer eldre enn `PAPIRKURV_DAGER` (30) ved oppstart, og holdes under `PAPIRKURV_MAKS` (20) |
-| LAGRING | `saveToStorage()`, `loadFromStorage()` + `render()` init-kall |
+Hold denne fila kort. Ny kunnskap legges slik:
+- en regel som ikke skal brytes → én linje under «Regler» her
+- hvorfor regelen finnes, og hvordan feilen ble funnet → `DETALJER.md`
+- hva som er endret når → commit-meldingen
 
 ---
 
-## Tekniske valg
-
-- **Ingen rammeverk.** Vanilla JS og CSS. Alt rendres via `innerHTML` og `createElement`. Gjør det enkelt å forstå og endre uten toolchain.
-- **Global scope.** Alle funksjoner og variabler er globale. Enkelt, men kaller på refaktorering om appen vokser.
-- **localStorage-persistens.** Alle datavariabler lagres automatisk ved hver mutasjon via `saveToStorage()`. Lastes ved oppstart via `loadFromStorage()`. Seed-data brukes som fallback hvis localStorage er tom.
-- **Elevnavn er skilt ut.** `allStudents[]` bærer `navn` i minnet, men ved lagring splittes lista: struktur til `lp_students` (kan synkes), navn til `lp_studentNames` (blir på enheten). Elever uten kjent navn får `Elev xxxx` og `navnMangler = true`, slik at fallbacket aldri lagres som ekte navn. Formålet er at fravær, tema og notater kan forlate maskinen uten å være direkte identifiserbare. **Merk:** fritekstfeltene `notes` og `studentNotes` kan fortsatt inneholde navn brukeren selv har skrevet inn.
-- **CSS-variabler for theming.** Alle farger via `--bg`, `--surface`, `--border`, `--accent` osv. i `:root`. Ingen hardkodede hex-verdier i `app.css` — se «Visuell identitet» nedenfor.
-- **Kalender-grid:** CSS Grid (`48px + repeat(5, 1fr)`), absolutt posisjonerte events basert på `toPx(tid)`.
-- **Rutenettet starter 07:30, ikke på en hel time.** `GRID_START_H = 7.5`. Alt som skal ligge på et klokkeslett må derfor plasseres med `(tid - GRID_START_H) * PX_PER_HOUR`, aldri ved å stable elementer eller telle `h++` fra `GRID_START_H`. Sistnevnte var årsaken til at tidsaksen sto blank fram til økt 19: løkka gikk 7.5, 8.5, 9.5 … og `Number.isInteger(h)` slo aldri til, så alle etikettene ble tom streng. Samme feil gjorde at de heltrukne strekene havnet på halvtimene.
-- **Event-modell:** `events[]` inneholder både faste (`recurs:true, weekday`) og engangshendelser (`recurs:false, date`). Annenhver-uke støttes via `weekPattern: 'every'|'odd'|'even'`.
-- **`weekday` er 0-basert med mandag som 0**, og er *eneste* felt `eventsForDate()` bruker for gjentakende hendelser — `date` ignoreres da. Merk at skjemaet samler ukedagen på to måter: undervisning og vikar velger den i `dagSelect`, mens møter velger en dato og ukedagen utledes med `getDayOfWeekFromDate()`. Fram til økt 19 var den utledningen en hardkodet `0`, så alle gjentakende møter havnet på mandag. `loadFromStorage()` reparerer gamle møter ut fra datoen deres, og `tests/gjentakende-moter.test.js` vokter begge deler.
-- **Et gjentakende møte har ingen `date`** — `saveEvent()` lagrer `date: recurs ? undefined : date`. Datofeltet i skjemaet må derfor fylles av `moteDatoForSkjema()`, aldri av `ev.date` alene. Se «Datofeltet i møteskjemaet» nedenfor.
-
-### Når en hendelse begynner å gjelde
-
-`gyldigFra` er datoen en hendelse vises fra, og `eventsForDate()` skjuler
-alt før den. Fram til 22. september 2026 fikk nye hendelser **dagens dato**,
-og en time opprettet tirsdag for mandag i samme uke dukket først opp uka
-etter. Nå regner `gyldigFraForNy()` den ut:
-
-- **Enkelthendelser:** datoen sin.
-- **Gjentakende med «gjeldende fra uke»:** mandagen i den uka.
-- **Gjentakende møte uten:** datoen valgt i skjemaet.
-- **Gjentakende time uten:** mandagen i uka som vises (`visningensMandag()`,
-  som bruker dagen i dagsvisning).
-
-**`startWeek` sjekkes ikke lenger i `eventsForDate()`.** Et ukenummer har
-ikke år, og `wn < startWeek` skjulte en time «fra uke 34» fra 1. januar til
-august. Uka gjøres om til en dato med `mandagForUkeNaer(uke, ref)`, som
-velger den uka med det nummeret som ligger nærmest `ref`. Endres uka på en
-eksisterende hendelse, flyttes `gyldigFra` med. `loadFromStorage()`
-migrerer eldre data, men flytter bare startdatoen **fram**, aldri bakover:
-appen kan ikke se forskjell på en time som skulle startet tidligere og en
-som med vilje starter senere. `startWeek` lagres fortsatt, så skjemaet kan
-vise feltet. `tests/startdato.test.js` vokter dette.
-
-### Vikartimer som telles
-
-En vikartime kan merkes «Tell som undervisningstime» (`ev.tellSomUndervisning`,
-haken `#vikarTellInput` i vikarskjemaet, av som standard). Merkede vikartimer
-er med i «N undervisningstimer denne uka» (`tellesSomUndervisning()` i
-`ukensUndervisningstimer()`), og en dobbelttime teller som to. Blokka sier
-«Vikar · telles», og hover sier det samme. Flagget settes bare på vikartimer:
-gjøres timen om til undervisning eller møte, blir det `false`.
-`tests/vikar-telling.test.js` vokter dette.
-
-### Knappene i hendelsesskjemaet
-
-«Avslutt fra dato» skjuler Lagre, Avbryt og sletteknappene og viser en
-datovelger. `openEventForm()` setter **alle** knappene tilbake til
-utgangstilstanden. Før ble bare datovelgeren og sletteknappene nullstilt,
-så lukket man modalen med krysset eller Escape midt i «Avslutt fra dato»,
-manglet Lagre og Avbryt neste gang skjemaet ble åpnet.
-
-### Datofeltet i møteskjemaet
-
-Rettet 10. september 2026, meldt som: «Når jeg åpner et møte, endres
-datoen på møtet til dagens dato.»
-
-Møteskjemaet har **ett datofelt**, men et gjentakende møte har ingen dato
-— det bor på `weekday`, og `saveEvent()` lagrer `date` som `undefined`.
-Feltet falt derfor tilbake til `isoDate(TODAY)`.
-
-Det farlige er at **`saveEvent()` leser ukedagen ut av det samme feltet**
-(`weekday = getDayOfWeekFromDate(moteDato)`). Et tirsdagsmøte man åpnet på
-en torsdag og lukket med «Lagre» uten å røre noe, ble et torsdagsmøte. Et
-fast møte kunne vandre gjennom uka bare av å bli sett på — uten varsel,
-uten at noe så feil ut i skjemaet.
-
-`moteDatoForSkjema(ev, klikketDato)` er vernet. Regelen er at datoen som
-vises **alltid må ha møtets egen ukedag**:
-
-| Tilfelle | Dato som vises |
-|---|---|
-| Nytt møte | i dag |
-| Engangsmøte | `ev.date` |
-| Gjentakende, klikket i kalenderen | den klikkede datoen |
-| Gjentakende, ellers | forekomsten i uka `currentWeekMonday` peker på |
-
-Klikk i kalenderen sender datoen med som tredje argument til
-`openEventForm()`. Det er ikke pynt: i månedsvisningen kan
-`currentWeekMonday` ligge måneder unna det man ser på, så uten den ville
-skjemaet åpnet på feil forekomst. En klikket dato som *ikke* har møtets
-ukedag forkastes — da er det tryggere å regne ut riktig dag enn å la møtet
-flytte seg.
-
-`tests/motedato.test.js` vokter det, og kjører gjennom **alle fem
-hverdager** framfor én: en test som bare prøver tirsdag ville stått grønn
-fire dager av fem med feilen i behold. To av testene klikker seg gjennom
-uke- og månedsvisningen i stedet for å kalle `openEventForm()` direkte —
-ellers ville de vært grønne selv om kalenderen sluttet å sende datoen.
-
-**Merk:** møter du allerede har åpnet og lagret kan ha flyttet seg før
-denne rettingen. De må settes tilbake for hånd.
-
-### Hvordan modaler lukkes
-
-Endret 19. august 2026. Klikk utenfor lukket tidligere **alle** overlegg.
-På arbeidsmodalene — der man skriver — var det for lett å bomme, og et
-bomklikk kostet det man hadde skrevet.
-
-Nå gjelder to regler:
-
-- **Klikk utenfor lukker bare små dialoger.** Regelen leses av markupen,
-  ikke av en liste med id-er: har overlegget en `.simple-modal` eller
-  `.after-save-modal` inni seg, er det en liten dialog der ingenting går
-  tapt. Legger du til en modal senere, **arver den oppførselen fra hvilken
-  klasse du gir den** — `.event-modal`, `.plan-modal`, `.elevlogg-modal`
-  og `.modal` blir stående ved klikk utenfor.
-- **Escape lukker det øverste åpne overlegget.** «Øverste» = sist i DOM-en
-  av dem med klassen `open`. Uten den ville musa vært eneste vei ut av
-  arbeidsmodalene.
-
-`tests/modallukking.test.js` vokter begge, og i tillegg at hver modal
-fortsatt har en knapp som lukker den — Escape alene er ikke nok.
-
-### Fraværsraden
-
-Lagt til 19. august 2026. En rad nederst i uke- og dagsvisningen, rett over
-legenden, med én avkrysningsboks per dag.
-
-**Den har ingenting med `attendance` å gjøre, og det er hele poenget.**
-`attendance` i `lessonData` er hvem som var til stede i en enkelt time.
-Haken bekrefter bare at du har gjort unna føringen i skolens eget system,
-utenfor appen. De bor derfor to forskjellige steder, og
-`tests/fravaer.test.js` vokter at de ikke får røre hverandre.
-
-- **Lagring:** `lp_fravaerFort`, `{ 'YYYY-MM-DD': true }`. **Bare dager som
-  er ført lagres** — en dag som mangler er «ikke ført», som også er
-  utgangspunktet, så nøkkelen vokser ikke med én oppføring per skoledag.
-  Står i `SYNK_NOKLER` og i `exportData()`/`importData()`.
-- **Kolonnebredder:** `renderFravaerRad()` bruker `kalenderKolonner()`, samme
-  kall som `#calGrid` og `.day-headers`. Første celle er tom og dekker
-  tidsaksen. **Ikke gi raden egne mål** — da glir haken fra dagen sin, og
-  en hake under feil dag er verre enn ingen hake. Målt i nettleseren står
-  hver hake 0 px fra midten av kolonnen sin, på PC og mobil.
-- **Hvilke dager:** `skalFoereFravaer()` — hverdager i skoleåret, minus
-  ferie, fridag **og planleggingsdag**. Planleggingsdager er hverdager,
-  men uten elever, så det finnes ikke fravær å føre. Dager uten hake får en
-  tom celle, ikke ingen celle, slik at kolonnene holder seg i flukt.
-- **`settFravaerFort()` kaller ikke `render()`.** En full rendring ville
-  bygget kalendergridet på nytt og kastet rulleposisjonen; alt som trenger
-  å endre seg er klassen på merket.
-- **Mobil:** teksten «Fravær ført» skjules under 768 px (kolonnen er ~70
-  px), boksen vokser til trykkflate, og `title` på merket forklarer raden.
-
-**Oversikten på Min side** lister skoledager uten hake, med
-`FRAVAER_TILBAKE = 21` dagers vindu og uten dagen i dag. Vinduet er kort
-med vilje: haken fantes ikke før 19. august 2026, så et lengre vindu ville
-vist hver skoledag siden august 2025 som «mangler». En test holder
-konstanten mellom 7 og 31 med begrunnelsen skrevet inn. Skal vinduet
-utvides, er svaret å lagre datoen funksjonen ble slått på — ikke å heve
-tallet.
-
-### Gjøremålsmerker og filter
-
-Lagt til 19. august 2026. `todos[].merke` er **fritekst med forslag**, ikke
-en fast liste — da slipper man et sted å vedlikeholde listen, og «IKT»
-finnes fra det øyeblikket man skriver det.
-
-Prisen for fritekst er at «IOP», «iop» og «Iop» blir tre merker.
-`normaliserMerke()` betaler den: skriver du et merke som finnes fra før med
-annen bruk av store bokstaver, **arver du skrivemåten som er der**. Første
-skrivemåte vinner. Merk at `alleMerker()` slår sammen skrivemåter uansett,
-så den avslører *ikke* om normaliseringen er borte — testen som fanger det
-ser på verdien som lagres på hvert gjøremål.
-
-Filterknappene viser merker, fag og elever **som faktisk er i bruk i
-aktive gjøremål**. En knapp uten treff er verre enn ingen knapp, og lista
-rydder seg selv når det siste IOP-gjøremålet er ferdig. Peker filteret på
-noe som forsvant, nullstilles det — ellers står lista tom uten forklaring.
-
-**Filterraden ligger inni `.sidebar-body`, ikke over den**, festet med
-`position: sticky`. Utenfor rulleflaten ville den blitt en egen rulleflate
-når merkene blir mange, og to rulleflater i samme panel er nøyaktig fella
-som ble ryddet bort for elevlistene (se punkt 5 under «Kjente
-begrensninger»). Ikke flytt den ut.
-
-Filteret endrer aldri rekkefølgen — en egen sorteringsvelger ville bare
-tatt plass fra en liste som er 272 px bred.
-
-### Egen rekkefølge: hold og dra
-
-Fra 16. oktober 2026 kan gjøremål flyttes med mus: hold inne i 250 ms, dra,
-slipp. **Når du først har dratt, bestemmer du — ikke fristen** (valgt
-framfor «frist først, du resten» og en sorteringsbryter). Plassen lagres
-som `rekkefolge` på gjøremålet og synkes med resten.
-
-- `ordneTodos()` sorterer: gjøremål med `rekkefolge` i den rekkefølgen;
-  de uten (nye, eller fra før) flettes inn på frist, foran første ordnede
-  gjøremål med senere frist. Ingen har plass → ren fristsortering som før.
-- `flyttTodo()` nummererer **alle aktive**, ikke bare de synlige, så et
-  aktivt filter ikke stokker om på det skjulte.
-- **Bare `pointerType === 'mouse'`.** På berøring går langt trykk og
-  rulling i beina på hverandre; der er lista uendret.
-- Statusrundingen, statusteksten og × starter aldri et dra. Klikket som
-  følger slippet svelges, ellers åpnes gjøremålet. Escape avbryter.
-
-### Gjøremålsfeeden
-
-Tredje ICS-feed ved siden av `undervisning` og `jobb`, med **sin egen
-token** slik at fristene kan deles uten at timeplanen følger med.
-
-Gjøremål med frist blir heldagshendelser på forfallsdatoen. **Ikke
-`VTODO`:** ICS har en egen oppgavetype, men om en abonnert nettkalender
-faktisk viser den varierer mellom klienter, og en oppgave som ikke dukker
-opp er verre enn ingen. Heldagshendelser er samme form som de to feedene
-som allerede virker. Feeden er enveis — avkryssing skjer i appen.
-
-**Hva som bevisst ikke er med.** Filen ligger lesbar for den som har
-adressen:
-
-- **Elevnavn aldri.** Et gjøremål kan være knyttet til en elev. Samme regel
-  som `icsTittel()` følger for enetimer.
-- **`tekst` heller ikke.** Fritekst inneholder det brukeren skrev, ofte
-  navn. Pseudonymiseringen beskytter strukturen, ikke innholdet.
-
-`tests/gjoeremaal.test.js` har en test som heter «ELEVNAVN KOMMER ALDRI
-MED». Ryker den, skal ingenting publiseres før den er grønn igjen.
-
-DTEND på en heldagshendelse er **eksklusiv** — en hendelse som varer 19.
-august har `DTEND;VALUE=DATE:20260820`. UID-en inneholder bare gjøremålets
-id, ikke fristen, slik at Outlook flytter hendelsen framfor å lage en ny
-når du endrer datoen.
-
-### Samarbeidsmøte
-
-Etiketten «Foreldremøte» ble «Samarbeidsmøte» 19. august 2026. **Bare
-etiketten.** Den lagrede verdien er fortsatt `category: 'foreldre'`, i
-`SPECIAL_COLORS`, i `eventColor()` og på hendelser som alt er lagret.
-
-Grunnen er at verdien ligger i `lp_events` på begge enheter og i den
-krypterte synkblokka. Et bytte ville krevd en migrering i
-`loadFromStorage()` som måtte kjøre på **alle** enheter før synken skrev
-gamle verdier tilbake — for en endring som bare gjelder et ord på skjermen.
-Skal verdien byttes senere, er det den rekkefølgen som er problemet, ikke
-selve navnebyttet.
-
-### «I dag» når appen står åpen over natta
-
-`TODAY` er `let`, ikke `const`. Fram til 22. september 2026 ble den satt én
-gang ved lasting, og en fane som sto åpen over natta trodde det fortsatt
-var i går: «I dag» sendte deg dit, og dagsmarkeringen sto på feil dag.
-`oppdaterIdag()` setter den på nytt og sier fra om datoen har skiftet.
-Den kalles av `goToToday()`, og `sjekkDatoskifte()` kalles ved
-`visibilitychange`, `focus` og hvert minutt. Da tegnes kalenderen på nytt,
-men visningen du har bladd til blir stående. Alle tre veiene trengs: en
-maskin som sover, kjører ingen timere. **Les aldri dagens dato inn i en
-variabel ved oppstart.** Bruk `TODAY` der du trenger den.
-
-### Ikon for timer uten elever
-
-En undervisningstime uten elever (`erUtenElever()`) får `IKON_UTEN_ELEVER`
-foran tittelen i uke- og dagsvisning, med «Ingen elever registrert» som
-title og aria-label. Ikke i månedsvisningen, der pillene er for lave.
-Ikonet er `user-slash` fra Font Awesome Free 7.3.1, lagt inn som SVG i
-app.js framfor å laste biblioteket. Det virker uten nett. Lisens CC BY 4.0,
-står i kommentaren. Fylt ikon, i motsetning til de strekede menyikonene,
-etter Nikolais eget valg. `tests/idag-og-ikon.test.js` vokter begge
-delene.
-
-### Enetimer på kalenderblokka
-
-Enetimer har **elevnavnet som tittel** (`eventDisplayLabel()`), så faget må
-stå et annet sted. Fram til 21. september 2026 sto det ingen steder. Nå står
-faget først i undertittelen («Norsk · enetime · 204 · 08:30–09:15»), og på
-mobil, der undertittelen er skjult, i linja under navnet i stedet for
-trinnet (`trinnKortEtikett()`). Trinnet sier lite på en enetime, siden det
-følger av eleven. Den eksporterte kalenderen er uendret: der er tittelen
-faget, aldri eleven (`icsTittel()`). `tests/enetime.test.js` vokter dette.
-
-### Hover på timene
-
-Lagt til 19. august 2026, i **billigste form med vilje**: nettleserens eget
-`title`-attributt, ikke et bygget kort. Formålet er å finne ut om hover
-faktisk blir brukt før noe større lages. Se posten om hover-kortet i
-veikart.md for hva et ekte kort krever — kortversjonen er at
-`.calendar-scroll` har `overflow-x: hidden`, så et kort må tegnes på
-`body`-nivå med `position: fixed`.
-
-`title` er ren tekst uten rulling, og **bryter ikke linjer selv**. Derfor
-gjør `eventHoverTekst()` begge deler manuelt:
-
-- `kapp()` klipper for lange felter — notat (`HOVER_NOTAT_MAKS` 240),
-  elevnotat (40), tema (80).
-- `bryt()` deler fritekst på mellomrom ved `HOVER_BREDDE` (64) tegn, så
-  tooltipen blir en boks og ikke en stripe tvers over skjermen.
-- `HOVER_ELEVER_MAKS` (12) begrenser elevlista, med «… og N til» under.
-
-Uten disse blir tooltipen ubrukelig lang på en full klasse med notater.
-**Kappingen er funksjonen**, ikke pynt — `tests/hover.test.js` vokter alle
-fire grensene.
-
-**Elevnavn og notater er med.** Bevisst valg: dette er en personlig app på
-egen maskin, og poenget er å slippe å åpne modalen. Merk at det er første
-sted i appen der navn dukker opp *uoppfordret* — når musa passerer, ikke
-når man klikker. Teksten forlater aldri enheten; den er ikke i noen feed og
-ikke i synken. Skal det snus, bygges elevdelen i én blokk til slutt i
-`eventHoverTekst()`.
-
-Teksten settes som **attributt**, aldri i `innerHTML`. Elevnotater er
-brukerens fritekst; i markup ville de blitt tolket som HTML. En test
-vokter det med et `<img onerror=…>` som notat.
-
-### Overordnet notat om eleven
-
-Lagt til 19. august 2026. Et fritekstfelt øverst i elevloggen for det som
-gjelder eleven generelt — støttebehov, avtaler med hjemmet, hva som pleier
-å virke. Elevloggen var fram til da **helt avledet**: den bygde alt fra
-`lessonData` og eide ingen egen tilstand. Dette er det første som er
-elevens eget.
-
-**Egen nøkkel, ikke et felt på elevobjektet — dette er det viktigste her.**
-`elevlisteUtenNavn()` er `({ navn, navnMangler, ...rest })`, altså en
-spread. Alt som legges på elevobjektet blir med i `lp_students` av seg
-selv, og dermed inn i synken *og* i «Eksporter uten navn», uten at noen tar
-stilling til det. Et overordnet notat er langt mer identifiserende enn et
-timenotat — «mor tok kontakt om situasjonen hjemme» mot «jobbet godt med
-brøk» — og den anonyme eksporten er nettopp filen man deler videre. Med
-`lp_elevNotater` er både synk og eksport et valg. `tests/elevnotat.test.js`
-har en test som slår ut hvis notatet finner veien inn i `lp_students`.
-
-Notatet **synkes** (kryptert, knyttet til elev-id og ikke navn), samme vern
-som `studentNotes` i lessonData. Bevisst: poenget er å ha det på både PC og
-telefon. Bare elever med tekst lagres; tømmer man feltet, forsvinner
-nøkkelen.
-
-To fallgruver som er dekket, og som testene vokter:
-
-- **Feltet tegnes før den tidlige returen** i `renderElevloggInnhold()`.
-  Har eleven ingen registrerte timer, gikk funksjonen ut med «Ingen
-  registrerte timer» og tømte containeren — notatet ville vært usynlig
-  akkurat når man har mest å skrive om en ny elev. Den returen setter nå
-  inn tom-meldingen som node framfor å nulle `innerHTML`.
-- **Lagring rendrer aldri loggen på nytt.** En re-render ville bygget
-  textareaen om igjen og kastet både markøren og det halvskrevne ordet.
-  Det eneste som endrer seg er kvitteringen. Lagres ved `blur` og med to
-  sekunders forsinkelse mens man skriver — nok til at en lang notis ikke
-  går tapt, uten at hvert tastetrykk armer en synkopplasting.
-
-Notatet følger med i papirkurven når en elev slettes, og tilbake ved
-gjenoppretting. Feltet bygges som noder, aldri via `innerHTML`.
-
-**Loggpostene under er klikkbare** (`.logg-entry.klikkbar`) og åpner timen
-sin via `aapneTimeFraLogg()`. Hover-flaten er eneste antydning om at raden
-kan trykkes — den har verken knapp eller ikon, og skal ikke få det: lista
-skal fortsatt leses som en logg.
-
-### Deltakelse i prosent
-
-Lagt til 21. september 2026. Øverst i elevloggen står elevens deltakelse
-(«67 % · til stede i 4 av 6 skoletimer»), og hver fagtittel har sin egen
-(«50 % · 1/2 t»). Tallene kommer fra `deltakelseForElev()`, som også ligger
-bak `calcAttendance()` og `calcAttendancePerFag()` i elevtabellen.
-
-**Enheten er skoletimer.** En dobbelttime teller som to, og er eleven borte
-fra den ene halvdelen, er det én av to. Tre ting ble rettet samtidig, og
-`tests/deltakelse.test.js` vokter alle:
-
-- **Nevneren er skoletimene timen dekker, ikke lengden på lista.**
-  `tilstedeISkoletimer(raw, antall)` leser `attendance` indeks for indeks,
-  slik boksene tegnes, og alt som ikke er `false` er til stede. Før talte
-  den `filter(Boolean)`: en time som ble ført som enkel og senere gjort til
-  dobbelttime ga 1 av 2, og en for lang liste ga over 100 %. Brikken i
-  loggen («1/2 t») leser på samme måte.
-- **`finnSkoletimer()` er streng**, som `skoletimerForHendelse()`. Med
-  `<=`/`>=` fikk en time som sluttet 09:25 også 2. time.
-- **Én løkke for totalen og fagene.** Før var det to kopier, og bare den
-  ene hoppet over ferier og dager utenfor skoleåret.
-
-Bare timer med en post i `lessonData` telles, altså timer der oppmøtet er
-åpnet og lagret. Ingen prosent vises før det finnes minst én slik time:
-«0 %» for en ny elev ville lest som at han aldri har vært der.
-
-### Hvem var med på timen
-
-Fra 19. oktober 2026. Elevlista ligger på **hendelsen**, ikke på datoen.
-Før dette fikk en elev som ble lagt til en eksisterende time, alle
-tidligere datoer godskrevet som oppmøte. Han hadde ikke noe kryss der,
-og et manglende kryss leses som «til stede». Fjernet man en elev, mistet
-hun historikken sin.
-
-**For en holdt time er det lagrede oppmøtet fasit** (`eleverPaaTime()`).
-`saveLessonPlan()` lagrer et kryss for hver elev på lista, så nøklene i
-`attendance` er nøyaktig dem som var med den dagen. Brukes av
-oppmøtetellingen, elevloggen, oppmøtelista i planmodalen og hover.
-
-Dagens liste brukes i stedet (eller i tillegg) når:
-- datoen er i dag eller framover: lista gjelder, og timen er ikke ferdig
-  ført;
-- oppmøtet ble lagret **før** timen. `lagret` stemples ved hver lagring.
-  Krysset fra et tema skrevet på forhånd er bare et utgangspunkt;
-- det ikke finnes oppmøte, eller det er tomt (`{}`).
-
-Poster uten `lagret` på en dato som ennå ikke har vært, stemples ved
-lasting (`maaSkrivesTilbake`). Ellers ville de blitt lest som fasit når
-dagen kom. Valgt framfor fra/til-dato per elev på timen: ingen nye felt,
-og det retter elever som allerede var lagt inn feil.
-
-### Vurderinger
-
-Bygget 19. oktober 2026 (veikart 14). Menypunkt med `desktop-kun`, visning
-`#vurderingerView`, og modalen `#vurderingOverlay`. Den ligger sist i DOM-en,
-slik at den legger seg øverst. Data lagres i `lp_vurderinger`, som er en
-liste:
-
-```js
-{ id, dato, fag, trinns: [8, 9, 10], tittel, form: 'tekst'|'maal'|'karakter', notis,
-  elever: [elevId], timeIds: [evId],
-  resultater: { elevId: { verdi, status, kommentar } } }
-```
-
-- **Formen gjelder hele vurderingen**, og den **låses når første verdi er
-  ført** (`vurderingFormLaast()`). `lagreVurdering()` holder en låst form
-  fast, uansett hva utkastet sier.
-- **Status fortrenger verdi.** Statusene er «ikke levert», «borte» og
-  «fritatt». Med status lagres verdien som `null`.
-- **En tom rad lagres ikke** i `resultater` (`rensResultat()` gir null).
-  Eleven står likevel på lista (`elever`) til du tar henne ut.
-- **Fritekst:** teksten er selve verdien, og det er ingen egen kommentar.
-- **Elevlista velges per vurdering** (veikart 26, 20. okt 2026). Under
-  «Timer» står fagets timer, slått sammen etter elevlista
-  (`timeLinjerForFag()`): timer med nøyaktig de samme aktive elevene blir
-  én linje, vist med dager og klokkeslett, rom, antall og de første navnene
-  (`timeLinjeTekst()`). Timer uten elever, og timer med `gyldigTil` før
-  datoen for vurderingen, er ikke med. Har faget bare én linje, krysses den
-  av når faget velges.
-- **Kryss på** henter elevene på linja inn i `elever`. **Kryss av** tar dem
-  ut igjen, men ikke dem som også står på en annen avkrysset linje, eller
-  som har fått noe ført (`velgTimeLinje()`). **Bytte av fag** nullstiller
-  timevalget og beholder bare dem som har noe ført.
-- **Justering for hånd:** «+ Legg til elev» viser alle aktive elever som
-  ikke står i lista. ✕ tar en elev ut. Har eleven noe ført, spørres du
-  først, og resultatet slettes.
-- **Lista lagres** (`elever`), sammen med hvilke timer som var krysset av
-  (`timeIds`), så den blir stående selv om noen senere bytter time.
-  `lagreVurdering()` tar alltid med dem som har et resultat.
-  `eleverForVurdering(u)` er `elever` pluss dem med resultat, sortert per
-  trinn og så alfabetisk, med en overskrift per trinn når det er flere.
-- **Trinn velges ikke.** `trinns` leses ut fra elevene ved lagring
-  (`trinnForElever()`) og brukes bare i oversikten. `trinnTekst()` gir
-  «9. trinn», «8. + 10. trinn» eller «8.–10. trinn». Den aller første
-  versjonen hadde `trinn` som ett tall, og `loadFromStorage()` gjør det om
-  til en liste. Vurderinger fra før 20. okt uten `elever` får lista fra
-  dem som har et resultat.
-- **Modalen jobber på et utkast** (`vurderingUtkast`). Avbryt eller Escape
-  endrer ingenting. `.event-modal` gjør at klikk utenfor ikke lukker den.
-- **Elevloggen** viser vurderingene øverst i fagblokka. Et fag med
-  vurderinger får en blokk selv om ingen time er ført. Klikk åpner
-  vurderingen, men bare på PC. Elevloggmodalen lukkes først, slik
-  `aapneTimeFraLogg()` også gjør.
-- **Personopplysninger.** `lp_vurderinger` står i `SYNK_NOKLER` og synkes
-  kryptert. Vurderingene er **bare med i full backup**, som varslene, ikke
-  i «Eksporter uten navn». De skal aldri inn i en kalenderfeed.
-- **Papirkurv.** En slettet vurdering havner i papirkurven. Slettes en
-  elev, flyttes resultatene og plassen på elevlistene til elevens
-  papirkurvpost (`vurderinger`, `vurderingDeltakelse`), og de settes tilbake
-  ved gjenoppretting. Vurderinger som er slettet i mellomtiden, hoppes over.
-- **Ikke noe unntak for «uten karakter»** (veikart 24). En elev som er
-  fritatt fra karakter, vurderes likevel.
-
-`tests/vurderinger.test.js` vokter dette.
-
-### Varsler
-
-Lagt til 21. september 2026 (veikart post 25). Varsler om fare for
-**manglende vurderingsgrunnlag** (med fag), og om fare for **nedsatt
-karakter i orden** eller **i atferd**. Registreres i elevloggen, under
-«Om eleven», og samles på Min side. Hjelpeteksten begge steder sier at
-skolens eget system er det formelle arkivet.
-
-- **Lagring:** `lp_varsler`, `{ elevId: [ { id, type, fag, dato } ] }`.
-  `fag` er `null` for orden og atferd. Elever uten varsler står ikke i
-  objektet. **Ingen fritekst**, bevisst.
-- **Egen nøkkel, aldri på elevobjektet**, av samme grunn som elevnotatet.
-- **Synkes**, men **holdes utenfor «Eksporter uten navn»**. Det er den
-  filen som deles. Varslene er med i full backup og leses ved import.
-- **Termin:** `skoleaar.terminskille` er første dag i 2. termin (feltet
-  «2. termin starter» under Skoleår). `terminFor(dato)` gir 1, 2, 0 når
-  skillet ikke er satt, og `null` utenfor skoleåret. Terminen lagres ikke på
-  varselet, så et flyttet skille tar varslene med seg.
-- **Min side** (`renderVarselOversikt()`) viser varslene i terminen vi er
-  i, gruppert på type, med «N uker til N. termin slutter» øverst, uthevet
-  når det er tre uker eller mindre igjen. Uten terminskille vises hele
-  skoleåret, og teksten ber om skillet. Trykk på en rad åpner elevloggen.
-- **I elevloggen** (`byggVarselFelt()`) velges fag bare blant fagene eleven
-  har i timeplanen (`fagForElev()`). Å registrere eller slette **bytter ut
-  bare varselblokka**, slik at et halvskrevet elevnotat over beholder
-  markøren. Varsler fra en annen termin står, men dempet.
-- **Papirkurv:** varslene følger eleven dit og tilbake.
-
-`tests/varsler.test.js` dekker alt over, og hvert vern er verifisert ved å
-fjerne det.
-
-### Hvilke datoer elevloggen viser
-
-Rettet 2. september 2026, etter en melding om at loggen viste timer eleven
-ikke hadde deltatt i.
-
-**Elevlista ligger på hendelsen, ikke på datoen.** Nøkkelen i `lessonData`
-er `hendelsesId_dato`, og én hendelse dekker alle datoene den gjentas på.
-Legger man en elev inn i en time i november, står han med ett slag på alle
-datoene den timen har hatt siden august — timer han aldri var i. Dette
-gjelder enhver funksjon som leser `lessonData` per elev, ikke bare loggen.
-
-`calcAttendance()` og `calcAttendancePerFag()` har alltid hatt vernet
-(`if (dateStr < startDato) return`). `renderElevloggInnhold()` hadde det
-ikke. Utslaget var at *tellingen* i Elever så riktig ut mens *loggen* viste
-for mye — to visninger av samme elev som sa ulike ting. Reservedatoen ved
-manglende `startDato` er `'2000-01-01'` i alle tre, så elever lagt inn før
-feltet fantes beholder historikken sin.
-
-**Grensa framover er bevisst ulik de to stedene:**
-
-| | Bakover | Framover |
-|---|---|---|
-| `calcAttendance()` | `< startDato` | `> i dag` — en time som ikke er holdt kan ikke telles som nærvær |
-| `renderElevloggInnhold()` | `< startDato` | ingen — planlagte timer blir stående |
-
-Loggen tar med timer fram i tid fordi tema ofte skrives på forhånd; lista
-er da også en oversikt over hva som kommer. De **merkes** i stedet for å
-skjules: klassen `.logg-entry--planlagt` (stiplet kant, gjennomsiktig
-flate) og brikka `.logg-planlagt-merke` («Planlagt»).
-
-Stiplet strek og ikke en ny farge, av to grunner: de fylte brikkene
-(`--fare`, `--overtid`) betyr fravær og ville fått konkurranse om samme
-plass i raden, og `--border-strong` markerer «ikke ferdig» andre steder i
-appen fra før (`.work-dot.planned`). `.logg-entry` har derfor
-`border: 1px solid transparent` — uten den ville planlagte rader vokst
-2 px og stått og hoppet mot radene rundt.
-
-En planlagt time viser **aldri** fraværsbrikke, selv om det ligger en
-verdi i `attendance`. Den er i så fall ført ved et uhell, og «Fraværende»
-på en time fram i tid ville lest som et faktum om noe som ikke har skjedd.
-
-`tests/elevlogg-datoer.test.js` vokter alt dette, inkludert at loggen og
-oppmøtetellingen holder samme grense bakover.
-
----
+## Hva appen er
+
+Personlig planleggingsverktøy for én faglærer på ungdomsskole (8.–10.
+trinn): timeplan, nærvær og elevlogg, vurderinger, varsler, gjøremål og
+arbeidstid i ett grensesnitt. Brukes på PC og mobil, ofte mellom timer.
+
+- **Data:** localStorage i nettleseren (`lp_*`-nøkler). Lagres ved hver
+  endring via `saveToStorage()`, lastes med `loadFromStorage()`.
+- **Synk (valgfri):** `sync.js` krypterer hele datasettet i nettleseren
+  (AES-GCM, PBKDF2) og lagrer én blokk per bruker i Supabase. Serveren ser
+  aldri klartekst. Appen virker uendret uten `sync.js`.
+- **Kalenderfeeder:** tre ICS-filer (undervisning, jobb, gjøremål) i en
+  offentlig Supabase-bøtte, beskyttet av token i adressen. Ikke krypterte.
+- **Publisering:** GitHub Pages fra `main` (st-nikko/laererplanlegger).
+  `app.css` og `app.js` caches i opptil ti minutter — Ctrl+Shift+R etter push.
+
+## Filer
+
+| Fil | Innhold |
+|-----|---------|
+| `index.html` | All markup: header, visninger, alle modaler. Laster `app.js`, så Supabase som ESM-modul, så `sync.js` |
+| `app.js` | All appkode, global scope. Seksjoner under |
+| `sync.js` | Kryptert synk og ICS-publisering. Seksjoner under |
+| `app.css` | All CSS. Farger kun som variabler i `:root` |
+| `tests/` | jsdom-tester, én fil per område. Se `tests/README.md` |
+| `veikart.md` | Vurderte utvidelser med prioritert rekkefølge øverst |
+| `DETALJER.md` | Begrunnelser og bakgrunn per område |
+| `SESSION-NOTES.md` | Gamle øktnotater (t.o.m. august 2026). Historikk |
+| `funksjonsplan.md` | Originalt kravdokument fra juni 2026. Historikk |
+
+### app.js
+
+Seksjonene har overskrifter på formen `// NAVN` mellom streker. Søk etter
+dem framfor å stole på linjenumre.
+
+| Seksjon | Hva den eier |
+|---------|--------------|
+| CONFIG | `PERIODS` (skoletimene — **eneste kilde til klokkeslett**), gridkonstanter, `TODAY`, `lunsjLuke()` |
+| COLORS | `COLOR_POOL`, `SPECIAL_COLORS`, `getSubjectColor()`, `eventColor()` |
+| STUDENTS | `allStudents[]`, elevnavn holdt utenfor synken (`elevLapp()`, `navnekart()`, `hydrerNavn()`), elevnotat, varsler, termin |
+| LESSON DATA | `lessonData{}` (nøkkel `hendelsesId_dato`), `topicsBySubject{}` |
+| EVENTS / WORK TIMES | `events[]`, `planfestetTid[]`, `overtid{}`, `gyldigFraForNy()` |
+| HELPERS | dato- og gridhjelpere, `eventsForDate()`, skoletimer, hover-tekst, deltakelse, forsentkomming |
+| RENDER | `render()`, `renderGrid()`, dagshoder, legende |
+| FRAVÆRSRAD | haken for «fravær ført i skolens system» — ikke `attendance` |
+| PLANFESTET TID / OVERTID | modaler for arbeidstid |
+| EVENT FORM | `openEventForm()`, `saveEvent()`, `moteDatoForSkjema()` |
+| LESSON PLAN MODAL | nærværsføring, tema, notater, `saveLessonPlan()` |
+| ELEVLOGG | `renderElevloggInnhold()` (deles av modal og fullskjerm), lenker i fritekst |
+| VURDERINGER | `vurderinger[]`, visning og modal (kun PC) |
+| ELEVLOGG VIEW / ELEVADMIN | elevvelger, elevtabell, elevskjema |
+| VIEW SWITCHING / MONTH VIEW | `setView()`, `changeNav()`, `renderMonthView()` |
+| SIDEBAR / GJØREMÅL | `todos[]`, merker, filter, dra-og-slipp |
+| MISC | «I dag», modallukking, import/eksport, Min side, ICS for undervisning |
+| PAPIRKURV | slettede timer, elever, gjøremål og vurderinger; lagring/lasting |
+| GJØREMÅLSKALENDER / ARBEIDSTIDSKALENDER | de to andre ICS-feedene |
+
+### sync.js
+
+KONFIGURASJON (`SYNK_NOKLER`) · OPPSTART · KRYPTERING · HVA SOM SYNKES ·
+PUSH / PULL · INNLOGGING · VERN MOT DATATAP · PASSFRASE · STATUSVISNING ·
+ICS-PUBLISERING.
+
+## Datamodell
+
+| Nøkkel | Synkes | I «Eksporter uten navn» | Merk |
+|--------|:-:|:-:|------|
+| `lp_events` | ja | ja | `recurs` + `weekday` (0 = mandag) eller `date`; `weekPattern`; `gyldigFra`/`gyldigTil` |
+| `lp_lessonData` | ja | ja | `attendance[elev][i]` er `true`, `false` eller `'sen'`; `lagret`-stempel |
+| `lp_students` | ja | ja | elever **uten** navn |
+| `lp_studentNames` | **nei** | nei | navnene. Forlater aldri enheten |
+| `lp_elevNotater` | ja | **ja** | egen nøkkel med vilje, ikke på elevobjektet. Med i anonym eksport — `exportDataUtenNavn()` advarer om det |
+| `lp_varsler` | ja | nei | ingen fritekst |
+| `lp_vurderinger` | ja | nei | aldri i feed |
+| `lp_todos` | ja | ja | `merke`, `rekkefolge` |
+| `lp_fravaerFort` | ja | ja | bare førte dager lagres |
+| `lp_papirkurv` | **nei** | nei | inneholder navn |
+| `lp_fagfarger`, `lp_fridager`, `lp_skoleaar`, `lp_planfestetTid`, `lp_overtid`, `lp_topicsBySubject` | ja | ja | |
+
+Fasit for hva som synkes er `SYNK_NOKLER` i `sync.js`, og for eksporten
+`exportData()` i `app.js`. Endres tabellen, endres koden der først.
+
+## Regler
+
+Hver linje er en feil som har skjedd eller et valg som er tatt. Testen i
+parentes slår ut hvis regelen brytes. Bakgrunn i `DETALJER.md` under samme
+overskrift.
+
+**Personvern**
+- Ingenting legges direkte på elevobjektet. `elevlisteUtenNavn()` er en
+  spread, så alt på objektet havner i synken og den anonyme eksporten.
+  Bruk en egen `lp_`-nøkkel (`elevnotat`, `varsler`).
+- Elevnavn og `tekst`/notater kommer aldri i en ICS-feed. Tittel er faget
+  (`icsTittel()`) (`ics`, `gjoeremaal` — «ELEVNAVN KOMMER ALDRI MED»).
+- `elevLapp()` er eneste kilde til de fire tegnene som vises uten navn
+  (`pseudonymisering`).
+- Brukertekst settes som `textContent` eller attributt, aldri i
+  `innerHTML` (`hover`). **Kjent hull:** flere eldre `innerHTML`-maler
+  setter inn navn og titler uten escaping.
+
+**Synk** — les «Synken kan spise data» i `DETALJER.md` før du rører `sync.js`
+- Siste skriver vinner, på hele blokka. Ingen sammenslåing.
+- Kall aldri `saveToStorage()` fra noe som kjører inne i en push. Det gir
+  en evig push-løkke (`synk`).
+- Push krever at enheten har pullet (`lp_sync_pullet`). Pull stopper hvis
+  `lp_sist_endret` viser ulagrede lokale endringer (`synk`).
+
+**Tid og dato**
+- Les aldri dagens dato inn i en variabel ved oppstart. Bruk `TODAY`, som
+  `sjekkDatoskifte()` oppdaterer (`idag-og-ikon`).
+- Gridet starter 07:30. Plasser alt med `(tid - GRID_START_H) * PX_PER_HOUR`,
+  aldri ved å telle `h++`. Ingen test vokter tidsaksen ennå.
+- Skriv aldri inn klokkeslett. `PERIODS` er eneste kilde, også for
+  lunsjen (`lunsj`).
+- Et gjentakende møte har ingen `date`. Datofeltet fylles av
+  `moteDatoForSkjema()`, ellers flytter møtet seg ved lagring (`motedato`).
+- `startWeek` styrer ikke synlighet lenger — `gyldigFra` gjør det
+  (`startdato`).
+- Tester bruker datoer regnet ut fra i dag, og løkker over alle fem
+  hverdager der ukedagen er det som testes.
+
+**Elever og nærvær**
+- Elevlista ligger på hendelsen, ikke datoen. For en holdt time er lagret
+  `attendance` fasit (`eleverPaaTime()`) (`elev-paa-time`).
+- Alt som leser nærvær sjekker `!== false`, ikke `=== true` — `'sen'`
+  betyr til stede (`forsentkomming`).
+- Timer før elevens `startDato` telles ikke og vises ikke i loggen
+  (`elevlogg-datoer`).
+- Deltakelse telles i skoletimer; en dobbelttime er to (`deltakelse`).
+- Fraværsraden og `attendance` rører aldri hverandre (`fravaer`).
+
+**Grensesnitt**
+- Klikk utenfor lukker bare `.simple-modal` og `.after-save-modal`.
+  Escape lukker øverste overlegg. Hver modal har en lukkeknapp
+  (`modallukking`).
+- `openEventForm()` nullstiller alle knappene i skjemaet.
+- Én rulleflate om gangen. Sjekk om en ny `max-height` havner inni en
+  modal (`mobil`).
+- Lagring av elevnotat og varsler rendrer ikke loggen på nytt — markøren
+  skal bli stående (`elevnotat`, `varsler`).
+- `category: 'foreldre'` vises som «Samarbeidsmøte». Bytt bare etiketten.
 
 ## Visuell identitet
 
-Redesignet i økt 19 (3. august 2026). Retningen er «rolig nordisk»: varm
-nøytral grunnflate, dempet kontrast, én tydelig accent. Appen ses på i
-timevis om dagen, så flaten skal være kjedelig og fargene skal jobbe.
+«Rolig nordisk»: varm nøytral flate, dempet kontrast, én accent (fjord,
+`--accent`). Kort fortalt:
 
-### Palett
+- Alle farger som variabler i `:root` i `app.css`. Unntak: `COLOR_POOL`
+  og `SPECIAL_COLORS` i `app.js`, som settes som inline stil.
+- Tekst minst 4,5:1, interaktive kanter minst 3:1. `--text-muted` kun til
+  små versal-etiketter.
+- Fagfarger på LCH-lyshet 89, kategorier på 94,5. Ingen to bakgrunner
+  nærmere enn ΔE 5 — mål før du endrer en farge.
+- Figtree til titler, Inter til UI, fra Google Fonts. Basis 14 px; gridet
+  henger på den. `tabular-nums` på tall som står i kolonner.
+- Logoen finnes i to versjoner med vilje: tre celler i headeren, to i
+  `favicon.svg`.
 
-Alle verdier ligger i `:root` i `app.css`. Ingen hardkodede farger utenfor
-den blokka — unntaket er `COLOR_POOL`/`SPECIAL_COLORS` i `app.js`, som må
-være JS fordi de settes som inline stil på hver hendelse.
+Palett, typografiskala og logobegrunnelse står i `DETALJER.md`.
 
-| Gruppe | Variabler |
-|--------|-----------|
-| Flate | `--bg` `#FCFBF9`, `--surface`, `--border`, `--border-faint`, `--border-strong`, `--border-input` |
-| Tekst | `--text-primary` `#22201D`, `--text-secondary`, `--text-muted`, `--paa-accent` |
-| Accent (fjord) | `--accent` `#2F6076`, `--accent-hover`, `--accent-deep`, `--accent-kant`, `--meny-aktiv-bg`, `--today-light` |
-| Semantisk | `--suksess`, `--overtid`, `--fare`, `--naa`, `--lyng-*`, `--fridag-bg`, `--utenfor-skoleaar-bg` — hver med `-soft` og `-kant` der de brukes som merkelapp |
-| Skygge | `--skygge-svak`, `--skygge-modal`, `--skygge-modal-lett` — varme (`rgba(34,32,29,…)`), ikke svarte |
-| Font | `--font-ui` (Inter), `--font-display` (Figtree) |
+## Arbeidsflyt
 
-Nøytralene har varm undertone, ikke den kjølige Tailwind-grå appen brukte
-til og med økt 18. Accenten er dyp og lite mettet med vilje: den lyse blå
-`#3b82f6` konkurrerte med de fargede timeblokkene i kalenderen.
+- **Kjør ikke git i den monterte mappa** fra sandkassen — heller ikke
+  `git status`. Det etterlater `.git/index.lock`. Nikolai committer og
+  pusher selv fra PowerShell.
+- Tester: `npm install jsdom`, så `node tests/<fil>.test.js`. Hver fil
+  avslutter med `process.exit`.
+- Verifiser ved å bryte: gjør endringen om igjen med vilje og se testen
+  bli rød.
+- Layout sjekkes i Playwright, ikke jsdom. `ERR_TUNNEL_CONNECTION_FAILED`
+  for Google Fonts og jsdelivr er ventet i sandkassen.
 
-Alle tekstfarger ligger over 4,5:1 mot sin bakgrunn, og interaktive kanter
-over 3:1 (WCAG AA / 1.4.11). `--text-muted` er akkurat 3,49:1 og skal bare
-brukes til små versal-etiketter, ikke brødtekst.
+## Kjente begrensninger
 
-### Fag- og kategorifarger
-
-`COLOR_POOL` (7 fag) og `SPECIAL_COLORS` (møte, foreldre, annet) + vikar i
-`eventColor()`. Konstruert i LCH, ikke plukket for hånd. To regler:
-
-1. **Fag ligger på lyshet 89, kategorier på 94,5.** Et blokkslag skal kunne
-   leses som «fag» eller «ikke fag» på lysheten alene.
-2. **Ingen to bakgrunner er nærmere hverandre enn ΔE 5.** Unntaket er møte
-   og vikar, som er identiske i JS og skilles av stripemønsteret i
-   `.event.vikar` / `.month-event-pill.vikar`.
-
-Regel 2 er verdt å holde på: første utkast til denne paletten hadde åtte par
-under ΔE 5 (mose/annet lå på 1,1 — praktisk talt samme farge). Den gamle
-Tailwind-paletten hadde tre. Endrer du en av de elleve fargene, mål
-avstanden til de andre før du committer.
-
-### Logo og favicon
-
-Motivet er et kalenderkort med én uthevet blokk — den okergule er «timen
-som skjer nå». Ordmerket deler navnet i **Lærer** (vekt 600) og
-planlegger (vekt 400, `--text-secondary`), som gjør et langt navn lettere å
-lese og gir headeren et fast punkt.
-
-**Merket finnes i to versjoner, og det er med vilje:**
-
-- **Header** (`index.html`, inline SVG i `.logo`): tre celler i toppraden.
-- **Favicon** (`favicon.svg`): to bredere celler. På 16 px gror tre celler
-  sammen til én grå stripe — testet ved å rendre SVG-en til PNG og se på
-  den. Endrer du header-merket, husk at faviconen ikke arver endringen.
-
-`apple-touch-icon.png` er fullflate uten kortformen, siden iOS avrunder
-selv. `<meta name="theme-color">` er satt til accenten.
-
-### Typografi
-
-Figtree til logo og titler, Inter til all UI-tekst. Begge fra Google Fonts i
-én forespørsel med `display=swap`. Uten nett faller de tilbake til
-systemfonten — appen fungerer, men mister litt av uttrykket.
-
-- Skala: 10 / 11 / 12 / 13 / 14 / 15 px. Basis er fortsatt 14 px; kalenderens
-  layout henger på det, så ikke flytt den uten å sjekke gridet.
-- Vekter: 400 brødtekst, 500 knapper og etiketter, 600 titler og
-  timeblokk-navn, 700 kun til `.event-badge`.
-- `font-variant-numeric: tabular-nums` på alt som viser klokkeslett, uketall
-  eller prosent — se lista øverst i `app.css`. Uten den hopper tidsaksen
-  sidelengs mellom `11:00` og `08:00`.
-- Titler får `--font-display` via en samleregel øverst i fila. Legger du til
-  en ny tittelklasse, meld den inn der.
-
----
-
-### sync.js — seksjoner
-
-| Seksjon | Innhold |
-|---------|---------|
-| KONFIGURASJON | `SUPABASE_URL`, `SUPABASE_ANON`, `SYNK_NOKLER` (hvilke localStorage-nøkler som synkes — `lp_studentNames` og `lp_papirkurv` er bevisst utelatt; `lp_fravaerFort` er med) |
-| OPPSTART | `initSync()`, `settStatus()`, `harPassfrase()`, `enhetsnavn()` |
-| KRYPTERING | `utledNokkel()` (PBKDF2, 250k runder), `krypter()`, `dekrypter()` (AES-GCM) |
-| HVA SOM SYNKES | `samleSynkdata()`, `skrivSynkdata()` — sistnevnte filtrerer mot `SYNK_NOKLER` så innkommende data ikke kan overskrive lokale navn |
-| PUSH / PULL | `syncPushDebounced()` (2 s), `syncPush()`, `syncPull()`, `syncNaa()` |
-| INNLOGGING | `synkLoggInn()` / `synkOpprettKonto()` (e-post + passord), `synkLoggUt()`, `synkFeilTekst()` (norske feilmeldinger) |
-| VERN MOT DATATAP | `harPulletDenneEnheten()`, `merkPullet()`, `harUlagredeEndringer()`, `taSynkKopi()`, `synkKopiInfo()`, `gjenopprettForSynk()` — se avsnittet «Synken kan spise data» nedenfor |
-| PASSFRASE | `lagrePassfrase()`, `glemPassfrase()` |
-| STATUSVISNING | `tegnSynkStatus()`, `sistSynkTekst()` |
-| ICS-PUBLISERING | `ICS_FEEDS` (to kalendere: `undervisning` og `jobb`), `feedToken()`, `feedAdresse()`, `publiserFeed()`, `slaAvFeed()`, `oppdaterPubliserteKalendere()`, `tegnICSStatus()` — laster opp til Storage-bøtta `kalender` under `{user_id}/{feed}-{token}.ics`. Hver kalender har **sin egen nøkkel**, så jobbkalenderen kan deles med familien uten at timeplanen følger med. **Filene er ikke krypterte** — bøtta er offentlig så Outlook og Google kan hente uten innlogging, og beskyttelsen er at token ikke lar seg gjette. Oppdateres av `syncPush()` |
-
-### Synken kan spise data — les dette før du rører sync.js
-
-Synken er **«siste skriver vinner» på én stor kryptert blokk**. Det finnes
-ingen sammenslåing: `skrivSynkdata()` skriver nøkkel for nøkkel oppå det som
-lå der. Den 6. august 2026 spiste den en times arbeid — elever, møter og
-undervisning lagt inn mellom 18:07 og 19:10 forsvant ved et hardt refresh.
-
-Tre feil virket sammen, og alle tre er nå rettet:
-
-1. **Pullen sammenlignet feil ting.** Den så på `lp_sync_sist`, altså når vi
-   sist snakket med serveren — ikke når dataene sist ble endret her. Alt
-   lokalt arbeid etter siste synk var usynlig for sjekken. Nå settes
-   `lp_sist_endret` ved hver `saveToStorage()`, og `harUlagredeEndringer()`
-   stopper pullen og spør brukeren framfor å overskrive.
-2. **Pushen kunne laste opp uten å ha lest.** `syncPush()` sjekket bare
-   innlogging og passfrase. En enhet der pullen feilet — typisk fordi
-   passfrasen manglet — kjørte videre som normalt og lastet opp sin egen
-   tomme tilstand oppå alt. Nå kreves `lp_sync_pullet`, som *ikke* settes
-   når dekrypteringen feiler.
-3. **`lp_sync_sist` ble satt til vår egen klokke etter push**, mens serveren
-   kan sette sin egen `updated_at`. Da tror neste pull at skyen er nyere, og
-   henter ned ved hvert oppstart. Det var den unødvendige pullen som gjorde
-   overskrivingen mulig i det hele tatt. Nå leses raden tilbake med
-   `.select('updated_at')`, og serverens verdi lagres.
-
-**Og den fjerde, som trolig var utløseren:** `publiserFeed()` avsluttet med
-`saveToStorage()`, men kalles selv til slutt i `syncPush()` via
-`oppdaterPubliserteKalendere()`. Siden `saveToStorage()` armer
-`syncPushDebounced()`, ble det en evig runde — push → publiser → lagre →
-push, hvert annet sekund. Enheten lastet dermed opp sin egen tilstand
-kontinuerlig og overskrev serveren uansett hva andre enheter pushet.
-Statusfeltet syklet synlig mellom «synkronisert», «synkroniserer» og
-«endringer venter». Nå hopper den stille publiseringen over lagringen;
-flagget skrives direkte og følger med neste ekte endring. **Kall aldri
-`saveToStorage()` fra noe som kjører inne i en push.**
-
-I tillegg tas `taSynkKopi()` rett før hver pull som faktisk overskriver, og
-«Angre siste synk» i Min side legger den tilbake *og* laster den opp — uten
-det siste ville neste pull hentet ned den dårlige kopien igjen.
-
-`tests/synk.test.js` gjenskaper hendelsen med en falsk Supabase. Fjerner du
-vernet, feiler testen «pull overskriver ikke lokale endringer som ikke er
-lastet opp» — verifisert.
-
-Supabase-tabellen `sync_data` har én rad per bruker: `ciphertext`, `salt`,
-`iv`, `updated_at`, `enhet`. Row Level Security gjør at hver bruker kun
-ser sin egen rad. Serveren ser aldri klartekst.
-
-`saveToStorage()` i app.js kaller `syncPushDebounced()` hvis funksjonen
-finnes — appen fungerer uendret om `sync.js` ikke lastes.
-
----
-
-## Kjente begrensninger / uløste ting
-
-1. ~~**`TODAY` er hardkodet**~~ — endret til `new Date()`. Live dato.
-2. ~~**Ingen `localStorage`**~~ — implementert. Data persisteres automatisk.
-3. ~~**"Now line" er hardkodet**~~ — endret til `new Date().getHours() + new Date().getMinutes() / 60`.
-4. ~~**Elever er hardkodet**~~ — ELEVADMIN implementert med legg til/rediger/slett og oppmøte%.
-5. **Mobil, steg 1** — to seksjoner i app.css: «BUNN-NAVIGASJON (mobil)» gjør `#sideMeny` til en bunn-rad, og «MOBIL (under 768px)» nederst i fila tar resten — header over to rader, smalere tidskolonne i gridet, fullskjermmodaler, gjøremål-sidebar som overlegg, `100dvh`, horisontalt rullbar elevtabell. Alt er ren CSS pluss klassene `desktop-kun`, `mobil-kun` og `rullbar-x` i markup. Ukesvisningen er fortsatt trang på 390px; blir det et problem, er neste grep å la mobilen åpne i dagsvisning.
-
-   **Én rulleflate om gangen.** `.student-list` har `max-height: 200px` i grunn-CSS. Inne i en fullskjermmodal på mobil ble det scroll i scroll — halve skjermen sto tom mens man dro i en liten boks. Mobilblokka nuller derfor både `max-height` og `overflow-y` på `.student-list`, slik at `.modal-body` er det eneste som ruller. Samme felle gjelder alt annet som får en fast `max-height` i grunn-CSS: sjekk om det havner inni en modal før du setter den.
-
-   **Steg 2 (økt 19)** — headeren ryddet: Gjøremål flyttet ut av headeren og inn i bunnmenyen som et femte element (`.mobil-kun`, `#menyGjoeremaal`, aktiv-markering settes i `toggleSidebar()`), logosymbolet vist alene i sin egen flex-celle mellom visningsvelgeren og knappene, og ukelabelen kortet ned. Etiketten skrives i to varianter i hver sin span av `renderWeekLabel()` — `.uke-lang` og `.uke-kort` — der CSS velger hvilken som vises. Det gjør at den følger rotasjon uten at JS må lytte på skjermbredde. Merk at `.mobil-kun` slås på i 768px-blokka, ikke 767px-blokka, slik at den følger bunnmenyen og ikke mangler på nøyaktig 768 px.
-6. ~~**SFS2213-beregning (`calcSFS`)**~~ — slettet 2. nov 2026. Tellingen av undervisningstimer bor i `tellUndervisningstimer()` på Min side, se veikart post 29.
-
-**Forsentkomming (veikart 30):** `attendance[elev][i]` kan være `'sen'` i tillegg til `true`/`false`. Alt som leser nærvær må sjekke `!== false`, ikke `=== true`. Hjelpere: `senISkoletimer()`, `senEtikett()`, `forsentForElev()`, `forsentDenneTerminen()`, `lagSenKnapp()`.
-
-**Legg til elev i en holdt time (veikart 31):** `renderManglerElever()` viser elever som står på `ev.students`, men ikke er i det lagrede oppmøtet for en holdt time, med en «Legg til»-knapp. `byggNaervaerElev()` bygger én elevrad i nærværslista, og viser en advarsel når elevens startdato er etter timen.
-7. **Annenhver-uke vises ikke i Måned-visning** — `eventsForDate` håndterer weekPattern i uke/dag, men månedvisningen arver dette riktig.
-8. **Mobilheaderen er fortsatt to rader, og det er strukturelt.** Etter opprydningen i økt 19 er rad 1 (visningsvelger · logo · I dag · Ny hendelse) ~347 px og rad 2 (ukenavigasjonen) ~215–237 px. Summen passer ikke på 390 px uansett hvor mye som fjernes fra rad 1, fordi ukenavigasjonen alene trenger over halve bredden. Én rad krever at enten visningsvelgeren eller ukenavigasjonen får en annen form — det er en større øvelse enn å flytte knapper. Rad 1 er dessuten full: på skjermer smalere enn ~350 px bryter den til en tredje rad framfor å flyte utenfor kanten.
-9. **Fontene krever nett ved første last** — Inter og Figtree hentes fra Google Fonts. `display=swap` gjør at appen alltid tegnes, men uten nett brukes systemfonten. Skal appen bli helt frittstående, må fontfilene inn i repoet og `@font-face` erstatte `<link>`-en.
-
-### Små forbedringer 21. okt 2026 (veikart 28, 9, 6, 11 og 15)
-
-- **Rull til nå** (`rullTilNaa()`), kalt én gang etter første `render()`.
-  Nå-linja havner en tredjedel ned i `.calendar-scroll`. Gjør ingenting
-  når uka som vises ikke har nå-linja, eller utenfor `GRID_START_H`–
-  `GRID_END_H`.
-- **Trinn i Outlook-tittelen.** `icsTittel()` gir «Fag · 9. trinn» via
-  `trinnTekst()`. Enetimer får ikke trinn. Med merket fra nedlasting:
-  «Norsk · 9. trinn · LP».
-- **Møtefrist.** `moteTodoFrist()` er datoen i `#moteDatoInput` +
-  `MOTE_FRIST_DAGER` (7). Feltet viser alltid riktig forekomst for et
-  gjentakende møte (`moteDatoForSkjema()`). `#moteTodoFrist` under
-  knappen oppdateres ved åpning og når datoen endres.
-- **Fagfarger.** `subjectColorMap` lagres i `lp_fagfarger` (i
-  `SYNK_NOKLER`, og i backup). Et nytt fag får den minst brukte fargen
-  (`nesteFagfarge()`), så sletting og ny innlegging ikke flytter farger.
-  `getSubjectColor()` skriver nye tildelinger rett til localStorage uten
-  `saveToStorage()`, fordi det skjer under rendring. Nøklene er fagnavn
-  (`ev.title`) — en enetime har faget som tittel, elevnavnet vises bare.
-- **Trinnmerke på PC.** `trinnMerkeTekst()` («9.», «8.+10.», «8.–10.»)
-  står i `.event-trinn-merke` øverst til høyre. Blokka får
-  `.har-trinn-merke` og `--trinn-merke-plass`, så tittelen ikke går inn
-  under merket. Skjult på mobil, der `.event-trinn-kort` gjør jobben.
-  Ikke på enetimer.
-- **Klikkbare adresser.** `finnAdresser()` finner http(s) og «www.»,
-  uten tegnsetting bakerst. `tekstMedLenker()` bygger tekstnoder og
-  `<a>` — aldri innerHTML. Lenkene stopper klikket, så de ikke åpner
-  loggposten eller gjøremålet de står i. Brukes i elevloggen (notater og
-  elevnotat; temaet settes nå også som tekst) og gjøremålslista. Under
-  `#planNotes`, `#todoTextInput` og «Om eleven» står en `.lenkerad`
-  (`festLenkerad()` / `oppdaterLenkerad()`), siden et tekstfelt ikke kan
-  ha klikkbare lenker.
-
-`tests/smaa-forbedringer.test.js` vokter dette, og `tests/ics.test.js`
-trinnet i tittelen.
+- Ingen service worker eller manifest: appen kan ikke installeres og
+  virker ikke uten nett.
+- Supabase-klienten hentes ulåst (`@supabase/supabase-js@2`) fra
+  jsdelivr, og passfrasen ligger i klartekst i localStorage.
+- `saveToStorage()` svelger feil (full lagring) og varsler bare i konsollen.
+- Fontene krever nett ved første last; uten nett brukes systemfonten.
+- Mobilheaderen er to rader, og det er strukturelt (se `DETALJER.md`).
+- Ukesvisningen er trang på 390 px. Neste grep er å åpne i dagsvisning
+  på mobil.

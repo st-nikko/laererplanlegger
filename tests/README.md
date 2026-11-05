@@ -18,7 +18,7 @@ Testene laster `index.html` og `app.js` i jsdom med et falskt
 ## Skriv aldri inn en dato som skal passeres
 
 `TODAY` er `new Date()`, og nye hendelser får en `gyldigFra` regnet ut fra
-uka som vises (se «Når en hendelse begynner å gjelde» i CONTEXT.md).
+uka som vises (se «Når en hendelse begynner å gjelde» i DETALJER.md).
 `eventsForDate()` viser ingenting før den datoen. En test
 med en fast dato i nær framtid blir derfor **rød av seg selv** den dagen
 kalenderen passerer den — `gjentakende-moter.test.js` sto rød 10. september

@@ -57,7 +57,7 @@ Beskrivelsen under er beholdt som begrunnelse.
 ### Hvorfor
 
 `lp_studentNames` synkes ikke — det er et bevisst personvernvalg, se
-«Tekniske valg» i CONTEXT.md. Konsekvensen er at navnene bare finnes i
+«Tekniske valg» i DETALJER.md. Konsekvensen er at navnene bare finnes i
 nettleserlagringen på den enkelte enheten, og at de **ikke** følger med til
 en ny enhet. Ryker PC-en, henter synken tilbake fravær, tema og notater
 knyttet til «Elev 4f2a», uten at appen vet hvem det er.
@@ -102,7 +102,7 @@ på timen, og som statistikken venter på som fjerde kategori.
 
 **Merket for «ingen elever registrert» er bygget** (22. september 2026),
 med `user-slash` fra Font Awesome framfor Feather-stilen foreslått under.
-Se «Ikon for timer uten elever» i CONTEXT.md. Statusene «utgått» og
+Se «Ikon for timer uten elever» i DETALJER.md. Statusene «utgått» og
 «ingen møtte» står fortsatt åpne.
 
 *Dette var to poster fram til 19. august 2026. De ble slått sammen fordi
@@ -285,7 +285,7 @@ men da må alle som abonnerer legge inn den nye adressen.
 
 ## 6. Frist én uke etter møtet på gjøremål fra møtemodulen ✅
 
-**Bygget 21. oktober 2026.** `moteTodoFrist()` gir datoen i møteskjemaet + 7 dager, og «Frist: tir. 28. okt» står under knappen (`oppdaterMoteTodoFrist()`). Se «Små forbedringer 21. okt» i CONTEXT.md.
+**Bygget 21. oktober 2026.** `moteTodoFrist()` gir datoen i møteskjemaet + 7 dager, og «Frist: tir. 28. okt» står under knappen (`oppdaterMoteTodoFrist()`). Se «Små forbedringer 21. okt» i DETALJER.md.
 
 **Idéen:** Et gjøremål opprettet fra møteskjemaet skal få frist én uke etter
 møtedatoen, framfor møtedatoen selv.
@@ -545,7 +545,7 @@ tredje måned, og verken uke- eller dagsvisningen har lørdag og søndag —
 på ulike trinn.
 
 **Status:** Ønsket, men den ene halvdelen kolliderer med palettreglene.
-Verdt å lese «Visuell identitet» i CONTEXT.md før noe røres.
+Verdt å lese «Visuell identitet» i DETALJER.md før noe røres.
 
 **Avklart i gjennomgangen 20. oktober 2026:** **Variant A først:** én farge per fag, trinnet tydeligere på PC (merke som på mobil), og lagre fargekartet så fag ikke bytter farge.
 Det Nikolai egentlig ønsker er **farge per gruppe**. Det er mulig nå som
@@ -571,7 +571,7 @@ lagre kartet.
 Nøkkelen måtte bli `tittel + '|' + trinn`. Fem fag på tre trinn er
 femten kombinasjoner, mot sju farger.
 
-Og da slår regelen i CONTEXT.md inn: **fag ligger på lyshet 89,
+Og da slår regelen i CONTEXT.md («Visuell identitet») inn: **fag ligger på lyshet 89,
 kategorier på 94,5, og ingen to bakgrunner er nærmere enn ΔE 5.** Sju
 farger på én lyshet er allerede tett. Femten er ikke mulig innenfor samme
 regel — man må enten slippe opp på ΔE (og da gror fargene sammen, som de
@@ -667,7 +667,7 @@ Anslag: 20 minutter, inkludert Escape.
 **Idéen:** Et eget menypunkt der du fører vurderinger, med resultat per
 elev, og ser dem igjen i elevloggen.
 
-**Status: bygget 19. oktober 2026.** Se «Vurderinger» i CONTEXT.md. Formen
+**Status: bygget 19. oktober 2026.** Se «Vurderinger» i DETALJER.md. Formen
 låses når første verdi er ført, og fritekst-formen har bare ett felt per
 elev. Resten av posten er avklaringen som ble gjort først.
 
@@ -1147,7 +1147,7 @@ Anslag: en halvtime.
 
 **Status:** Prøvd i billigste form 19. august 2026. `title`-attributtet på
 hver blokk gir tema, notat, elevliste med notat per elev, og hvem som var
-borte — se «Hover på timene» i CONTEXT.md. Om et **ekte kort** skal bygges
+borte — se «Hover på timene» i DETALJER.md. Om et **ekte kort** skal bygges
 avhenger av om denne varianten faktisk blir brukt.
 
 **Avklart i gjennomgangen 20. oktober 2026:** Beholdes som **utprøving.** Den grå `title`-boksen er god nok i bruk, men det er verdt å se om et ekte kort er mer nyttig.
@@ -1302,7 +1302,7 @@ stegene først finnes.
 
 **Idéen:** Oversikt over hvilke varsler som er sendt, til hvem og når.
 
-**Status:** Bygget 21. september 2026. Se «Varsler» i CONTEXT.md.
+**Status:** Bygget 21. september 2026. Se «Varsler» i DETALJER.md.
 Resten av posten er vurderingen som ble gjort før, og står for å vise
 hvorfor det ble som det ble.
 
@@ -1379,7 +1379,7 @@ programmering») som timer og vurderinger knyttes til, i stedet for at alt
 går via trinn. I dag er det flere grupper på samme trinn, og når du legger
 inn en vurdering må du frita elevene som ikke hører til gruppen.
 
-**Status: nivå 1 bygget 20. oktober 2026.** Se «Vurderinger» i CONTEXT.md.
+**Status: nivå 1 bygget 20. oktober 2026.** Se «Vurderinger» i DETALJER.md.
 Under «Timer» i vurderingen krysser du av fagets timer, slått sammen etter
 elevliste, og elevene hentes derfra. Lista kan justeres med «+ Legg til
 elev» og ✕, og lagres på vurderingen. Trinn velges ikke lenger.
@@ -1804,7 +1804,7 @@ av en grunn som ikke går bort av seg selv.
 
 Gjøremål med frist blir heldagshendelser på forfallsdatoen, i en feed med
 egen adresse. Enveis: avkryssing skjer i appen. Se «Gjøremålsfeeden» i
-CONTEXT.md for hva som bevisst ikke er med — elevnavn og fritekst.
+DETALJER.md for hva som bevisst ikke er med — elevnavn og fritekst.
 
 #### Toveis-synk krever noe appen ikke har
 
@@ -1944,7 +1944,7 @@ gjøremål på mobil (18), fritekstfeltet (20) og fraværshaken (16). Samme dag
 kom også merker og filter på gjøremål, «Foreldremøte» → «Samarbeidsmøte»,
 hover-tooltip på timene (22), et overordnet notat om eleven i elevloggen og
 klikk fra loggpost til time — de sto aldri i veikartet, og er dokumentert i
-CONTEXT.md i stedet.*
+CONTEXT.md og DETALJER.md i stedet.*
 
 *Gjennomgått punkt for punkt 20. oktober 2026: 1, 12, 21 og 24 forkastet,
 sammen med tastatur/skjermleser og varsler fra «lagt bort». Søk i notater

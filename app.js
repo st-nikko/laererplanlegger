@@ -1440,7 +1440,7 @@ function renderLegend() {
     }
   });
   // Nøkkelen er fortsatt 'foreldre'. Bare etiketten er endret (19. aug
-  // 2026) — se «Samarbeidsmøte» i CONTEXT.md for hvorfor verdien i
+  // 2026) — se «Samarbeidsmøte» i DETALJER.md for hvorfor verdien i
   // dataene ikke ble rørt.
   [['Møte','mote'],['Samarbeidsmøte','foreldre']].forEach(([label,key])=>{
     const c=SPECIAL_COLORS[key];
